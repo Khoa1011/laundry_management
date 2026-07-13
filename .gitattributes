@@ -1,0 +1,10 @@
+* text=auto
+
+# Unix scripts must use LF
+backend/mvnw text eol=lf
+*.sh text eol=lf
+
+# Windows scripts use CRLF
+backend/mvnw.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
