@@ -1,8 +1,6 @@
 spring:
   application:
     name: laundry-management
-  profiles:
-    default: local
   flyway:
     enabled: true
   jpa:
