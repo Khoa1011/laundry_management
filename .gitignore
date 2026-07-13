@@ -1,0 +1,42 @@
+﻿# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# Java / Spring Boot
+backend/target/
+target/
+*.class
+*.jar
+*.war
+*.log
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+node_modules/
+dist/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Runtime and uploads
+logs/
+uploads/
+tmp/
+temp/
