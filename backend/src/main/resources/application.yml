@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: laundry-management
+  profiles:
+    default: local
+  flyway:
+    enabled: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

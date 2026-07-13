@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -eu
+
+MAVEN_VERSION="3.9.11"
+MAVEN_CACHE_HASH="03d7e36a140982eea48e22c1dcac01d8862b2550b2939e09a0809bbc5182a5bc"
+MAVEN_USER_HOME="${MAVEN_USER_HOME:-"$HOME/.m2"}"
+MAVEN_HOME="${MAVEN_USER_HOME}/wrapper/dists/apache-maven-${MAVEN_VERSION}/${MAVEN_CACHE_HASH}"
+
+if [ ! -x "${MAVEN_HOME}/bin/mvn" ]; then
+  echo "Apache Maven ${MAVEN_VERSION} is not available in the local Maven Wrapper cache:" >&2
+  echo "${MAVEN_HOME}" >&2
+  echo "Cache Maven ${MAVEN_VERSION} locally before running this no-download wrapper." >&2
+  exit 1
+fi
+
+exec "${MAVEN_HOME}/bin/mvn" "$@"
