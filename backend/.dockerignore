@@ -1,0 +1,15 @@
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+*.log
+logs/
+.env
+.env.*
+!.env.example
+tmp/
+temp/
+*.swp
+*.tmp
+
