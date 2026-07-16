@@ -1,0 +1,14 @@
+:root, [data-theme="laundry-teal"] {
+  --app-background: var(--neutral-50); --surface: var(--neutral-0); --surface-elevated: var(--neutral-0); --surface-subtle: var(--neutral-100); --surface-selected: var(--teal-50); --surface-disabled: var(--neutral-100);
+  --text-primary: var(--neutral-900); --text-secondary: var(--neutral-500); --text-muted: var(--neutral-400); --text-disabled: var(--neutral-400); --text-inverse: var(--neutral-0);
+  --border-default: var(--neutral-200); --border-strong: var(--neutral-300);
+  --primary: var(--teal-500); --primary-hover: var(--teal-600); --primary-active: var(--teal-700); --primary-foreground: var(--neutral-0); --primary-soft: var(--teal-50); --primary-soft-strong: var(--teal-100); --primary-border: var(--teal-200); --focus-ring: rgb(10 163 157 / 28%);
+  --success: var(--success-500); --success-surface: var(--success-50); --success-border: var(--success-100); --success-foreground: var(--success-700);
+  --warning: var(--warning-500); --warning-surface: var(--warning-50); --warning-border: var(--warning-100); --warning-foreground: var(--warning-600);
+  --info: var(--info-500); --info-surface: var(--info-50); --info-border: var(--info-100); --info-foreground: var(--info-600);
+  --danger: var(--danger-500); --danger-surface: var(--danger-50); --danger-border: var(--danger-100); --danger-foreground: var(--danger-600);
+  --primary-fab-gradient: linear-gradient(145deg, var(--teal-400), var(--teal-600)); --primary-fab-shadow: 0 8px 22px rgb(10 152 151 / 28%);
+}
+[data-theme="laundry-indigo"] {
+  --surface-selected: var(--indigo-50); --primary: var(--indigo-500); --primary-hover: var(--indigo-600); --primary-active: var(--indigo-700); --primary-soft: var(--indigo-50); --primary-soft-strong: var(--indigo-100); --primary-border: var(--indigo-200); --focus-ring: rgb(89 110 232 / 28%); --primary-fab-gradient: linear-gradient(145deg, var(--indigo-400), var(--indigo-600)); --primary-fab-shadow: 0 8px 22px rgb(89 110 232 / 26%);
+}

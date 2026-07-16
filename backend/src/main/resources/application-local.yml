@@ -12,3 +12,5 @@ spring:
       hibernate:
         jdbc:
           time_zone: Asia/Ho_Chi_Minh
+  flyway:
+    locations: classpath:db/migration/common,classpath:db/migration/mysql

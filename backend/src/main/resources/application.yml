@@ -8,6 +8,18 @@ spring:
     hibernate:
       ddl-auto: validate
 
+app:
+  security:
+    jwt:
+      secret: ${APP_JWT_SECRET:}
+      expiration: ${APP_JWT_EXPIRATION:PT1H}
+  bootstrap:
+    enabled: ${APP_BOOTSTRAP_ENABLED:false}
+    username: ${APP_BOOTSTRAP_USERNAME:}
+    password: ${APP_BOOTSTRAP_PASSWORD:}
+    branch-code: ${APP_BOOTSTRAP_BRANCH_CODE:MAIN}
+    branch-name: ${APP_BOOTSTRAP_BRANCH_NAME:Chi nhánh chính}
+
 management:
   endpoints:
     web:
