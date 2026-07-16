@@ -7,6 +7,7 @@ import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react
 import { ApiError } from '../../api/client'
 import type { CustomerDetail, CustomerInput, CustomerSource } from '../../api/types'
 import { useAuth } from '../../auth/AuthProvider'
+import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ConfirmDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, NotFoundState, PermissionDeniedState } from '../../components/States'
 import { useToast } from '../../providers/ToastProvider'
@@ -36,7 +37,7 @@ export function CustomerFormPage() {
   const updateMutation = useUpdateCustomer(customerId ?? 0, branchId ?? 0)
   const [conflictOpen, setConflictOpen] = useState(false)
   const allowLeave = useRef(false)
-  const canUse = hasPermission(editing ? 'customer.update' : 'customer.create')
+  const canUse = hasPermission(editing ? PERMISSION_CODES.CUSTOMER_UPDATE : PERMISSION_CODES.CUSTOMER_CREATE)
   const { register, handleSubmit, watch, reset, setError, formState: { errors, isDirty } } = useForm<CustomerFormValues>({ resolver: zodResolver(schema), defaultValues: emptyValues })
   const includeAddress = watch('includeAddress')
   const blocker = useBlocker(() => isDirty && !allowLeave.current)

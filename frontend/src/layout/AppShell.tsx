@@ -3,13 +3,14 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { PERMISSION_CODES, type PermissionCode } from '../auth/permissionCodes.generated'
 import { QuickCustomerDialog } from '../features/customers/QuickCustomerDialog'
 import { useTheme } from '../providers/ThemeProvider'
 
 const navItems = [
   { to: '/overview', key: 'overview', icon: Home },
   { to: '/orders', key: 'orders', icon: ClipboardList },
-  { to: '/customers', key: 'customers', icon: Users },
+  { to: '/customers', key: 'customers', icon: Users, permission: PERMISSION_CODES.CUSTOMER_READ },
   { to: '/more', key: 'more', icon: MoreHorizontal },
 ] as const
 
@@ -22,7 +23,9 @@ export function AppShell() {
   const [quickCreateOpen, setQuickCreateOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const focused = location.pathname === '/customers/new' || /\/customers\/\d+\/edit$/.test(location.pathname)
-  const canCreate = hasPermission('customer.create')
+  const canCreate = hasPermission(PERMISSION_CODES.CUSTOMER_CREATE)
+  const visibleNavItems = navItems.filter((item) =>
+    !('permission' in item) || hasPermission(item.permission as PermissionCode))
 
   const signOut = () => { logout(); navigate('/login', { replace: true }) }
   return (
@@ -30,7 +33,7 @@ export function AppShell() {
       <aside className="desktop-sidebar">
         <div className="brand"><span className="brand__mark"><Shirt size={22} aria-hidden="true" /></span><span><strong>{t('appName')}</strong><small>POS</small></span></div>
         <nav className="sidebar-nav" aria-label={t('navigation:customers')}>
-          {navItems.map(({ to, key, icon: Icon }) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}><Icon size={20} aria-hidden="true" /><span>{t(`navigation:${key}`)}</span></NavLink>)}
+          {visibleNavItems.map(({ to, key, icon: Icon }) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}><Icon size={20} aria-hidden="true" /><span>{t(`navigation:${key}`)}</span></NavLink>)}
         </nav>
         <NavLink to="/settings/preferences" className="nav-item nav-item--settings"><Settings2 size={20} aria-hidden="true" /><span>{t('navigation:preferences')}</span></NavLink>
       </aside>
@@ -48,7 +51,7 @@ export function AppShell() {
         </div>
       </header>
 
-      {mobileMenuOpen && <div className="mobile-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setMobileMenuOpen(false) }}><aside className="mobile-drawer" aria-label={t('menu')}><div className="mobile-drawer__header"><div className="brand"><span className="brand__mark"><Shirt size={22} /></span><strong>{t('appName')}</strong></div><button className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label={t('close')}><X size={20} /></button></div>{navItems.map(({ to, key, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setMobileMenuOpen(false)} className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}><Icon size={20} /><span>{t(`navigation:${key}`)}</span></NavLink>)}<div className="mobile-preferences"><label>{t('theme')}<select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}><option value="laundry-teal">{t('teal')}</option><option value="laundry-indigo">{t('indigo')}</option></select></label><label>{t('language')}<select value={i18n.language.startsWith('en') ? 'en' : 'vi'} onChange={(event) => void i18n.changeLanguage(event.target.value)}><option value="vi">{t('vietnamese')}</option><option value="en">{t('english')}</option></select></label><button className="button button--secondary" onClick={signOut}>{t('logout')}</button></div></aside></div>}
+      {mobileMenuOpen && <div className="mobile-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setMobileMenuOpen(false) }}><aside className="mobile-drawer" aria-label={t('menu')}><div className="mobile-drawer__header"><div className="brand"><span className="brand__mark"><Shirt size={22} /></span><strong>{t('appName')}</strong></div><button className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label={t('close')}><X size={20} /></button></div>{visibleNavItems.map(({ to, key, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setMobileMenuOpen(false)} className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}><Icon size={20} /><span>{t(`navigation:${key}`)}</span></NavLink>)}<div className="mobile-preferences"><label>{t('theme')}<select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}><option value="laundry-teal">{t('teal')}</option><option value="laundry-indigo">{t('indigo')}</option></select></label><label>{t('language')}<select value={i18n.language.startsWith('en') ? 'en' : 'vi'} onChange={(event) => void i18n.changeLanguage(event.target.value)}><option value="vi">{t('vietnamese')}</option><option value="en">{t('english')}</option></select></label><button className="button button--secondary" onClick={signOut}>{t('logout')}</button></div></aside></div>}
 
       <main className="app-main"><Outlet /></main>
 
@@ -56,10 +59,10 @@ export function AppShell() {
         <NavLink to="/overview" className={({ isActive }) => isActive ? 'active' : ''}><Home size={23} /><span>{t('navigation:overview')}</span></NavLink>
         <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}><ClipboardList size={23} /><span>{t('navigation:orders')}</span></NavLink>
         <button type="button" className="central-create" onClick={() => canCreate && setQuickCreateOpen(true)} disabled={!canCreate} aria-label={t('customers:quickAdd')}><Plus size={28} /></button>
-        <NavLink to="/customers" className={({ isActive }) => isActive ? 'active' : ''}><Users size={23} /><span>{t('navigation:customers')}</span></NavLink>
+        {hasPermission(PERMISSION_CODES.CUSTOMER_READ) && <NavLink to="/customers" className={({ isActive }) => isActive ? 'active' : ''}><Users size={23} /><span>{t('navigation:customers')}</span></NavLink>}
         <NavLink to="/more" className={({ isActive }) => isActive ? 'active' : ''}><MoreHorizontal size={23} /><span>{t('navigation:more')}</span></NavLink>
       </nav>}
-      <QuickCustomerDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />
+      {canCreate && <QuickCustomerDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />}
     </div>
   )
 }

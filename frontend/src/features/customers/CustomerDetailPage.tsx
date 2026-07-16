@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import type { CustomerActivity, CustomerAddress, CustomerStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthProvider'
+import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ConfirmDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, NotFoundState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { useToast } from '../../providers/ToastProvider'
@@ -23,11 +24,11 @@ export function CustomerDetailPage() {
   const [addressStatusTarget, setAddressStatusTarget] = useState<CustomerAddress | null>(null)
   const [replacementId, setReplacementId] = useState<number | undefined>()
   const [activityPage, setActivityPage] = useState(0)
-  const canRead = hasPermission('customer.read')
-  const canEdit = hasPermission('customer.update')
-  const canStatus = hasPermission('customer.deactivate')
-  const canAddress = hasPermission('customer.address.manage')
-  const canAudit = hasPermission('customer.audit.read')
+  const canRead = hasPermission(PERMISSION_CODES.CUSTOMER_READ)
+  const canEdit = hasPermission(PERMISSION_CODES.CUSTOMER_UPDATE)
+  const canStatus = hasPermission(PERMISSION_CODES.CUSTOMER_DEACTIVATE)
+  const canAddress = hasPermission(PERMISSION_CODES.CUSTOMER_ADDRESS_MANAGE)
+  const canAudit = hasPermission(PERMISSION_CODES.CUSTOMER_AUDIT_READ)
   const customer = query.data
   const activities = useCustomerActivities(customerId, branchId ?? 0, activityPage, canAudit && Boolean(customer && branchId))
   const statusMutation = useChangeCustomerStatus(customerId, branchId ?? 0)

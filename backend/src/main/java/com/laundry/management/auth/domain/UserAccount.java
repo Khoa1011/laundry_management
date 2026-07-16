@@ -57,6 +57,9 @@ public class UserAccount {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserBranch> branchAssignments = new LinkedHashSet<>();
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<UserPermissionOverride> permissionOverrides = new LinkedHashSet<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -91,6 +94,16 @@ public class UserAccount {
         status = AccountStatus.INACTIVE;
     }
 
+    public void overridePermission(Permission permission, PermissionOverrideEffect effect) {
+        permissionOverrides.stream()
+            .filter(existing -> existing.getPermission().getCode().equals(permission.getCode()))
+            .findFirst()
+            .ifPresentOrElse(
+                existing -> existing.changeEffect(effect),
+                () -> permissionOverrides.add(new UserPermissionOverride(this, permission, effect))
+            );
+    }
+
     public Long getId() {
         return id;
     }
@@ -121,5 +134,9 @@ public class UserAccount {
 
     public Set<UserBranch> getBranchAssignments() {
         return Set.copyOf(branchAssignments);
+    }
+
+    public Set<UserPermissionOverride> getPermissionOverrides() {
+        return Set.copyOf(permissionOverrides);
     }
 }

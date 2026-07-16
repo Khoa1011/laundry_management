@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import type { CustomerListItem, CustomerSource, CustomerStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthProvider'
+import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { useCustomers, type CustomerFilters } from './api'
@@ -25,9 +26,9 @@ export function CustomerListPage() {
   const [quickOpen, setQuickOpen] = useState(false)
   const searchParam = params.get('search') ?? ''
   const [searchInput, setSearchInput] = useState(searchParam)
-  const canRead = hasPermission('customer.read')
-  const canCreate = hasPermission('customer.create')
-  const canUpdate = hasPermission('customer.update')
+  const canRead = hasPermission(PERMISSION_CODES.CUSTOMER_READ)
+  const canCreate = hasPermission(PERMISSION_CODES.CUSTOMER_CREATE)
+  const canUpdate = hasPermission(PERMISSION_CODES.CUSTOMER_UPDATE)
 
   useEffect(() => setSearchInput(searchParam), [searchParam])
   useEffect(() => {

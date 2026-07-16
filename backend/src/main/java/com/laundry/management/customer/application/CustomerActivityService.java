@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.security.CurrentUserProvider;
+import com.laundry.management.auth.security.permission.PermissionCodes;
 import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.common.exception.ErrorCode;
 import com.laundry.management.customer.api.CustomerActivityListResponse;
@@ -69,7 +70,7 @@ public class CustomerActivityService {
         }
     }
 
-    @PreAuthorize("hasAuthority('customer.audit.read')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_AUDIT_READ + "')")
     @Transactional(readOnly = true)
     public CustomerActivityListResponse list(Long customerId, Long requestedBranchId, int page, int size) {
         validatePage(page, size);

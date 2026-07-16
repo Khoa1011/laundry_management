@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from 'react-router-dom'
 import { useAuth } from './auth/AuthProvider'
+import { PERMISSION_CODES, type PermissionCode } from './auth/permissionCodes.generated'
 import { StatePanel } from './components/States'
 import { AppShell } from './layout/AppShell'
 import { LoginPage } from './pages/LoginPage'
@@ -22,6 +23,11 @@ function ProtectedRoute() {
   return user ? <Outlet /> : <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
 }
 
+function PermissionRoute({ permission, children }: { permission: PermissionCode; children: ReactNode }) {
+  const { hasPermission } = useAuth()
+  return hasPermission(permission) ? children : <Navigate to="/forbidden" replace />
+}
+
 function RouteError() {
   const { t } = useTranslation()
   return <main className="standalone-state"><StatePanel title={t('errors:genericTitle')} body={t('errors:genericBody')} action={<a className="button button--secondary" href="/customers">{t('goHome')}</a>} /></main>
@@ -32,10 +38,10 @@ const router = createBrowserRouter([
   { element: <ProtectedRoute />, errorElement: <RouteError />, children: [
     { element: <AppShell />, children: [
       { index: true, element: <Navigate to="/customers" replace /> },
-      { path: '/customers', element: <LazyPage><CustomerListPage /></LazyPage> },
-      { path: '/customers/new', element: <LazyPage><CustomerFormPage /></LazyPage> },
-      { path: '/customers/:customerId', element: <LazyPage><CustomerDetailPage /></LazyPage> },
-      { path: '/customers/:customerId/edit', element: <LazyPage><CustomerFormPage /></LazyPage> },
+      { path: '/customers', element: <PermissionRoute permission={PERMISSION_CODES.CUSTOMER_READ}><LazyPage><CustomerListPage /></LazyPage></PermissionRoute> },
+      { path: '/customers/new', element: <PermissionRoute permission={PERMISSION_CODES.CUSTOMER_CREATE}><LazyPage><CustomerFormPage /></LazyPage></PermissionRoute> },
+      { path: '/customers/:customerId', element: <PermissionRoute permission={PERMISSION_CODES.CUSTOMER_READ}><LazyPage><CustomerDetailPage /></LazyPage></PermissionRoute> },
+      { path: '/customers/:customerId/edit', element: <PermissionRoute permission={PERMISSION_CODES.CUSTOMER_UPDATE}><LazyPage><CustomerFormPage /></LazyPage></PermissionRoute> },
       { path: '/overview', element: <LazyPage><PlaceholderPage /></LazyPage> },
       { path: '/orders', element: <LazyPage><PlaceholderPage /></LazyPage> },
       { path: '/more', element: <LazyPage><PlaceholderPage /></LazyPage> },

@@ -6,6 +6,7 @@ import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.infrastructure.BranchRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
 import com.laundry.management.auth.security.CurrentUserProvider;
+import com.laundry.management.auth.security.permission.PermissionCodes;
 import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.common.exception.ErrorCode;
 import com.laundry.management.customer.api.CustomerCreateRequest;
@@ -69,7 +70,7 @@ public class CustomerService {
         this.customerMapper = customerMapper;
     }
 
-    @PreAuthorize("hasAuthority('customer.create')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_CREATE + "')")
     @Transactional
     public CustomerDetailResponse create(CustomerCreateRequest request) {
         Long branchId = currentUserProvider.resolveAuthorizedBranch(request.branchId());
@@ -122,7 +123,7 @@ public class CustomerService {
         return detail(customer);
     }
 
-    @PreAuthorize("hasAuthority('customer.update')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_UPDATE + "')")
     @Transactional
     public CustomerDetailResponse update(
         Long customerId,
@@ -165,7 +166,7 @@ public class CustomerService {
         return detail(customer);
     }
 
-    @PreAuthorize("hasAuthority('customer.deactivate')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_DEACTIVATE + "')")
     @Transactional
     public CustomerDetailResponse changeStatus(
         Long customerId,

@@ -19,6 +19,26 @@
 - Keep changes within task scope. Do not modify the frontend for backend-only work.
 - After backend changes, run the available backend tests and the build command supported by the repository.
 
+## Mandatory Access-Control-First Workflow for Every Business Module
+
+Codex and all agents must:
+
+1. Read `.agents/skills/module-access-control-first/SKILL.md`.
+2. Create or update the module permission manifest before implementing a new business module or capability.
+3. Register every new permission.
+4. Generate backend permission constants.
+5. Generate frontend permission constants and types.
+6. Add explicit default role grants.
+7. Keep permissions separate from branch or tenant scope, ownership scope, and business policies.
+8. Protect every backend endpoint or application-service path with an effective-permission check.
+9. Protect frontend navigation, routes, pages, fields, and actions.
+10. Use effective permissions returned by the backend.
+11. Never derive frontend access from role names.
+12. Never introduce an ADMIN role-name bypass.
+13. Preserve `DENY > ALLOW > ROLE` precedence.
+14. Run permission generation, validation, and generated-file synchronization checks before final module completion.
+15. Treat missing permission coverage or unknown permission references as a blocking quality-gate failure.
+
 ## Mobile-first web UI rules
 
 ### Objective

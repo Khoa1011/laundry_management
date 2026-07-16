@@ -12,8 +12,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.laundry.management.auth.domain.Branch;
 import com.laundry.management.auth.domain.Role;
+import com.laundry.management.auth.domain.PermissionOverrideEffect;
 import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.infrastructure.BranchRepository;
+import com.laundry.management.auth.infrastructure.PermissionRepository;
 import com.laundry.management.auth.infrastructure.RoleRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
 import com.laundry.management.customer.infrastructure.CustomerActivityRepository;
@@ -55,6 +57,9 @@ class AuthenticationIntegrationTest {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private PermissionRepository permissionRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -112,6 +117,52 @@ class AuthenticationIntegrationTest {
             .andExpect(jsonPath("$.user.permissions", hasItem("customer.read")))
             .andExpect(jsonPath("$.user.branches[0].code").value("TEST"))
             .andExpect(content().string(org.hamcrest.Matchers.not(containsString("passwordHash"))));
+    }
+
+    @Test
+    void userDenyOverridesRoleGrant() throws Exception {
+        UserAccount account = userAccountRepository.findByUsernameIgnoreCase(USERNAME).orElseThrow();
+        account.overridePermission(
+            permissionRepository.findByCode("customer.read").orElseThrow(),
+            PermissionOverrideEffect.DENY
+        );
+        userAccountRepository.saveAndFlush(account);
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"manager.test","password":"test-password-only"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.permissions", org.hamcrest.Matchers.not(hasItem("customer.read"))));
+    }
+
+    @Test
+    void userAllowAddsPermissionMissingFromRole() throws Exception {
+        Role receptionist = roleRepository.findByCode("RECEPTIONIST").orElseThrow();
+        Branch branch = branchRepository.findAll().get(0);
+        UserAccount account = new UserAccount(
+            "reception.audit",
+            passwordEncoder.encode(PASSWORD),
+            "Reception Audit",
+            branch
+        );
+        account.addRole(receptionist);
+        account = userAccountRepository.saveAndFlush(account);
+        account.assignBranch(branch, true);
+        account.overridePermission(
+            permissionRepository.findByCode("customer.audit.read").orElseThrow(),
+            PermissionOverrideEffect.ALLOW
+        );
+        userAccountRepository.saveAndFlush(account);
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"reception.audit","password":"test-password-only"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.permissions", hasItem("customer.audit.read")));
     }
 
     @Test

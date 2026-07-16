@@ -1,6 +1,7 @@
 package com.laundry.management.customer.application;
 
 import com.laundry.management.auth.security.CurrentUserProvider;
+import com.laundry.management.auth.security.permission.PermissionCodes;
 import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.common.exception.ErrorCode;
 import com.laundry.management.customer.api.CustomerDetailResponse;
@@ -48,7 +49,7 @@ public class CustomerQueryService {
         this.customerMapper = customerMapper;
     }
 
-    @PreAuthorize("hasAuthority('customer.read')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_READ + "')")
     @Transactional(readOnly = true)
     public CustomerListResponse list(
         int page,
@@ -105,7 +106,7 @@ public class CustomerQueryService {
         );
     }
 
-    @PreAuthorize("hasAuthority('customer.read')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_READ + "')")
     @Transactional(readOnly = true)
     public CustomerDetailResponse get(Long customerId, Long requestedBranchId) {
         Long branchId = currentUserProvider.resolveAuthorizedBranch(requestedBranchId);

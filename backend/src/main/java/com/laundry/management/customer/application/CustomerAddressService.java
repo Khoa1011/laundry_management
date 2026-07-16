@@ -3,6 +3,7 @@ package com.laundry.management.customer.application;
 import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
 import com.laundry.management.auth.security.CurrentUserProvider;
+import com.laundry.management.auth.security.permission.PermissionCodes;
 import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.common.exception.ErrorCode;
 import com.laundry.management.customer.api.CustomerAddressCreateRequest;
@@ -56,7 +57,7 @@ public class CustomerAddressService {
         this.customerMapper = customerMapper;
     }
 
-    @PreAuthorize("hasAuthority('customer.read')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_READ + "')")
     @Transactional(readOnly = true)
     public List<CustomerAddressResponse> list(Long customerId, Long requestedBranchId) {
         Long branchId = currentUserProvider.resolveAuthorizedBranch(requestedBranchId);
@@ -65,7 +66,7 @@ public class CustomerAddressService {
             .stream().map(customerMapper::toAddress).toList();
     }
 
-    @PreAuthorize("hasAuthority('customer.address.manage')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
     @Transactional
     public CustomerAddressResponse create(
         Long customerId,
@@ -86,7 +87,7 @@ public class CustomerAddressService {
         return createAddress(customer, request, actor);
     }
 
-    @PreAuthorize("hasAuthority('customer.address.manage')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
     @Transactional
     public CustomerAddressResponse update(
         Long customerId,
@@ -149,7 +150,7 @@ public class CustomerAddressService {
         return customerMapper.toAddress(address);
     }
 
-    @PreAuthorize("hasAuthority('customer.address.manage')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
     @Transactional
     public CustomerAddressResponse setDefault(
         Long customerId,
@@ -185,7 +186,7 @@ public class CustomerAddressService {
         return customerMapper.toAddress(address);
     }
 
-    @PreAuthorize("hasAuthority('customer.address.manage')")
+    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
     @Transactional
     public CustomerAddressResponse changeStatus(
         Long customerId,

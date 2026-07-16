@@ -2,6 +2,7 @@ package com.laundry.management.auth.security;
 
 import com.laundry.management.auth.domain.AccountStatus;
 import com.laundry.management.auth.domain.Permission;
+import com.laundry.management.auth.domain.PermissionOverrideEffect;
 import com.laundry.management.auth.domain.Role;
 import com.laundry.management.auth.domain.UserAccount;
 import java.util.Collection;
@@ -56,6 +57,16 @@ public final class AuthenticatedUser implements UserDetails {
                 permissionCodes.add(permission.getCode());
             }
         }
+        Set<String> deniedPermissionCodes = new TreeSet<>();
+        account.getPermissionOverrides().forEach(override -> {
+            String code = override.getPermission().getCode();
+            if (override.getEffect() == PermissionOverrideEffect.DENY) {
+                deniedPermissionCodes.add(code);
+            } else {
+                permissionCodes.add(code);
+            }
+        });
+        permissionCodes.removeAll(deniedPermissionCodes);
 
         List<BranchAccess> branchAccess = account.getBranchAssignments().stream()
             .map(assignment -> new BranchAccess(

@@ -162,6 +162,17 @@ npm run lint
 npm run build
 ```
 
+Permission catalog quality gates from the repository root:
+
+```powershell
+node scripts/access-control/generate-permissions.mjs
+node scripts/access-control/validate-permissions.mjs
+node scripts/access-control/check-generated-permissions.mjs
+node --test scripts/access-control/access-control.test.mjs
+```
+
+See `docs/ACCESS_CONTROL.md` and `docs/ADDING_A_NEW_MODULE.md` before adding a business capability.
+
 The frontend currently provides a responsive system-readiness shell only. It contains no mock business data and does not decide any unresolved rules from `docs/BUSINESS_RULES.md`.
 
 ## Troubleshooting

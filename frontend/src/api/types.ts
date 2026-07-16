@@ -22,7 +22,7 @@ export interface CurrentUser {
   username: string
   displayName: string
   roles: string[]
-  permissions: string[]
+  permissions: PermissionCode[]
   branches: BranchAccess[]
   defaultBranchId: number
 }
@@ -125,3 +125,4 @@ export interface CustomerActivity {
 }
 
 export type CustomerActivityList = PageResponse<CustomerActivity>
+import type { PermissionCode } from '../auth/permissionCodes.generated'

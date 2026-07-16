@@ -1,0 +1,44 @@
+{
+  "_instructions": {
+    "usage": "Copy this file to <module>.yml, remove _instructions, and replace every placeholder.",
+    "permissionQuestion": "Permissions answer: May the user perform this type of action?",
+    "dataScopeQuestion": "Data scope answers: On which branches, tenants, or records?",
+    "businessPolicyQuestion": "Business policies answer: Under which business conditions?",
+    "policyExamples": [
+      "approval amount limit",
+      "two-person approval",
+      "creator cannot approve",
+      "posted records cannot be edited",
+      "discount limit",
+      "refund limit"
+    ],
+    "riskLevels": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+    "warning": "HIGH and CRITICAL permissions require explicit default-role declarations. Never persist wildcard permissions."
+  },
+  "module": {
+    "code": "replace-module-code",
+    "nameVi": "Tên mô-đun tiếng Việt",
+    "nameEn": "English module name",
+    "descriptionVi": "Mô tả tiếng Việt",
+    "descriptionEn": "English description",
+    "displayOrder": 100,
+    "dataScopeNotes": "Describe branch, tenant, ownership, and record scope separately from permission checks.",
+    "businessPolicyNotes": "Describe approval limits and other business conditions separately from permissions."
+  },
+  "permissions": [
+    {
+      "code": "replace-module.read",
+      "resource": "replace-module",
+      "action": "read",
+      "nameVi": "Tên quyền tiếng Việt",
+      "nameEn": "English permission name",
+      "descriptionVi": "Mô tả quyền tiếng Việt",
+      "descriptionEn": "English permission description",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["replace-module.read"]
+  }
+}

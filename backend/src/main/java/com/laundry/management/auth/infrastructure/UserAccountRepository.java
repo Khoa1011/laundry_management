@@ -10,6 +10,8 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     @EntityGraph(attributePaths = {
         "roles",
         "roles.permissions",
+        "permissionOverrides",
+        "permissionOverrides.permission",
         "branchAssignments",
         "branchAssignments.branch",
         "defaultBranch"

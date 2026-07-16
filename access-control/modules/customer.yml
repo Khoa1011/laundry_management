@@ -1,0 +1,104 @@
+{
+  "module": {
+    "code": "customer",
+    "nameVi": "Khách hàng",
+    "nameEn": "Customer Management",
+    "descriptionVi": "Quản lý hồ sơ, địa chỉ và lịch sử thay đổi của khách hàng.",
+    "descriptionEn": "Manage customer profiles, addresses, and change history.",
+    "displayOrder": 10,
+    "dataScopeNotes": "Mọi thao tác Customer phải được giới hạn theo chi nhánh mà người dùng được phân công.",
+    "businessPolicyNotes": "Quy tắc duy nhất số điện thoại, vô hiệu hóa và lưu giữ dữ liệu vẫn thuộc business policy."
+  },
+  "permissions": [
+    {
+      "code": "customer.read",
+      "resource": "customer",
+      "action": "read",
+      "nameVi": "Xem khách hàng",
+      "nameEn": "View customers",
+      "descriptionVi": "Xem danh sách và chi tiết khách hàng trong phạm vi dữ liệu được phép.",
+      "descriptionEn": "View customer lists and details within the allowed data scope.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "customer.create",
+      "resource": "customer",
+      "action": "create",
+      "nameVi": "Tạo khách hàng",
+      "nameEn": "Create customers",
+      "descriptionVi": "Tạo hồ sơ khách hàng mới trong chi nhánh được phép.",
+      "descriptionEn": "Create a customer profile in an allowed branch.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 20
+    },
+    {
+      "code": "customer.update",
+      "resource": "customer",
+      "action": "update",
+      "nameVi": "Cập nhật khách hàng",
+      "nameEn": "Update customers",
+      "descriptionVi": "Cập nhật thông tin hồ sơ khách hàng.",
+      "descriptionEn": "Update customer profile information.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 30
+    },
+    {
+      "code": "customer.deactivate",
+      "resource": "customer",
+      "action": "deactivate",
+      "nameVi": "Đổi trạng thái khách hàng",
+      "nameEn": "Change customer status",
+      "descriptionVi": "Vô hiệu hóa hoặc kích hoạt lại hồ sơ khách hàng.",
+      "descriptionEn": "Deactivate or reactivate a customer profile.",
+      "riskLevel": "HIGH",
+      "displayOrder": 40
+    },
+    {
+      "code": "customer.address.manage",
+      "resource": "customer.address",
+      "action": "manage",
+      "nameVi": "Quản lý địa chỉ khách hàng",
+      "nameEn": "Manage customer addresses",
+      "descriptionVi": "Tạo, sửa, đặt mặc định và đổi trạng thái địa chỉ khách hàng.",
+      "descriptionEn": "Create, update, set default, and change customer address status.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 50
+    },
+    {
+      "code": "customer.audit.read",
+      "resource": "customer.audit",
+      "action": "read",
+      "nameVi": "Xem lịch sử khách hàng",
+      "nameEn": "View customer audit history",
+      "descriptionVi": "Xem lịch sử thay đổi và người thực hiện trên hồ sơ khách hàng.",
+      "descriptionEn": "View customer change history and acting users.",
+      "riskLevel": "HIGH",
+      "displayOrder": 60
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": [
+      "customer.read",
+      "customer.create",
+      "customer.update",
+      "customer.deactivate",
+      "customer.address.manage",
+      "customer.audit.read"
+    ],
+    "MANAGER": [
+      "customer.read",
+      "customer.create",
+      "customer.update",
+      "customer.deactivate",
+      "customer.address.manage",
+      "customer.audit.read"
+    ],
+    "RECEPTIONIST": [
+      "customer.read",
+      "customer.create",
+      "customer.update",
+      "customer.address.manage"
+    ]
+  }
+}

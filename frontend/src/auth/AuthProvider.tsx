@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { apiRequest, clearSession, readSession, writeSession } from '../api/client'
 import type { CurrentUser, LoginResponse } from '../api/types'
+import type { PermissionCode } from './permissionCodes.generated'
 
 interface AuthContextValue {
   user: CurrentUser | null
@@ -9,7 +10,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>
   logout: () => void
   setBranchId: (branchId: number) => void
-  hasPermission: (permission: string) => boolean
+  hasPermission: (permission: PermissionCode) => boolean
   clearExpiredNotice: () => void
 }
 
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBranchIdState(nextBranchId)
   }, [user])
 
-  const hasPermission = useCallback((permission: string) => user?.permissions.includes(permission) ?? false, [user])
+  const hasPermission = useCallback((permission: PermissionCode) => user?.permissions.includes(permission) ?? false, [user])
   const clearExpiredNotice = useCallback(() => setSessionExpired(false), [])
   const value = useMemo(() => ({ user, branchId, sessionExpired, login, logout, setBranchId, hasPermission, clearExpiredNotice }), [user, branchId, sessionExpired, login, logout, setBranchId, hasPermission, clearExpiredNotice])
 
