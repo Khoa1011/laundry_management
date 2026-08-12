@@ -23,7 +23,9 @@ On macOS or Linux:
 cp .env.example .env
 ```
 
-Review `.env` and replace both example MySQL passwords before startup. The committed values in `.env.example` are local-development placeholders, not production credentials. `.env` is ignored by Git.
+Review `.env`, replace both example MySQL passwords, and set `APP_EMPLOYEE_IDENTITY_KEY` to exactly 32 random bytes encoded as Base64 before using employee identity features. Store the production key in a secret manager and plan a data migration before rotating it. The committed values in `.env.example` are local-development placeholders, not production credentials. `.env` is ignored by Git.
+
+Private employee documents are persisted in the Docker volume `employee_private_data`; they are not served by Nginx or exposed through a public path.
 
 Start the complete application with one command:
 
@@ -53,6 +55,8 @@ The application endpoints are:
 - Frontend: <http://localhost:5173>
 - Backend health: <http://localhost:8080/actuator/health>
 - Frontend-proxied backend health: <http://localhost:5173/api/health>
+
+Shared frontend standards for money inputs, camera capture, and media preview are documented in [docs/FRONTEND_FOUNDATIONS.md](docs/FRONTEND_FOUNDATIONS.md).
 
 Ports bind to `127.0.0.1` by default. Other devices cannot access them unless the Compose configuration is intentionally changed.
 
