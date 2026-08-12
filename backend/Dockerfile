@@ -27,6 +27,9 @@ WORKDIR /app
 
 COPY --from=builder --chown=laundry:laundry /tmp/app.jar ./app.jar
 
+RUN mkdir -p /app/private-data/employee-documents \
+    && chown -R laundry:laundry /app/private-data
+
 USER laundry:laundry
 
 ENV JAVA_TOOL_OPTIONS="-XX:InitialRAMPercentage=5.0 -XX:MaxRAMPercentage=25.0 -XX:+ExitOnOutOfMemoryError"

@@ -70,7 +70,7 @@ public class CustomerActivityService {
         }
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_AUDIT_READ + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_AUDIT_READ)")
     @Transactional(readOnly = true)
     public CustomerActivityListResponse list(Long customerId, Long requestedBranchId, int page, int size) {
         validatePage(page, size);

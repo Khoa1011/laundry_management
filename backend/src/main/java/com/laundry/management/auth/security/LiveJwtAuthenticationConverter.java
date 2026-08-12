@@ -1,5 +1,6 @@
 package com.laundry.management.auth.security;
 
+import com.laundry.management.auth.access.application.EffectivePermissionService;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
 import java.util.Objects;
 import org.springframework.core.convert.converter.Converter;
@@ -16,16 +17,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class LiveJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     private final UserAccountRepository userAccountRepository;
+    private final EffectivePermissionService effectivePermissionService;
 
-    public LiveJwtAuthenticationConverter(UserAccountRepository userAccountRepository) {
+    public LiveJwtAuthenticationConverter(
+        UserAccountRepository userAccountRepository,
+        EffectivePermissionService effectivePermissionService
+    ) {
         this.userAccountRepository = userAccountRepository;
+        this.effectivePermissionService = effectivePermissionService;
     }
 
     @Override
     @Transactional(readOnly = true)
     public AbstractAuthenticationToken convert(Jwt jwt) {
         AuthenticatedUser user = userAccountRepository.findByUsernameIgnoreCase(jwt.getSubject())
-            .map(AuthenticatedUser::from)
+            .map(account -> AuthenticatedUser.from(account, effectivePermissionService.resolve(account)))
             .filter(AuthenticatedUser::isEnabled)
             .filter(candidate -> Objects.equals(candidate.id(), userIdClaim(jwt)))
             .orElseThrow(this::invalidToken);

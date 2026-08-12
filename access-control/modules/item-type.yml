@@ -1,0 +1,63 @@
+{
+  "module": {
+    "code": "item-type",
+    "nameVi": "Danh mục loại đồ",
+    "nameEn": "Item Type Catalog",
+    "descriptionVi": "Quản lý cây phân loại đồ giặt và các thiết lập xử lý mặc định.",
+    "descriptionEn": "Manage the hierarchical laundry item catalog and default handling settings.",
+    "displayOrder": 36,
+    "dataScopeNotes": "Danh mục loại đồ dùng chung; quyền không tự mở rộng phạm vi chi nhánh của bảng giá.",
+    "businessPolicyNotes": "Không cho phép quan hệ cha con vòng; loại đồ đã được tham chiếu không bị xóa cứng."
+  },
+  "permissions": [
+    {
+      "code": "item-type.read",
+      "resource": "item-type",
+      "action": "read",
+      "nameVi": "Xem loại đồ",
+      "nameEn": "View item types",
+      "descriptionVi": "Xem danh sách, cây phân cấp và chi tiết loại đồ.",
+      "descriptionEn": "View item type lists, hierarchy, and details.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "item-type.create",
+      "resource": "item-type",
+      "action": "create",
+      "nameVi": "Tạo loại đồ",
+      "nameEn": "Create item types",
+      "descriptionVi": "Tạo loại đồ gốc hoặc loại đồ con.",
+      "descriptionEn": "Create root or child item types.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 20
+    },
+    {
+      "code": "item-type.update",
+      "resource": "item-type",
+      "action": "update",
+      "nameVi": "Cập nhật loại đồ",
+      "nameEn": "Update item types",
+      "descriptionVi": "Cập nhật thông tin hoặc chuyển loại đồ sang nhánh cha hợp lệ.",
+      "descriptionEn": "Update item details or move an item to a valid parent.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 30
+    },
+    {
+      "code": "item-type.archive",
+      "resource": "item-type",
+      "action": "archive",
+      "nameVi": "Lưu trữ loại đồ",
+      "nameEn": "Archive item types",
+      "descriptionVi": "Ngừng hoạt động hoặc lưu trữ loại đồ mà không xóa lịch sử.",
+      "descriptionEn": "Deactivate or archive item types without deleting history.",
+      "riskLevel": "HIGH",
+      "displayOrder": 40
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["item-type.read", "item-type.create", "item-type.update", "item-type.archive"],
+    "MANAGER": ["item-type.read", "item-type.create", "item-type.update", "item-type.archive"],
+    "RECEPTIONIST": ["item-type.read"]
+  }
+}

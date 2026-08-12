@@ -1,66 +1,161 @@
-import { Bell, ChevronDown, ClipboardList, Home, Languages, Menu, MoreHorizontal, Plus, Settings2, Shirt, Sparkles, Users, X } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, ClipboardList, Home, Languages, Menu, MoreHorizontal, Palette, PanelLeftClose, PanelLeftOpen, Plus, Settings2, ShieldCheck, Shirt, Tags, Users, UsersRound, X } from 'lucide-react'
+import { AnimatePresence, m } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { PERMISSION_CODES, type PermissionCode } from '../auth/permissionCodes.generated'
+import { LiquidNavLink } from '../components/navigation/LiquidNavLink'
+import { Button, ButtonLink } from '../components/ui/Button'
+import { IconButton, IconButtonLink } from '../components/ui/IconButton'
 import { QuickCustomerDialog } from '../features/customers/QuickCustomerDialog'
-import { useTheme } from '../providers/ThemeProvider'
+import { NotificationBell } from '../features/notifications/components/NotificationBell'
+import { motionDuration, motionEase } from '../providers/motionPresets'
 
 const navItems = [
   { to: '/overview', key: 'overview', icon: Home },
   { to: '/orders', key: 'orders', icon: ClipboardList },
   { to: '/customers', key: 'customers', icon: Users, permission: PERMISSION_CODES.CUSTOMER_READ },
+  { to: '/employees', key: 'employees', icon: UsersRound, permission: PERMISSION_CODES.EMPLOYEE_READ },
   { to: '/more', key: 'more', icon: MoreHorizontal },
 ] as const
 
 export function AppShell() {
   const { t, i18n } = useTranslation()
   const { user, branchId, setBranchId, logout, hasPermission } = useAuth()
-  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const [quickCreateOpen, setQuickCreateOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    localStorage.getItem('laundry.sidebar.collapsed') === 'true')
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const mobileDrawerRef = useRef<HTMLElement>(null)
   const focused = location.pathname === '/customers/new' || /\/customers\/\d+\/edit$/.test(location.pathname)
+    || location.pathname === '/employees/new' || /\/employees\/\d+\/edit$/.test(location.pathname)
+    || /\/settings\/access\/roles\/(?:new|\d+\/(?:edit|permissions))$/.test(location.pathname)
   const canCreate = hasPermission(PERMISSION_CODES.CUSTOMER_CREATE)
   const visibleNavItems = navItems.filter((item) =>
     !('permission' in item) || hasPermission(item.permission as PermissionCode))
+  const canOpenAccess = [
+    PERMISSION_CODES.ACCESS_ROLE_READ,
+    PERMISSION_CODES.ACCESS_USER_READ,
+    PERMISSION_CODES.ACCESS_PERMISSION_READ,
+    PERMISSION_CODES.ACCESS_AUDIT_READ,
+  ].some(hasPermission)
+  const canOpenCatalog = [
+    PERMISSION_CODES.SERVICE_READ,
+    PERMISSION_CODES.ITEM_TYPE_READ,
+    PERMISSION_CODES.PRICE_LIST_READ,
+  ].some(hasPermission)
+  const desktopPrimaryNavItems = visibleNavItems.filter((item) => item.key !== 'more')
+  const itemLabel = (key: typeof navItems[number]['key']) =>
+    key === 'employees' ? t('employee:title') : t(`navigation:${key}`)
+  const toggleSidebar = () => setSidebarCollapsed((current) => {
+    const next = !current
+    localStorage.setItem('laundry.sidebar.collapsed', String(next))
+    return next
+  })
 
-  const signOut = () => { logout(); navigate('/login', { replace: true }) }
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const drawer = mobileDrawerRef.current
+    const trigger = mobileMenuButtonRef.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    drawer?.querySelector<HTMLElement>('button, a, select')?.focus()
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMobileMenuOpen(false)
+        return
+      }
+      if (event.key !== 'Tab' || !drawer) return
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], select:not([disabled])'))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      trigger?.focus()
+    }
+  }, [mobileMenuOpen])
+
+  useEffect(() => {
+    const onNavigate = (event: Event) => {
+      const route = (event as CustomEvent<string>).detail
+      if (typeof route === 'string' && route.startsWith('/')) navigate(route)
+    }
+    window.addEventListener('laundry:navigate', onNavigate)
+    return () => window.removeEventListener('laundry:navigate', onNavigate)
+  }, [navigate])
+
+  const signOut = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
   return (
-    <div className={`application-shell${focused ? ' application-shell--focused' : ''}`}>
+    <div className={`application-shell${focused ? ' application-shell--focused' : ''}${sidebarCollapsed ? ' application-shell--sidebar-collapsed' : ''}`}>
+      <a className="skip-link" href="#main-content">{t('skipToContent')}</a>
       <aside className="desktop-sidebar">
-        <div className="brand"><span className="brand__mark"><Shirt size={22} aria-hidden="true" /></span><span><strong>{t('appName')}</strong><small>POS</small></span></div>
-        <nav className="sidebar-nav" aria-label={t('navigation:customers')}>
-          {visibleNavItems.map(({ to, key, icon: Icon }) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}><Icon size={20} aria-hidden="true" /><span>{t(`navigation:${key}`)}</span></NavLink>)}
+        <div className="desktop-sidebar__header">
+          <div className="brand"><span className="brand__mark"><Shirt size={22} aria-hidden="true" /></span><span><strong>{t('appName')}</strong><small>{t('appMode')}</small></span></div>
+          <IconButton type="button" className="sidebar-collapse-button" onClick={toggleSidebar} label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')} title={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}>
+            {sidebarCollapsed ? <PanelLeftOpen size={19} aria-hidden="true" /> : <PanelLeftClose size={19} aria-hidden="true" />}
+          </IconButton>
+        </div>
+        <p className="sidebar-group-label">{t('navigation:operations')}</p>
+        <nav className="sidebar-nav" aria-label={t('navigation:operations')}>
+          {desktopPrimaryNavItems.map(({ to, key, icon: Icon }) => <LiquidNavLink key={to} to={to} title={itemLabel(key)} indicatorId="desktop-sidebar-active"><Icon size={20} aria-hidden="true" /><span>{itemLabel(key)}</span></LiquidNavLink>)}
+          {!hasPermission(PERMISSION_CODES.EMPLOYEE_READ) && hasPermission(PERMISSION_CODES.EMPLOYEE_READ_SELF) && <LiquidNavLink to="/employees/me" title={t('employee:selfTitle')} indicatorId="desktop-sidebar-active"><UsersRound size={20} aria-hidden="true" /><span>{t('employee:selfTitle')}</span></LiquidNavLink>}
         </nav>
-        <NavLink to="/settings/preferences" className="nav-item nav-item--settings"><Settings2 size={20} aria-hidden="true" /><span>{t('navigation:preferences')}</span></NavLink>
+        <p className="sidebar-group-label sidebar-group-label--admin">{t('navigation:administration')}</p>
+        <nav className="sidebar-nav sidebar-nav--secondary" aria-label={t('navigation:administration')}>
+          {canOpenCatalog && <LiquidNavLink to="/catalog/services" title={t('catalog:navigation')} indicatorId="desktop-sidebar-active"><Tags size={20} aria-hidden="true" /><span>{t('catalog:navigation')}</span></LiquidNavLink>}
+          {canOpenAccess && <LiquidNavLink to="/settings/access" title={t('access:accessControl')} indicatorId="desktop-sidebar-active"><ShieldCheck size={20} aria-hidden="true" /><span>{t('access:accessControl')}</span></LiquidNavLink>}
+          <LiquidNavLink to="/more" title={t('navigation:more')} indicatorId="desktop-sidebar-active"><MoreHorizontal size={20} aria-hidden="true" /><span>{t('navigation:more')}</span></LiquidNavLink>
+        </nav>
+        <LiquidNavLink to="/settings/preferences" title={t('navigation:preferences')} className="nav-item nav-item--settings" indicatorId="desktop-sidebar-active"><Settings2 size={20} aria-hidden="true" /><span>{t('navigation:preferences')}</span></LiquidNavLink>
       </aside>
 
       <header className="app-header">
-        <button type="button" className="icon-button mobile-menu-button" onClick={() => setMobileMenuOpen(true)} aria-label={t('menu')}><Menu size={22} aria-hidden="true" /></button>
+        <IconButton ref={mobileMenuButtonRef} type="button" className="mobile-menu-button" onClick={() => setMobileMenuOpen(true)} label={t('menu')}><Menu size={22} aria-hidden="true" /></IconButton>
         <div className="mobile-brand"><Shirt size={20} aria-hidden="true" /><strong>{t('appName')}</strong></div>
         <div className="header-spacer" />
         {user && user.branches.length > 0 && <label className="header-select"><span className="sr-only">{t('branch')}</span><select value={branchId ?? ''} onChange={(event) => setBranchId(Number(event.target.value))}>{user.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></label>}
+        <NotificationBell />
         <div className="desktop-header-controls">
-          <label className="compact-select"><Sparkles size={17} aria-hidden="true" /><span className="sr-only">{t('theme')}</span><select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}><option value="laundry-teal">{t('teal')}</option><option value="laundry-indigo">{t('indigo')}</option></select></label>
+          <IconButtonLink className="header-appearance-button" to="/settings/preferences" label={t('appearance:title')} title={t('appearance:title')}><Palette size={18} aria-hidden="true" /></IconButtonLink>
           <label className="compact-select"><Languages size={17} aria-hidden="true" /><span className="sr-only">{t('language')}</span><select value={i18n.language.startsWith('en') ? 'en' : 'vi'} onChange={(event) => void i18n.changeLanguage(event.target.value)}><option value="vi">VI</option><option value="en">EN</option></select></label>
-          <button type="button" className="icon-button" aria-label={t('notifications')} title={t('noNotifications')}><Bell size={20} aria-hidden="true" /></button>
-          <div className="user-context"><span className="avatar avatar--small">{user?.displayName.slice(0, 1).toLocaleUpperCase()}</span><span><strong>{user?.displayName}</strong><small>{user?.roles[0]}</small></span><button type="button" className="text-button" onClick={signOut}>{t('logout')}</button></div>
+          <div className="user-context"><span className="avatar avatar--small">{user?.displayName.slice(0, 1).toLocaleUpperCase()}</span><span><strong>{user?.displayName}</strong><small>{user?.roles[0]}</small></span><Button type="button" variant="ghost" size="sm" className="text-button" onClick={() => void signOut()}>{t('logout')}</Button></div>
         </div>
       </header>
 
-      {mobileMenuOpen && <div className="mobile-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setMobileMenuOpen(false) }}><aside className="mobile-drawer" aria-label={t('menu')}><div className="mobile-drawer__header"><div className="brand"><span className="brand__mark"><Shirt size={22} /></span><strong>{t('appName')}</strong></div><button className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label={t('close')}><X size={20} /></button></div>{visibleNavItems.map(({ to, key, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setMobileMenuOpen(false)} className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}><Icon size={20} /><span>{t(`navigation:${key}`)}</span></NavLink>)}<div className="mobile-preferences"><label>{t('theme')}<select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}><option value="laundry-teal">{t('teal')}</option><option value="laundry-indigo">{t('indigo')}</option></select></label><label>{t('language')}<select value={i18n.language.startsWith('en') ? 'en' : 'vi'} onChange={(event) => void i18n.changeLanguage(event.target.value)}><option value="vi">{t('vietnamese')}</option><option value="en">{t('english')}</option></select></label><button className="button button--secondary" onClick={signOut}>{t('logout')}</button></div></aside></div>}
+      <AnimatePresence initial={false}>
+        {mobileMenuOpen && <m.div className="mobile-drawer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: motionDuration.primitive }} onMouseDown={(event) => { if (event.target === event.currentTarget) setMobileMenuOpen(false) }}><m.aside ref={mobileDrawerRef} className="mobile-drawer" role="dialog" aria-modal="true" aria-label={t('menu')} initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ duration: motionDuration.structural, ease: motionEase }}><div className="mobile-drawer__header"><div className="brand"><span className="brand__mark"><Shirt size={22} /></span><span><strong>{t('appName')}</strong><small>{t('appMode')}</small></span></div><IconButton onClick={() => setMobileMenuOpen(false)} label={t('close')}><X size={20} /></IconButton></div>{visibleNavItems.map(({ to, key, icon: Icon }) => <LiquidNavLink key={to} to={to} onClick={() => setMobileMenuOpen(false)} indicatorId="mobile-drawer-active"><Icon size={20} /><span>{key === 'employees' ? t('employee:title') : t(`navigation:${key}`)}</span></LiquidNavLink>)}{!hasPermission(PERMISSION_CODES.EMPLOYEE_READ) && hasPermission(PERMISSION_CODES.EMPLOYEE_READ_SELF) && <LiquidNavLink to="/employees/me" onClick={() => setMobileMenuOpen(false)} indicatorId="mobile-drawer-active"><UsersRound size={20} /><span>{t('employee:selfTitle')}</span></LiquidNavLink>}{canOpenCatalog && <LiquidNavLink to="/catalog/services" onClick={() => setMobileMenuOpen(false)} indicatorId="mobile-drawer-active"><Tags size={20} /><span>{t('catalog:navigation')}</span></LiquidNavLink>}{canOpenAccess && <LiquidNavLink to="/settings/access" onClick={() => setMobileMenuOpen(false)} indicatorId="mobile-drawer-active"><ShieldCheck size={20} /><span>{t('access:accessControl')}</span></LiquidNavLink>}<div className="mobile-preferences"><ButtonLink to="/settings/preferences" onClick={() => setMobileMenuOpen(false)} variant="secondary"><Palette size={18} aria-hidden="true" />{t('appearance:title')}</ButtonLink><label>{t('language')}<select value={i18n.language.startsWith('en') ? 'en' : 'vi'} onChange={(event) => void i18n.changeLanguage(event.target.value)}><option value="vi">{t('vietnamese')}</option><option value="en">{t('english')}</option></select></label><Button variant="secondary" onClick={() => void signOut()}>{t('logout')}</Button></div></m.aside></m.div>}
+      </AnimatePresence>
 
-      <main className="app-main"><Outlet /></main>
+      <main id="main-content" className="app-main">
+        <Outlet />
+      </main>
 
       {!focused && <nav className="mobile-bottom-nav" aria-label={t('menu')}>
-        <NavLink to="/overview" className={({ isActive }) => isActive ? 'active' : ''}><Home size={23} /><span>{t('navigation:overview')}</span></NavLink>
-        <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}><ClipboardList size={23} /><span>{t('navigation:orders')}</span></NavLink>
-        <button type="button" className="central-create" onClick={() => canCreate && setQuickCreateOpen(true)} disabled={!canCreate} aria-label={t('customers:quickAdd')}><Plus size={28} /></button>
-        {hasPermission(PERMISSION_CODES.CUSTOMER_READ) && <NavLink to="/customers" className={({ isActive }) => isActive ? 'active' : ''}><Users size={23} /><span>{t('navigation:customers')}</span></NavLink>}
-        <NavLink to="/more" className={({ isActive }) => isActive ? 'active' : ''}><MoreHorizontal size={23} /><span>{t('navigation:more')}</span></NavLink>
+        <LiquidNavLink to="/overview" className="" activeClassName="active" indicatorId="mobile-bottom-active"><Home size={23} /><span>{t('navigation:overview')}</span></LiquidNavLink>
+        <LiquidNavLink to="/orders" className="" activeClassName="active" indicatorId="mobile-bottom-active"><ClipboardList size={23} /><span>{t('navigation:orders')}</span></LiquidNavLink>
+        <IconButton type="button" className="central-create" renderLevel="premium" variant="primary" onClick={() => canCreate && setQuickCreateOpen(true)} disabled={!canCreate} label={t('customers:quickAdd')}><Plus size={28} /></IconButton>
+        {hasPermission(PERMISSION_CODES.CUSTOMER_READ) && <LiquidNavLink to="/customers" className="" activeClassName="active" indicatorId="mobile-bottom-active"><Users size={23} /><span>{t('navigation:customers')}</span></LiquidNavLink>}
+        <LiquidNavLink to="/more" className="" activeClassName="active" indicatorId="mobile-bottom-active"><MoreHorizontal size={23} /><span>{t('navigation:more')}</span></LiquidNavLink>
       </nav>}
       {canCreate && <QuickCustomerDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />}
     </div>

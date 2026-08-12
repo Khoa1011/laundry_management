@@ -14,6 +14,11 @@ Precedence is `DENY > ALLOW > ROLE`. Role names never bypass effective permissio
 
 Each business module owns one manifest in `access-control/modules/<module>.yml`. The files use JSON syntax, which is valid YAML 1.2, so the repository can validate and generate artifacts with the built-in Node.js runtime and no network-installed parser.
 
+Permission segments use lowercase dot notation. A resource segment may use
+kebab-case when the registered domain term requires it, for example
+`access.effective-permission.read`; uppercase, underscores, wildcards, and
+leading or trailing hyphens remain invalid.
+
 Run from the repository root:
 
 ```powershell

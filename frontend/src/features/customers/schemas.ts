@@ -13,18 +13,24 @@ export function customerSchema(t: TFunction) {
     source: z.enum(['', 'WALK_IN', 'REFERRAL', 'FACEBOOK', 'ZALO', 'GOOGLE', 'WEBSITE', 'PARTNER', 'OTHER']),
     note: z.string().max(2000, t('validation:noteLength')),
     includeAddress: z.boolean(),
-    receiverName: z.string(),
+    differentReceiver: z.boolean(),
+    receiverName: z.string().max(150, t('validation:maxLength')),
     receiverPhone: z.string(),
+    administrativeVersion: z.enum(['', 'V1', 'V2']),
     province: z.string().max(120, t('validation:maxLength')),
+    provinceCode: z.string(),
     district: z.string().max(120, t('validation:maxLength')),
+    districtCode: z.string(),
     ward: z.string().max(120, t('validation:maxLength')),
+    wardCode: z.string(),
     addressLine: z.string().max(500, t('validation:maxLength')),
     deliveryNote: z.string().max(1000, t('validation:maxLength')),
   }).superRefine((value, context) => {
     if (!value.includeAddress) return
+    if (!value.addressLine.trim()) context.addIssue({ code: 'custom', path: ['addressLine'], message: t('validation:addressRequired') })
+    if (!value.differentReceiver) return
     if (!value.receiverName.trim()) context.addIssue({ code: 'custom', path: ['receiverName'], message: t('validation:receiverRequired') })
     if (!phonePattern.test(value.receiverPhone.trim())) context.addIssue({ code: 'custom', path: ['receiverPhone'], message: t('validation:phoneInvalid') })
-    if (!value.addressLine.trim()) context.addIssue({ code: 'custom', path: ['addressLine'], message: t('validation:addressRequired') })
   })
 }
 
@@ -32,9 +38,13 @@ export function addressSchema(t: TFunction) {
   return z.object({
     receiverName: z.string().trim().min(1, t('validation:receiverRequired')).max(150, t('validation:maxLength')),
     receiverPhone: z.string().trim().min(1, t('validation:phoneRequired')).regex(phonePattern, t('validation:phoneInvalid')),
+    administrativeVersion: z.enum(['', 'V1', 'V2']),
     province: z.string().max(120, t('validation:maxLength')),
+    provinceCode: z.string(),
     district: z.string().max(120, t('validation:maxLength')),
+    districtCode: z.string(),
     ward: z.string().max(120, t('validation:maxLength')),
+    wardCode: z.string(),
     addressLine: z.string().trim().min(1, t('validation:addressRequired')).max(500, t('validation:maxLength')),
     deliveryNote: z.string().max(1000, t('validation:maxLength')),
     isDefault: z.boolean(),

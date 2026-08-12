@@ -10,6 +10,7 @@ export type CustomerSource =
   | 'PARTNER'
   | 'OTHER'
 export type AddressStatus = 'ACTIVE' | 'INACTIVE'
+export type AdministrativeVersion = 'V1' | 'V2'
 
 export interface BranchAccess {
   id: number
@@ -25,6 +26,16 @@ export interface CurrentUser {
   permissions: PermissionCode[]
   branches: BranchAccess[]
   defaultBranchId: number
+  authorizationVersion?: number
+  status?: 'ACTIVE' | 'INACTIVE'
+  primaryRole?: {
+    id: number
+    code: string
+    nameVi: string
+    nameEn: string
+    status: 'ACTIVE' | 'INACTIVE'
+    system: boolean
+  } | null
 }
 
 export interface LoginResponse {
@@ -71,9 +82,13 @@ export interface CustomerAddress {
   id: number
   receiverName: string
   receiverPhone: string
+  administrativeVersion?: AdministrativeVersion | null
   province?: string | null
+  provinceCode?: number | null
   district?: string | null
+  districtCode?: number | null
   ward?: string | null
+  wardCode?: number | null
   addressLine: string
   deliveryNote?: string | null
   isDefault: boolean
@@ -94,9 +109,13 @@ export interface CustomerDetail extends CustomerListItem {
 export interface AddressInput {
   receiverName: string
   receiverPhone: string
+  administrativeVersion?: AdministrativeVersion
   province?: string
+  provinceCode?: number
   district?: string
+  districtCode?: number
   ward?: string
+  wardCode?: number
   addressLine: string
   deliveryNote?: string
   isDefault: boolean

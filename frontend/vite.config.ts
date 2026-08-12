@@ -8,13 +8,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined
-          if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('/zod/')) return 'vendor-forms'
-          if (id.includes('@tanstack')) return 'vendor-query'
-          if (id.includes('i18next')) return 'vendor-i18n'
-          if (id.includes('lucide-react')) return 'vendor-icons'
-          if (id.includes('react') || id.includes('scheduler')) return 'vendor-react'
-          return 'vendor'
+          if (!id.includes('node_modules')) return
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|i18next|react-i18next)[\\/]/.test(id)) {
+            return 'framework'
+          }
+          if (id.includes('/node_modules/motion/') || id.includes('\\node_modules\\motion\\')) return 'motion'
+          if (id.includes('/node_modules/@tanstack/') || id.includes('\\node_modules\\@tanstack\\')) return 'data'
         },
       },
     },

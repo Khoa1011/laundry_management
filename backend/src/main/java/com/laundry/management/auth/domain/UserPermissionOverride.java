@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -42,6 +43,23 @@ public class UserPermissionOverride {
     @Column(nullable = false, length = 10)
     private PermissionOverrideEffect effect;
 
+    @Column(nullable = false, length = 500)
+    private String reason;
+
+    @Column(name = "effective_from")
+    private Instant effectiveFrom;
+
+    @Column(name = "effective_to")
+    private Instant effectiveTo;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OverrideStatus status;
+
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -53,10 +71,21 @@ public class UserPermissionOverride {
     protected UserPermissionOverride() {
     }
 
-    UserPermissionOverride(UserAccount user, Permission permission, PermissionOverrideEffect effect) {
+    public UserPermissionOverride(
+        UserAccount user,
+        Permission permission,
+        PermissionOverrideEffect effect,
+        String reason,
+        Instant effectiveFrom,
+        Instant effectiveTo
+    ) {
         this.user = user;
         this.permission = permission;
         this.effect = effect;
+        this.reason = reason;
+        this.effectiveFrom = effectiveFrom;
+        this.effectiveTo = effectiveTo;
+        this.status = OverrideStatus.ACTIVE;
     }
 
     public Permission getPermission() {
@@ -70,4 +99,29 @@ public class UserPermissionOverride {
     public void changeEffect(PermissionOverrideEffect nextEffect) {
         this.effect = nextEffect;
     }
+
+    public void update(
+        PermissionOverrideEffect nextEffect,
+        String nextReason,
+        Instant nextEffectiveFrom,
+        Instant nextEffectiveTo
+    ) {
+        this.effect = nextEffect;
+        this.reason = nextReason;
+        this.effectiveFrom = nextEffectiveFrom;
+        this.effectiveTo = nextEffectiveTo;
+        this.status = OverrideStatus.ACTIVE;
+    }
+
+    public boolean isEffectiveAt(Instant instant) {
+        return status == OverrideStatus.ACTIVE
+            && (effectiveFrom == null || !effectiveFrom.isAfter(instant))
+            && (effectiveTo == null || effectiveTo.isAfter(instant));
+    }
+
+    public String getReason() { return reason; }
+    public Instant getEffectiveFrom() { return effectiveFrom; }
+    public Instant getEffectiveTo() { return effectiveTo; }
+    public OverrideStatus getStatus() { return status; }
+    public long getVersion() { return version; }
 }

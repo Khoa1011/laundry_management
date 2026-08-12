@@ -29,7 +29,8 @@ public class CurrentUserProvider {
             principal.defaultBranchId(),
             principal.roles(),
             principal.permissions(),
-            principal.branches().stream().map(BranchAccess::id).toList()
+            principal.branches().stream().map(BranchAccess::id).toList(),
+            principal.authorizationVersion()
         );
     }
 

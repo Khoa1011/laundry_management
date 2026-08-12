@@ -1,0 +1,170 @@
+{
+  "module": {
+    "code": "access",
+    "nameVi": "Phân quyền và truy cập",
+    "nameEn": "Access Control",
+    "descriptionVi": "Quản lý danh mục quyền, vai trò, quyền người dùng và lịch sử thay đổi phân quyền.",
+    "descriptionEn": "Manage the permission catalog, roles, user access overrides, and authorization history.",
+    "displayOrder": 5,
+    "dataScopeNotes": "Quản trị truy cập chỉ áp dụng cho người dùng thuộc các chi nhánh mà người quản trị được phân công.",
+    "businessPolicyNotes": "Tự khóa quyền quản trị cuối cùng và hạn chế vai trò hệ thống là quy tắc an toàn, không phải wildcard permission."
+  },
+  "permissions": [
+    {
+      "code": "access.permission.read",
+      "resource": "access.permission",
+      "action": "read",
+      "nameVi": "Xem danh mục quyền",
+      "nameEn": "View permission catalog",
+      "descriptionVi": "Xem danh mục quyền và các quyền được nhóm theo mô-đun.",
+      "descriptionEn": "View the permission catalog and permissions grouped by module.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "access.role.read",
+      "resource": "access.role",
+      "action": "read",
+      "nameVi": "Xem vai trò",
+      "nameEn": "View roles",
+      "descriptionVi": "Xem danh sách, chi tiết và ma trận quyền của vai trò.",
+      "descriptionEn": "View role lists, details, and permission matrices.",
+      "riskLevel": "LOW",
+      "displayOrder": 20
+    },
+    {
+      "code": "access.role.create",
+      "resource": "access.role",
+      "action": "create",
+      "nameVi": "Tạo vai trò",
+      "nameEn": "Create roles",
+      "descriptionVi": "Tạo vai trò tùy chỉnh mới.",
+      "descriptionEn": "Create a new custom role.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 30
+    },
+    {
+      "code": "access.role.update",
+      "resource": "access.role",
+      "action": "update",
+      "nameVi": "Cập nhật vai trò",
+      "nameEn": "Update roles",
+      "descriptionVi": "Cập nhật tên, mô tả và trạng thái hợp lệ của vai trò.",
+      "descriptionEn": "Update role names, descriptions, and eligible status.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 40
+    },
+    {
+      "code": "access.role.clone",
+      "resource": "access.role",
+      "action": "clone",
+      "nameVi": "Sao chép vai trò",
+      "nameEn": "Clone roles",
+      "descriptionVi": "Tạo vai trò tùy chỉnh từ quyền mặc định của vai trò hiện có.",
+      "descriptionEn": "Create a custom role from an existing role's default permissions.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 50
+    },
+    {
+      "code": "access.role.deactivate",
+      "resource": "access.role",
+      "action": "deactivate",
+      "nameVi": "Đổi trạng thái vai trò",
+      "nameEn": "Change role status",
+      "descriptionVi": "Kích hoạt hoặc vô hiệu hóa vai trò đủ điều kiện.",
+      "descriptionEn": "Activate or deactivate an eligible role.",
+      "riskLevel": "HIGH",
+      "displayOrder": 60
+    },
+    {
+      "code": "access.role.permission.assign",
+      "resource": "access.role.permission",
+      "action": "assign",
+      "nameVi": "Gán quyền cho vai trò",
+      "nameEn": "Assign role permissions",
+      "descriptionVi": "Lưu toàn bộ ma trận quyền mặc định của vai trò.",
+      "descriptionEn": "Save the complete default permission matrix for a role.",
+      "riskLevel": "HIGH",
+      "displayOrder": 70
+    },
+    {
+      "code": "access.user.read",
+      "resource": "access.user",
+      "action": "read",
+      "nameVi": "Xem truy cập người dùng",
+      "nameEn": "View user access",
+      "descriptionVi": "Tìm kiếm và xem cấu hình truy cập của người dùng.",
+      "descriptionEn": "Search and view user access configuration.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 80
+    },
+    {
+      "code": "access.user.role.assign",
+      "resource": "access.user.role",
+      "action": "assign",
+      "nameVi": "Gán vai trò người dùng",
+      "nameEn": "Assign user roles",
+      "descriptionVi": "Gán hoặc thay đổi vai trò chính đang hoạt động của người dùng.",
+      "descriptionEn": "Assign or change a user's active primary role.",
+      "riskLevel": "HIGH",
+      "displayOrder": 90
+    },
+    {
+      "code": "access.user.permission.override",
+      "resource": "access.user.permission",
+      "action": "override",
+      "nameVi": "Ghi đè quyền người dùng",
+      "nameEn": "Override user permissions",
+      "descriptionVi": "Thêm, thay đổi hoặc xóa ghi đè ALLOW và DENY của người dùng.",
+      "descriptionEn": "Add, change, or remove user ALLOW and DENY overrides.",
+      "riskLevel": "HIGH",
+      "displayOrder": 100
+    },
+    {
+      "code": "access.effective-permission.read",
+      "resource": "access.effective-permission",
+      "action": "read",
+      "nameVi": "Xem quyền hiệu lực",
+      "nameEn": "View effective permissions",
+      "descriptionVi": "Xem quyền hiệu lực và nguồn tạo ra kết quả phân quyền.",
+      "descriptionEn": "View effective permissions and their authorization sources.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 110
+    },
+    {
+      "code": "access.audit.read",
+      "resource": "access.audit",
+      "action": "read",
+      "nameVi": "Xem nhật ký phân quyền",
+      "nameEn": "View authorization audit",
+      "descriptionVi": "Xem lịch sử thay đổi vai trò, ma trận và quyền người dùng.",
+      "descriptionEn": "View role, matrix, and user authorization change history.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 120
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": [
+      "access.permission.read",
+      "access.role.read",
+      "access.role.create",
+      "access.role.update",
+      "access.role.clone",
+      "access.role.deactivate",
+      "access.role.permission.assign",
+      "access.user.read",
+      "access.user.role.assign",
+      "access.user.permission.override",
+      "access.effective-permission.read",
+      "access.audit.read"
+    ],
+    "MANAGER": [
+      "access.permission.read",
+      "access.role.read",
+      "access.user.read",
+      "access.effective-permission.read",
+      "access.audit.read"
+    ],
+    "RECEPTIONIST": []
+  }
+}

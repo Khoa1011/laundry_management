@@ -70,7 +70,7 @@ public class CustomerService {
         this.customerMapper = customerMapper;
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_CREATE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_CREATE)")
     @Transactional
     public CustomerDetailResponse create(CustomerCreateRequest request) {
         Long branchId = currentUserProvider.resolveAuthorizedBranch(request.branchId());
@@ -123,7 +123,7 @@ public class CustomerService {
         return detail(customer);
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_UPDATE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_UPDATE)")
     @Transactional
     public CustomerDetailResponse update(
         Long customerId,
@@ -166,7 +166,7 @@ public class CustomerService {
         return detail(customer);
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_DEACTIVATE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_DEACTIVATE)")
     @Transactional
     public CustomerDetailResponse changeStatus(
         Long customerId,

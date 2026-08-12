@@ -1,8 +1,7 @@
 package com.laundry.management.auth.security;
 
 import com.laundry.management.auth.domain.AccountStatus;
-import com.laundry.management.auth.domain.Permission;
-import com.laundry.management.auth.domain.PermissionOverrideEffect;
+import com.laundry.management.auth.access.application.EffectivePermissionService;
 import com.laundry.management.auth.domain.Role;
 import com.laundry.management.auth.domain.UserAccount;
 import java.util.Collection;
@@ -25,6 +24,7 @@ public final class AuthenticatedUser implements UserDetails {
     private final Set<String> permissions;
     private final List<BranchAccess> branches;
     private final boolean active;
+    private final long authorizationVersion;
 
     private AuthenticatedUser(
         Long id,
@@ -35,7 +35,8 @@ public final class AuthenticatedUser implements UserDetails {
         Set<String> roles,
         Set<String> permissions,
         List<BranchAccess> branches,
-        boolean active
+        boolean active,
+        long authorizationVersion
     ) {
         this.id = id;
         this.username = username;
@@ -46,27 +47,17 @@ public final class AuthenticatedUser implements UserDetails {
         this.permissions = Set.copyOf(permissions);
         this.branches = List.copyOf(branches);
         this.active = active;
+        this.authorizationVersion = authorizationVersion;
     }
 
-    public static AuthenticatedUser from(UserAccount account) {
+    public static AuthenticatedUser from(
+        UserAccount account,
+        EffectivePermissionService.EffectiveAccess effectiveAccess
+    ) {
         Set<String> roleCodes = new TreeSet<>();
-        Set<String> permissionCodes = new TreeSet<>();
         for (Role role : account.getRoles()) {
             roleCodes.add(role.getCode());
-            for (Permission permission : role.getPermissions()) {
-                permissionCodes.add(permission.getCode());
-            }
         }
-        Set<String> deniedPermissionCodes = new TreeSet<>();
-        account.getPermissionOverrides().forEach(override -> {
-            String code = override.getPermission().getCode();
-            if (override.getEffect() == PermissionOverrideEffect.DENY) {
-                deniedPermissionCodes.add(code);
-            } else {
-                permissionCodes.add(code);
-            }
-        });
-        permissionCodes.removeAll(deniedPermissionCodes);
 
         List<BranchAccess> branchAccess = account.getBranchAssignments().stream()
             .map(assignment -> new BranchAccess(
@@ -84,9 +75,10 @@ public final class AuthenticatedUser implements UserDetails {
             account.getDisplayName(),
             account.getDefaultBranch() == null ? null : account.getDefaultBranch().getId(),
             roleCodes,
-            permissionCodes,
+            effectiveAccess.permissionCodes(),
             branchAccess,
-            account.getStatus() == AccountStatus.ACTIVE
+            account.getStatus() == AccountStatus.ACTIVE && !account.isLocked(),
+            effectiveAccess.authorizationVersion()
         );
     }
 
@@ -113,6 +105,8 @@ public final class AuthenticatedUser implements UserDetails {
     public List<BranchAccess> branches() {
         return branches;
     }
+
+    public long authorizationVersion() { return authorizationVersion; }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

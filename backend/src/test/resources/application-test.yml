@@ -20,3 +20,9 @@ app:
     jwt:
       secret: test-only-jwt-secret-with-at-least-thirty-two-bytes
       expiration: PT1H
+    refresh-token:
+      expiration: P7D
+      secure-cookie: false
+  employee-sensitive:
+    identity-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    storage-root: ${java.io.tmpdir}/laundry-management-test-private-documents

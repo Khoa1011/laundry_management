@@ -49,7 +49,7 @@ public class CustomerQueryService {
         this.customerMapper = customerMapper;
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_READ + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_READ)")
     @Transactional(readOnly = true)
     public CustomerListResponse list(
         int page,
@@ -106,7 +106,7 @@ public class CustomerQueryService {
         );
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_READ + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_READ)")
     @Transactional(readOnly = true)
     public CustomerDetailResponse get(Long customerId, Long requestedBranchId) {
         Long branchId = currentUserProvider.resolveAuthorizedBranch(requestedBranchId);

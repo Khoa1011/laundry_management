@@ -285,6 +285,36 @@ class CustomerManagementIntegrationTest {
     }
 
     @Test
+    void structuredAddressRoundTripsAdministrativeCodes() throws Exception {
+        JsonNode customer = createCustomer(managerAToken, baseCustomer(
+            "Structured address customer", "0908123456", "INDIVIDUAL", "WALK_IN"
+        ));
+        ObjectNode request = addressRequest("Receiver", "0908123456", "12 Main Street", false);
+        request.put("administrativeVersion", "V2");
+        request.put("province", "Ho Chi Minh City");
+        request.put("provinceCode", 79);
+        request.remove("district");
+        request.put("ward", "Ben Thanh Ward");
+        request.put("wardCode", 26734);
+
+        JsonNode created = createAddress(customer.path("id").asLong(), request);
+        org.assertj.core.api.Assertions.assertThat(created.path("administrativeVersion").asText()).isEqualTo("V2");
+        org.assertj.core.api.Assertions.assertThat(created.path("provinceCode").asInt()).isEqualTo(79);
+        org.assertj.core.api.Assertions.assertThat(created.path("district").isNull()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(created.path("districtCode").isNull()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(created.path("wardCode").asInt()).isEqualTo(26734);
+
+        mockMvc.perform(get("/api/customers/{id}/addresses", customer.path("id").asLong())
+                .header("Authorization", bearer(managerAToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].administrativeVersion").value("V2"))
+            .andExpect(jsonPath("$[0].provinceCode").value(79))
+            .andExpect(jsonPath("$[0].district").isEmpty())
+            .andExpect(jsonPath("$[0].districtCode").isEmpty())
+            .andExpect(jsonPath("$[0].wardCode").value(26734));
+    }
+
+    @Test
     void addressLifecycleMaintainsAtMostOneActiveDefaultAndRequiresReplacement() throws Exception {
         JsonNode customer = createCustomer(managerAToken, baseCustomer(
             "Khách địa chỉ", "0908888888", "INDIVIDUAL", "WALK_IN"

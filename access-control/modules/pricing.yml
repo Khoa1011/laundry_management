@@ -1,0 +1,41 @@
+{
+  "module": {
+    "code": "pricing",
+    "nameVi": "Tính giá",
+    "nameEn": "Pricing Engine",
+    "descriptionVi": "Tính giá phía máy chủ và đọc lịch sử báo giá, phiên bản giá.",
+    "descriptionEn": "Calculate authoritative prices and read quote or pricing-version history.",
+    "displayOrder": 39,
+    "dataScopeNotes": "Yêu cầu xem giá phải kiểm tra chi nhánh trước khi phân giải bảng giá và quy tắc.",
+    "businessPolicyNotes": "Máy chủ là nguồn giá có thẩm quyền; giao diện không được tự quyết định số tiền cuối cùng."
+  },
+  "permissions": [
+    {
+      "code": "pricing.preview",
+      "resource": "pricing",
+      "action": "preview",
+      "nameVi": "Xem thử giá",
+      "nameEn": "Preview prices",
+      "descriptionVi": "Yêu cầu máy chủ tính thử giá tại một thời điểm hiệu lực.",
+      "descriptionEn": "Request an authoritative price preview at an effective time.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "pricing.read-history",
+      "resource": "pricing",
+      "action": "read-history",
+      "nameVi": "Xem lịch sử giá",
+      "nameEn": "View pricing history",
+      "descriptionVi": "Xem lịch sử công bố và phiên bản quy tắc giá.",
+      "descriptionEn": "View publication history and pricing-rule versions.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 20
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["pricing.preview", "pricing.read-history"],
+    "MANAGER": ["pricing.preview", "pricing.read-history"],
+    "RECEPTIONIST": ["pricing.preview"]
+  }
+}

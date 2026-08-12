@@ -1,0 +1,74 @@
+{
+  "module": {
+    "code": "price-rule",
+    "nameVi": "Quy tắc giá",
+    "nameEn": "Pricing Rules",
+    "descriptionVi": "Quản lý phạm vi, phương pháp, bậc giá và phiên bản quy tắc tính giá.",
+    "descriptionEn": "Manage pricing-rule scope, methods, tiers, and versions.",
+    "displayOrder": 38,
+    "dataScopeNotes": "Phạm vi quy tắc kế thừa chi nhánh của bảng giá và phải được kiểm tra riêng.",
+    "businessPolicyNotes": "Quy tắc nháp có thể xóa; quy tắc đã công bố chỉ được thay thế bằng phiên bản mới."
+  },
+  "permissions": [
+    {
+      "code": "price-rule.read",
+      "resource": "price-rule",
+      "action": "read",
+      "nameVi": "Xem quy tắc giá",
+      "nameEn": "View pricing rules",
+      "descriptionVi": "Xem quy tắc và bậc giá thuộc bảng giá được phép.",
+      "descriptionEn": "View rules and tiers in accessible price lists.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "price-rule.create",
+      "resource": "price-rule",
+      "action": "create",
+      "nameVi": "Tạo quy tắc giá",
+      "nameEn": "Create pricing rules",
+      "descriptionVi": "Thêm quy tắc vào bảng giá nháp.",
+      "descriptionEn": "Add rules to draft price lists.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 20
+    },
+    {
+      "code": "price-rule.update-draft",
+      "resource": "price-rule",
+      "action": "update-draft",
+      "nameVi": "Sửa quy tắc nháp",
+      "nameEn": "Update draft pricing rules",
+      "descriptionVi": "Cập nhật quy tắc và bậc giá khi chưa công bố.",
+      "descriptionEn": "Update unpublished rules and tiers.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 30
+    },
+    {
+      "code": "price-rule.delete-draft",
+      "resource": "price-rule",
+      "action": "delete-draft",
+      "nameVi": "Xóa quy tắc nháp",
+      "nameEn": "Delete draft pricing rules",
+      "descriptionVi": "Xóa vật lý quy tắc chỉ khi bảng giá còn là bản nháp.",
+      "descriptionEn": "Physically delete rules only while their price list is a draft.",
+      "riskLevel": "HIGH",
+      "displayOrder": 40
+    },
+    {
+      "code": "price-rule.override-conflict",
+      "resource": "price-rule",
+      "action": "override-conflict",
+      "nameVi": "Ghi đè xung đột giá",
+      "nameEn": "Override pricing conflicts",
+      "descriptionVi": "Cho phép quy trình ngoại lệ có lý do đối với xung đột đã được phát hiện.",
+      "descriptionEn": "Allow a reasoned exception workflow for a detected pricing conflict.",
+      "riskLevel": "CRITICAL",
+      "displayOrder": 50
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["price-rule.read", "price-rule.create", "price-rule.update-draft", "price-rule.delete-draft", "price-rule.override-conflict"],
+    "MANAGER": ["price-rule.read", "price-rule.create", "price-rule.update-draft", "price-rule.delete-draft"],
+    "RECEPTIONIST": ["price-rule.read"]
+  }
+}

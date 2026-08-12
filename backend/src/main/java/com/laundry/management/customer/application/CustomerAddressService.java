@@ -17,6 +17,7 @@ import com.laundry.management.customer.domain.CustomerActivityAction;
 import com.laundry.management.customer.domain.CustomerAddress;
 import com.laundry.management.customer.infrastructure.CustomerAddressRepository;
 import com.laundry.management.customer.infrastructure.CustomerRepository;
+import com.laundry.management.location.application.AdministrativeAddressValidator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,7 @@ public class CustomerAddressService {
         this.customerMapper = customerMapper;
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_READ + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_READ)")
     @Transactional(readOnly = true)
     public List<CustomerAddressResponse> list(Long customerId, Long requestedBranchId) {
         Long branchId = currentUserProvider.resolveAuthorizedBranch(requestedBranchId);
@@ -66,7 +67,7 @@ public class CustomerAddressService {
             .stream().map(customerMapper::toAddress).toList();
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_ADDRESS_MANAGE)")
     @Transactional
     public CustomerAddressResponse create(
         Long customerId,
@@ -87,7 +88,7 @@ public class CustomerAddressService {
         return createAddress(customer, request, actor);
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_ADDRESS_MANAGE)")
     @Transactional
     public CustomerAddressResponse update(
         Long customerId,
@@ -102,13 +103,26 @@ public class CustomerAddressService {
         UserAccount actor = actor();
         NormalizedPhone phone = phoneNormalizer.normalize(request.receiverPhone());
         String oldPhone = address.getNormalizedReceiverPhone();
+        AdministrativeAddressValidator.validate(
+            request.administrativeVersion(),
+            request.province(),
+            request.provinceCode(),
+            request.district(),
+            request.districtCode(),
+            request.ward(),
+            request.wardCode()
+        );
         address.update(
             dataNormalizer.requiredText(request.receiverName(), "Receiver name"),
             phone.display(),
             phone.e164(),
+            request.administrativeVersion(),
             dataNormalizer.optionalText(request.province()),
+            request.provinceCode(),
             dataNormalizer.optionalText(request.district()),
+            request.districtCode(),
             dataNormalizer.optionalText(request.ward()),
+            request.wardCode(),
             dataNormalizer.requiredText(request.addressLine(), "Address line"),
             dataNormalizer.optionalText(request.deliveryNote()),
             actor
@@ -121,7 +135,8 @@ public class CustomerAddressService {
 
         Map<String, Object> changes = new LinkedHashMap<>();
         changes.put("fields", List.of(
-            "receiverName", "receiverPhone", "province", "district", "ward", "addressLine", "deliveryNote"
+            "receiverName", "receiverPhone", "administrativeVersion", "province", "provinceCode",
+            "district", "districtCode", "ward", "wardCode", "addressLine", "deliveryNote"
         ));
         if (!oldPhone.equals(phone.e164())) {
             changes.put("receiverPhone", Map.of(
@@ -150,7 +165,7 @@ public class CustomerAddressService {
         return customerMapper.toAddress(address);
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_ADDRESS_MANAGE)")
     @Transactional
     public CustomerAddressResponse setDefault(
         Long customerId,
@@ -186,7 +201,7 @@ public class CustomerAddressService {
         return customerMapper.toAddress(address);
     }
 
-    @PreAuthorize("hasAuthority('" + PermissionCodes.CUSTOMER_ADDRESS_MANAGE + "')")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_ADDRESS_MANAGE)")
     @Transactional
     public CustomerAddressResponse changeStatus(
         Long customerId,
@@ -223,6 +238,15 @@ public class CustomerAddressService {
 
     private CustomerAddress createAddress(Customer customer, CustomerAddressCreateRequest request, UserAccount actor) {
         NormalizedPhone phone = phoneNormalizer.normalize(request.receiverPhone());
+        AdministrativeAddressValidator.validate(
+            request.administrativeVersion(),
+            request.province(),
+            request.provinceCode(),
+            request.district(),
+            request.districtCode(),
+            request.ward(),
+            request.wardCode()
+        );
         boolean hasActiveAddress = addressRepository.existsByCustomerIdAndStatus(customer.getId(), AddressStatus.ACTIVE);
         boolean makeDefault = !hasActiveAddress || request.defaultAddress();
         CustomerAddress address = new CustomerAddress(
@@ -230,9 +254,13 @@ public class CustomerAddressService {
             dataNormalizer.requiredText(request.receiverName(), "Receiver name"),
             phone.display(),
             phone.e164(),
+            request.administrativeVersion(),
             dataNormalizer.optionalText(request.province()),
+            request.provinceCode(),
             dataNormalizer.optionalText(request.district()),
+            request.districtCode(),
             dataNormalizer.optionalText(request.ward()),
+            request.wardCode(),
             dataNormalizer.requiredText(request.addressLine(), "Address line"),
             dataNormalizer.optionalText(request.deliveryNote()),
             makeDefault,

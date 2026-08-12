@@ -2,7 +2,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 
 export const RISK_LEVELS = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
-export const PERMISSION_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/
+export const PERMISSION_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$/
 export const SUPPORTED_ROLES = new Set(['OWNER', 'MANAGER', 'RECEPTIONIST'])
 
 export function constantName(code) {

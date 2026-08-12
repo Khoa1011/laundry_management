@@ -24,7 +24,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({ JwtProperties.class, RefreshTokenProperties.class })
 public class SecurityConfig {
 
     @Bean
@@ -39,7 +39,12 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/actuator/health", "/api/auth/login").permitAll()
+                .requestMatchers(
+                    "/actuator/health",
+                    "/api/auth/login",
+                    "/api/auth/refresh",
+                    "/api/auth/logout"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions

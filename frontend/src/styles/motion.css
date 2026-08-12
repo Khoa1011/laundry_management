@@ -1,0 +1,26 @@
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--motion-base);
+  animation-timing-function: var(--ease-out-quint);
+}
+
+.motion-page {
+  min-width: 0;
+}
+
+.motion-press {
+  transform-origin: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .motion-lift:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms;
+  }
+}

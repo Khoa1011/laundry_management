@@ -10,7 +10,8 @@ public record CurrentUser(
     Long defaultBranchId,
     Set<String> roles,
     Set<String> permissions,
-    List<Long> branchIds
+    List<Long> branchIds,
+    long authorizationVersion
 ) {
 
     public boolean canAccessBranch(Long branchId) {

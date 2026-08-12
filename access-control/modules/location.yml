@@ -1,0 +1,36 @@
+{
+  "module": {
+    "code": "location",
+    "nameVi": "Danh mục địa chỉ",
+    "nameEn": "Location Catalog",
+    "descriptionVi": "Tra cứu danh mục tỉnh, thành, quận, huyện, phường và xã Việt Nam theo phiên bản hành chính.",
+    "descriptionEn": "Look up Vietnamese provinces, districts, and wards by administrative version.",
+    "displayOrder": 15,
+    "dataScopeNotes": "Danh mục hành chính là dữ liệu dùng chung toàn hệ thống và không mang phạm vi chi nhánh.",
+    "businessPolicyNotes": "Phiên bản V2 là địa chỉ hiện hành sau 07/2025; V1 chỉ dùng khi cần lưu địa chỉ cũ trước 07/2025."
+  },
+  "permissions": [
+    {
+      "code": "location.read",
+      "resource": "location",
+      "action": "read",
+      "nameVi": "Tra cứu danh mục địa chỉ",
+      "nameEn": "View location catalog",
+      "descriptionVi": "Tra cứu tỉnh, thành, quận, huyện, phường và xã để nhập địa chỉ có cấu trúc.",
+      "descriptionEn": "View provinces, districts, and wards for structured address entry.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": [
+      "location.read"
+    ],
+    "MANAGER": [
+      "location.read"
+    ],
+    "RECEPTIONIST": [
+      "location.read"
+    ]
+  }
+}

@@ -2,9 +2,12 @@ package com.laundry.management.auth;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,12 +19,14 @@ import com.laundry.management.auth.domain.PermissionOverrideEffect;
 import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.infrastructure.BranchRepository;
 import com.laundry.management.auth.infrastructure.PermissionRepository;
+import com.laundry.management.auth.infrastructure.RefreshTokenRepository;
 import com.laundry.management.auth.infrastructure.RoleRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
 import com.laundry.management.customer.infrastructure.CustomerActivityRepository;
 import com.laundry.management.customer.infrastructure.CustomerAddressRepository;
 import com.laundry.management.customer.infrastructure.CustomerRepository;
 import java.time.Instant;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,11 +84,15 @@ class AuthenticationIntegrationTest {
     @Autowired
     private CustomerRepository customerRepository;
 
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
     @BeforeEach
     void setUp() {
         customerActivityRepository.deleteAll();
         customerAddressRepository.deleteAll();
         customerRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userAccountRepository.deleteAll();
         branchRepository.deleteAll();
 
@@ -116,7 +125,44 @@ class AuthenticationIntegrationTest {
             .andExpect(jsonPath("$.user.roles", hasItem("MANAGER")))
             .andExpect(jsonPath("$.user.permissions", hasItem("customer.read")))
             .andExpect(jsonPath("$.user.branches[0].code").value("TEST"))
-            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("passwordHash"))));
+            .andExpect(cookie().httpOnly("laundry_refresh", true))
+            .andExpect(cookie().secure("laundry_refresh", false))
+            .andExpect(header().string("Set-Cookie", containsString("SameSite=Strict")))
+            .andExpect(header().string("Cache-Control", containsString("no-store")))
+            .andExpect(content().string(not(containsString("passwordHash"))))
+            .andExpect(content().string(not(containsString("refreshToken"))));
+    }
+
+    @Test
+    void refreshRotatesTokenAndRejectsReusedFamily() throws Exception {
+        MvcResult login = login();
+        Cookie original = login.getResponse().getCookie("laundry_refresh");
+
+        MvcResult refreshed = mockMvc.perform(post("/api/auth/refresh").cookie(original))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").isNotEmpty())
+            .andExpect(cookie().httpOnly("laundry_refresh", true))
+            .andReturn();
+        Cookie replacement = refreshed.getResponse().getCookie("laundry_refresh");
+        org.junit.jupiter.api.Assertions.assertNotEquals(original.getValue(), replacement.getValue());
+
+        mockMvc.perform(post("/api/auth/refresh").cookie(original))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.detail").value("Sign in to continue."));
+        mockMvc.perform(post("/api/auth/refresh").cookie(replacement))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutRevokesRefreshTokenAndClearsCookie() throws Exception {
+        Cookie refreshCookie = login().getResponse().getCookie("laundry_refresh");
+
+        mockMvc.perform(post("/api/auth/logout").cookie(refreshCookie))
+            .andExpect(status().isNoContent())
+            .andExpect(cookie().maxAge("laundry_refresh", 0));
+
+        mockMvc.perform(post("/api/auth/refresh").cookie(refreshCookie))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -236,5 +282,15 @@ class AuthenticationIntegrationTest {
                 .header("Authorization", "Bearer " + token))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
+    private MvcResult login() throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"manager.test","password":"test-password-only"}
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
     }
 }

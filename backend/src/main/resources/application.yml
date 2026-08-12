@@ -7,18 +7,38 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  servlet:
+    multipart:
+      max-file-size: ${APP_EMPLOYEE_DOCUMENT_MAX_FILE_SIZE:20MB}
+      max-request-size: ${APP_EMPLOYEE_DOCUMENT_MAX_REQUEST_SIZE:21MB}
 
 app:
   security:
     jwt:
       secret: ${APP_JWT_SECRET:}
       expiration: ${APP_JWT_EXPIRATION:PT1H}
+    refresh-token:
+      expiration: ${APP_REFRESH_TOKEN_EXPIRATION:P7D}
+      secure-cookie: ${APP_REFRESH_TOKEN_SECURE_COOKIE:false}
   bootstrap:
     enabled: ${APP_BOOTSTRAP_ENABLED:false}
     username: ${APP_BOOTSTRAP_USERNAME:}
     password: ${APP_BOOTSTRAP_PASSWORD:}
     branch-code: ${APP_BOOTSTRAP_BRANCH_CODE:MAIN}
     branch-name: ${APP_BOOTSTRAP_BRANCH_NAME:Chi nhánh chính}
+  employee-sensitive:
+    identity-key: ${APP_EMPLOYEE_IDENTITY_KEY:}
+    storage-root: ${APP_EMPLOYEE_DOCUMENT_STORAGE_ROOT:./private-data/employee-documents}
+    image-max-bytes: ${APP_EMPLOYEE_DOCUMENT_IMAGE_MAX_BYTES:10485760}
+    pdf-max-bytes: ${APP_EMPLOYEE_DOCUMENT_PDF_MAX_BYTES:20971520}
+  locations:
+    vietnam:
+      base-url: ${APP_VIETNAM_LOCATION_BASE_URL:https://provinces.open-api.vn}
+      connect-timeout: ${APP_VIETNAM_LOCATION_CONNECT_TIMEOUT:PT2S}
+      read-timeout: ${APP_VIETNAM_LOCATION_READ_TIMEOUT:PT3S}
+      cache-ttl: ${APP_VIETNAM_LOCATION_CACHE_TTL:P30D}
+      stale-ttl: ${APP_VIETNAM_LOCATION_STALE_TTL:P90D}
+      max-entries: ${APP_VIETNAM_LOCATION_CACHE_MAX_ENTRIES:1024}
 
 management:
   endpoints:

@@ -1,0 +1,181 @@
+{
+  "module": {
+    "code": "notification",
+    "nameVi": "Thông báo",
+    "nameEn": "Notifications",
+    "descriptionVi": "Nhận, theo dõi và gửi thông báo nội bộ theo người dùng, nhân viên, chi nhánh, vị trí công việc hoặc quyền hiệu lực.",
+    "descriptionEn": "Receive, track, and send internal notifications by user, employee, branch, position, or effective permission.",
+    "displayOrder": 30,
+    "dataScopeNotes": "Nội dung cá nhân luôn được giới hạn theo user_id của principal. Quyền gửi được kiểm tra độc lập với phạm vi chi nhánh và tập người nhận hợp lệ.",
+    "businessPolicyNotes": "Người thực hiện bị loại khỏi tập người nhận theo mặc định. Người nhận cuối cùng luôn là tài khoản ACTIVE, không bị khóa và nằm trong phạm vi chi nhánh hợp lệ."
+  },
+  "permissions": [
+    {
+      "code": "notification.read-own",
+      "resource": "notification",
+      "action": "read-own",
+      "nameVi": "Xem thông báo của bản thân",
+      "nameEn": "View own notifications",
+      "descriptionVi": "Xem danh sách, chi tiết, số chưa đọc và luồng thời gian thực của tài khoản hiện tại.",
+      "descriptionEn": "View the current account's notification list, detail, unread count, and realtime stream.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "notification.mark-read-own",
+      "resource": "notification",
+      "action": "mark-read-own",
+      "nameVi": "Đánh dấu thông báo đã đọc",
+      "nameEn": "Mark own notification read",
+      "descriptionVi": "Đánh dấu một thông báo của tài khoản hiện tại là đã đọc.",
+      "descriptionEn": "Mark one notification belonging to the current account as read.",
+      "riskLevel": "LOW",
+      "displayOrder": 20
+    },
+    {
+      "code": "notification.mark-all-read-own",
+      "resource": "notification",
+      "action": "mark-all-read-own",
+      "nameVi": "Đánh dấu tất cả thông báo đã đọc",
+      "nameEn": "Mark all own notifications read",
+      "descriptionVi": "Đánh dấu toàn bộ thông báo đang hiển thị của tài khoản hiện tại là đã đọc.",
+      "descriptionEn": "Mark all visible notifications belonging to the current account as read.",
+      "riskLevel": "LOW",
+      "displayOrder": 30
+    },
+    {
+      "code": "notification.dismiss-own",
+      "resource": "notification",
+      "action": "dismiss-own",
+      "nameVi": "Ẩn thông báo của bản thân",
+      "nameEn": "Dismiss own notifications",
+      "descriptionVi": "Ẩn một thông báo khỏi danh sách thông thường của tài khoản hiện tại.",
+      "descriptionEn": "Hide one notification from the current account's normal list.",
+      "riskLevel": "LOW",
+      "displayOrder": 40
+    },
+    {
+      "code": "notification.preferences.manage-own",
+      "resource": "notification.preferences",
+      "action": "manage-own",
+      "nameVi": "Quản lý tùy chọn thông báo",
+      "nameEn": "Manage own notification preferences",
+      "descriptionVi": "Quản lý âm thanh, âm lượng, thông báo nổi và hiệu ứng chuông của tài khoản hiện tại.",
+      "descriptionEn": "Manage the current account's sound, volume, toast, and bell-animation preferences.",
+      "riskLevel": "LOW",
+      "displayOrder": 50
+    },
+    {
+      "code": "notification.send-specific",
+      "resource": "notification",
+      "action": "send-specific",
+      "nameVi": "Gửi thông báo cho người dùng",
+      "nameEn": "Send notifications to users",
+      "descriptionVi": "Gửi thông báo đến các tài khoản được chọn trong phạm vi chi nhánh được phép.",
+      "descriptionEn": "Send notifications to selected accounts within the allowed branch scope.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 60
+    },
+    {
+      "code": "notification.send-employee",
+      "resource": "notification",
+      "action": "send-employee",
+      "nameVi": "Gửi thông báo cho nhân viên",
+      "nameEn": "Send notifications to employees",
+      "descriptionVi": "Gửi thông báo đến các nhân viên được chọn có tài khoản hợp lệ.",
+      "descriptionEn": "Send notifications to selected employees with eligible linked accounts.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 70
+    },
+    {
+      "code": "notification.broadcast-branch-users",
+      "resource": "notification",
+      "action": "broadcast-branch-users",
+      "nameVi": "Gửi thông báo cho người dùng chi nhánh",
+      "nameEn": "Broadcast to branch users",
+      "descriptionVi": "Gửi thông báo đến toàn bộ tài khoản hợp lệ trong một chi nhánh được phép.",
+      "descriptionEn": "Broadcast notifications to all eligible accounts in an allowed branch.",
+      "riskLevel": "HIGH",
+      "displayOrder": 80
+    },
+    {
+      "code": "notification.broadcast-branch-employees",
+      "resource": "notification",
+      "action": "broadcast-branch-employees",
+      "nameVi": "Gửi thông báo cho nhân viên chi nhánh",
+      "nameEn": "Broadcast to branch employees",
+      "descriptionVi": "Gửi thông báo đến toàn bộ nhân viên đang hoạt động có tài khoản hợp lệ trong một chi nhánh.",
+      "descriptionEn": "Broadcast notifications to all active employees with eligible accounts in a branch.",
+      "riskLevel": "HIGH",
+      "displayOrder": 90
+    },
+    {
+      "code": "notification.send-by-position",
+      "resource": "notification",
+      "action": "send-by-position",
+      "nameVi": "Gửi thông báo theo vị trí công việc",
+      "nameEn": "Send notifications by position",
+      "descriptionVi": "Gửi thông báo đến nhân viên có vị trí công việc được chọn trong một chi nhánh.",
+      "descriptionEn": "Send notifications to employees holding selected positions in a branch.",
+      "riskLevel": "HIGH",
+      "displayOrder": 100
+    },
+    {
+      "code": "notification.send-by-permission",
+      "resource": "notification",
+      "action": "send-by-permission",
+      "nameVi": "Gửi thông báo theo quyền hiệu lực",
+      "nameEn": "Send notifications by effective permission",
+      "descriptionVi": "Gửi thông báo đến người dùng có quyền hiệu lực được chọn trong một chi nhánh, có áp dụng DENY.",
+      "descriptionEn": "Send notifications to users with a selected effective permission in a branch, honoring DENY overrides.",
+      "riskLevel": "HIGH",
+      "displayOrder": 110
+    },
+    {
+      "code": "notification.manage",
+      "resource": "notification",
+      "action": "manage",
+      "nameVi": "Quản trị hệ thống thông báo",
+      "nameEn": "Manage notification system",
+      "descriptionVi": "Truy cập chẩn đoán và quản trị nền tảng thông báo mà không mặc nhiên cấp quyền xem nội dung cá nhân.",
+      "descriptionEn": "Access notification diagnostics and administration without implicitly granting access to personal content.",
+      "riskLevel": "HIGH",
+      "displayOrder": 120
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": [
+      "notification.read-own",
+      "notification.mark-read-own",
+      "notification.mark-all-read-own",
+      "notification.dismiss-own",
+      "notification.preferences.manage-own",
+      "notification.send-specific",
+      "notification.send-employee",
+      "notification.broadcast-branch-users",
+      "notification.broadcast-branch-employees",
+      "notification.send-by-position",
+      "notification.send-by-permission",
+      "notification.manage"
+    ],
+    "MANAGER": [
+      "notification.read-own",
+      "notification.mark-read-own",
+      "notification.mark-all-read-own",
+      "notification.dismiss-own",
+      "notification.preferences.manage-own",
+      "notification.send-specific",
+      "notification.send-employee",
+      "notification.broadcast-branch-employees",
+      "notification.send-by-position",
+      "notification.send-by-permission"
+    ],
+    "RECEPTIONIST": [
+      "notification.read-own",
+      "notification.mark-read-own",
+      "notification.mark-all-read-own",
+      "notification.dismiss-own",
+      "notification.preferences.manage-own"
+    ]
+  }
+}

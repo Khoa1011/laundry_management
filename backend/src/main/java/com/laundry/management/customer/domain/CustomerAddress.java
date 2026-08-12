@@ -1,6 +1,7 @@
 package com.laundry.management.customer.domain;
 
 import com.laundry.management.auth.domain.UserAccount;
+import com.laundry.management.location.domain.AdministrativeVersion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,14 +39,27 @@ public class CustomerAddress {
     @Column(name = "normalized_receiver_phone", nullable = false, length = 20)
     private String normalizedReceiverPhone;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "administrative_version", length = 10)
+    private AdministrativeVersion administrativeVersion;
+
     @Column(length = 120)
     private String province;
+
+    @Column(name = "province_code")
+    private Integer provinceCode;
 
     @Column(length = 120)
     private String district;
 
+    @Column(name = "district_code")
+    private Integer districtCode;
+
     @Column(length = 120)
     private String ward;
+
+    @Column(name = "ward_code")
+    private Integer wardCode;
 
     @Column(name = "address_line", nullable = false, length = 500)
     private String addressLine;
@@ -88,9 +102,13 @@ public class CustomerAddress {
         String receiverName,
         String receiverPhone,
         String normalizedReceiverPhone,
+        AdministrativeVersion administrativeVersion,
         String province,
+        Integer provinceCode,
         String district,
+        Integer districtCode,
         String ward,
+        Integer wardCode,
         String addressLine,
         String deliveryNote,
         boolean defaultAddress,
@@ -100,9 +118,13 @@ public class CustomerAddress {
         this.receiverName = receiverName;
         this.receiverPhone = receiverPhone;
         this.normalizedReceiverPhone = normalizedReceiverPhone;
+        this.administrativeVersion = administrativeVersion;
         this.province = province;
+        this.provinceCode = provinceCode;
         this.district = district;
+        this.districtCode = districtCode;
         this.ward = ward;
+        this.wardCode = wardCode;
         this.addressLine = addressLine;
         this.deliveryNote = deliveryNote;
         this.defaultAddress = defaultAddress;
@@ -115,9 +137,13 @@ public class CustomerAddress {
         String receiverName,
         String receiverPhone,
         String normalizedReceiverPhone,
+        AdministrativeVersion administrativeVersion,
         String province,
+        Integer provinceCode,
         String district,
+        Integer districtCode,
         String ward,
+        Integer wardCode,
         String addressLine,
         String deliveryNote,
         UserAccount actor
@@ -125,9 +151,13 @@ public class CustomerAddress {
         this.receiverName = receiverName;
         this.receiverPhone = receiverPhone;
         this.normalizedReceiverPhone = normalizedReceiverPhone;
+        this.administrativeVersion = administrativeVersion;
         this.province = province;
+        this.provinceCode = provinceCode;
         this.district = district;
+        this.districtCode = districtCode;
         this.ward = ward;
+        this.wardCode = wardCode;
         this.addressLine = addressLine;
         this.deliveryNote = deliveryNote;
         this.updatedBy = actor;
@@ -159,9 +189,13 @@ public class CustomerAddress {
     public String getReceiverName() { return receiverName; }
     public String getReceiverPhone() { return receiverPhone; }
     public String getNormalizedReceiverPhone() { return normalizedReceiverPhone; }
+    public AdministrativeVersion getAdministrativeVersion() { return administrativeVersion; }
     public String getProvince() { return province; }
+    public Integer getProvinceCode() { return provinceCode; }
     public String getDistrict() { return district; }
+    public Integer getDistrictCode() { return districtCode; }
     public String getWard() { return ward; }
+    public Integer getWardCode() { return wardCode; }
     public String getAddressLine() { return addressLine; }
     public String getDeliveryNote() { return deliveryNote; }
     public boolean isDefaultAddress() { return defaultAddress; }

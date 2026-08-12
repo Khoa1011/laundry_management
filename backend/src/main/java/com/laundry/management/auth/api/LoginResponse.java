@@ -18,7 +18,8 @@ public record LoginResponse(
         Set<String> roles,
         Set<String> permissions,
         List<BranchAccess> branches,
-        Long defaultBranchId
+        Long defaultBranchId,
+        long authorizationVersion
     ) {
     }
 }

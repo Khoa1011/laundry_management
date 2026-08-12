@@ -1,0 +1,85 @@
+{
+  "module": {
+    "code": "price-list",
+    "nameVi": "Bảng giá",
+    "nameEn": "Price Lists",
+    "descriptionVi": "Quản lý vòng đời bảng giá theo chi nhánh và thời gian hiệu lực.",
+    "descriptionEn": "Manage branch-scoped price-list lifecycle and effective periods.",
+    "displayOrder": 37,
+    "dataScopeNotes": "Mọi thao tác phải kiểm tra chi nhánh của bảng giá sau khi kiểm tra quyền.",
+    "businessPolicyNotes": "Bảng giá đã công bố không được sửa tại chỗ; công bố và lưu trữ là thao tác có rủi ro cao."
+  },
+  "permissions": [
+    {
+      "code": "price-list.read",
+      "resource": "price-list",
+      "action": "read",
+      "nameVi": "Xem bảng giá",
+      "nameEn": "View price lists",
+      "descriptionVi": "Xem bảng giá trong phạm vi chi nhánh được phép.",
+      "descriptionEn": "View price lists within allowed branch scope.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "price-list.create",
+      "resource": "price-list",
+      "action": "create",
+      "nameVi": "Tạo bảng giá",
+      "nameEn": "Create price lists",
+      "descriptionVi": "Tạo bảng giá nháp cho chi nhánh được phép.",
+      "descriptionEn": "Create draft price lists for allowed branches.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 20
+    },
+    {
+      "code": "price-list.update-draft",
+      "resource": "price-list",
+      "action": "update-draft",
+      "nameVi": "Sửa bảng giá nháp",
+      "nameEn": "Update draft price lists",
+      "descriptionVi": "Cập nhật thông tin bảng giá khi còn ở trạng thái nháp.",
+      "descriptionEn": "Update price-list metadata while it remains a draft.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 30
+    },
+    {
+      "code": "price-list.duplicate",
+      "resource": "price-list",
+      "action": "duplicate",
+      "nameVi": "Nhân bản bảng giá",
+      "nameEn": "Duplicate price lists",
+      "descriptionVi": "Tạo bản nháp mới từ một bảng giá hiện có.",
+      "descriptionEn": "Create a new draft from an existing price list.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 40
+    },
+    {
+      "code": "price-list.publish",
+      "resource": "price-list",
+      "action": "publish",
+      "nameVi": "Công bố bảng giá",
+      "nameEn": "Publish price lists",
+      "descriptionVi": "Công bố hoặc lên lịch áp dụng bảng giá đã được kiểm tra.",
+      "descriptionEn": "Publish or schedule a validated price list.",
+      "riskLevel": "CRITICAL",
+      "displayOrder": 50
+    },
+    {
+      "code": "price-list.archive",
+      "resource": "price-list",
+      "action": "archive",
+      "nameVi": "Lưu trữ bảng giá",
+      "nameEn": "Archive price lists",
+      "descriptionVi": "Ngừng sử dụng bảng giá nhưng giữ nguyên lịch sử.",
+      "descriptionEn": "Retire a price list while preserving history.",
+      "riskLevel": "HIGH",
+      "displayOrder": 60
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["price-list.read", "price-list.create", "price-list.update-draft", "price-list.duplicate", "price-list.publish", "price-list.archive"],
+    "MANAGER": ["price-list.read", "price-list.create", "price-list.update-draft", "price-list.duplicate", "price-list.publish", "price-list.archive"],
+    "RECEPTIONIST": ["price-list.read"]
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "module": {
+    "code": "service",
+    "nameVi": "Danh mục dịch vụ",
+    "nameEn": "Service Catalog",
+    "descriptionVi": "Quản lý dịch vụ giặt là, đơn vị mặc định và khả năng xử lý chung.",
+    "descriptionEn": "Manage laundry services, default units, and shared-processing capability.",
+    "displayOrder": 35,
+    "dataScopeNotes": "Danh mục dịch vụ dùng chung, nhưng mọi thao tác cấu hình giá vẫn phải kiểm tra phạm vi chi nhánh riêng.",
+    "businessPolicyNotes": "Dịch vụ đã được tham chiếu không bị xóa cứng; trạng thái và khả năng xử lý chung là chính sách nghiệp vụ độc lập."
+  },
+  "permissions": [
+    {
+      "code": "service.read",
+      "resource": "service",
+      "action": "read",
+      "nameVi": "Xem dịch vụ",
+      "nameEn": "View services",
+      "descriptionVi": "Xem danh sách và chi tiết dịch vụ.",
+      "descriptionEn": "View service lists and details.",
+      "riskLevel": "LOW",
+      "displayOrder": 10
+    },
+    {
+      "code": "service.create",
+      "resource": "service",
+      "action": "create",
+      "nameVi": "Tạo dịch vụ",
+      "nameEn": "Create services",
+      "descriptionVi": "Tạo dịch vụ mới với mã do hệ thống sinh.",
+      "descriptionEn": "Create services with system-generated codes.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 20
+    },
+    {
+      "code": "service.update",
+      "resource": "service",
+      "action": "update",
+      "nameVi": "Cập nhật dịch vụ",
+      "nameEn": "Update services",
+      "descriptionVi": "Cập nhật thông tin và thiết lập xử lý của dịch vụ.",
+      "descriptionEn": "Update service information and processing settings.",
+      "riskLevel": "MEDIUM",
+      "displayOrder": 30
+    },
+    {
+      "code": "service.archive",
+      "resource": "service",
+      "action": "archive",
+      "nameVi": "Lưu trữ dịch vụ",
+      "nameEn": "Archive services",
+      "descriptionVi": "Ngừng hoạt động hoặc lưu trữ dịch vụ mà không xóa lịch sử.",
+      "descriptionEn": "Deactivate or archive services without deleting history.",
+      "riskLevel": "HIGH",
+      "displayOrder": 40
+    }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["service.read", "service.create", "service.update", "service.archive"],
+    "MANAGER": ["service.read", "service.create", "service.update", "service.archive"],
+    "RECEPTIONIST": ["service.read"]
+  }
+}

@@ -10,10 +10,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "branches")
+@BatchSize(size = 50)
 public class Branch {
 
     @Id

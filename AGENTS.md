@@ -19,6 +19,21 @@
 - Keep changes within task scope. Do not modify the frontend for backend-only work.
 - After backend changes, run the available backend tests and the build command supported by the repository.
 
+## Mandatory Frontend Design-System Workflow
+
+For every frontend screen, module, component, or visual change:
+
+1. Read `DESIGN.md` before implementation and treat it as the canonical visual contract.
+2. For every frontend or UI task, use the `impeccable` skill and the repository `laundry-admin-liquid-glass` skill when available.
+3. Read `docs/design/LIQUID_GLASS_ADMIN_RULES.md` and `docs/design/UI_IMPLEMENTATION_CHECKLIST.md` before planning or changing interface code.
+4. Reuse semantic tokens from `frontend/src/styles/tokens.css` and `frontend/src/styles/themes.css`; never add raw brand colors, arbitrary spacing, radii, shadows, z-index values, blur values, glass tints, or animation curves inside a feature.
+5. Reuse or extend shared primitives in `frontend/src/components` before creating a feature-local equivalent.
+6. Keep money input, evidence capture, media preview, overlays, state panels, toast behavior, buttons, fields, badges, tabs, filters, and fixed actions visually and behaviorally consistent across modules.
+7. Use `frontend/src/providers/MotionProvider.tsx` and shared motion tokens. Motion must communicate state, remain within 120-240ms for routine interactions, avoid bounce and page-load choreography, and respect reduced motion.
+8. Preserve API contracts, permissions, branch scope, validation, loading, empty, error, success, and keyboard behavior during redesigns.
+9. Update `DESIGN.md` first when a deliberate system-wide visual decision changes; do not let one page silently establish a new convention.
+10. Treat unknown token references, duplicated primitives, ad hoc feature styling, page-local glass styling, and missing responsive coverage as blocking frontend quality failures.
+
 ## Mandatory Access-Control-First Workflow for Every Business Module
 
 Codex and all agents must:

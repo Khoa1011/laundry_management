@@ -15,14 +15,17 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "users")
+@BatchSize(size = 50)
 public class UserAccount {
 
     @Id
@@ -47,6 +50,7 @@ public class UserAccount {
     private AccountStatus status;
 
     @ManyToMany(fetch = FetchType.LAZY)
+    @BatchSize(size = 50)
     @JoinTable(
         name = "user_roles",
         joinColumns = @JoinColumn(name = "user_id"),
@@ -55,9 +59,11 @@ public class UserAccount {
     private Set<Role> roles = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     private Set<UserBranch> branchAssignments = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     private Set<UserPermissionOverride> permissionOverrides = new LinkedHashSet<>();
 
     @CreationTimestamp
@@ -67,6 +73,23 @@ public class UserAccount {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name = "authorization_version", nullable = false)
+    private long authorizationVersion;
+
+    @Column(name = "locked_at")
+    private Instant lockedAt;
+
+    @Column(name = "locked_reason", length = 500)
+    private String lockedReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "locked_by")
+    private UserAccount lockedBy;
+
+    @Version
+    @Column(name = "access_version", nullable = false)
+    private long accessVersion;
 
     protected UserAccount() {
     }
@@ -83,6 +106,12 @@ public class UserAccount {
         roles.add(role);
     }
 
+    public void assignPrimaryRole(Role role) {
+        roles.clear();
+        roles.add(role);
+        authorizationVersion++;
+    }
+
     public void assignBranch(Branch branch, boolean asDefault) {
         branchAssignments.add(new UserBranch(this, branch, asDefault));
         if (asDefault) {
@@ -94,14 +123,43 @@ public class UserAccount {
         status = AccountStatus.INACTIVE;
     }
 
+    public boolean lock(String reason, UserAccount actor) {
+        if (lockedAt != null) {
+            return false;
+        }
+        lockedAt = Instant.now();
+        lockedReason = reason;
+        lockedBy = actor;
+        authorizationVersion++;
+        return true;
+    }
+
     public void overridePermission(Permission permission, PermissionOverrideEffect effect) {
         permissionOverrides.stream()
             .filter(existing -> existing.getPermission().getCode().equals(permission.getCode()))
             .findFirst()
             .ifPresentOrElse(
                 existing -> existing.changeEffect(effect),
-                () -> permissionOverrides.add(new UserPermissionOverride(this, permission, effect))
+                () -> permissionOverrides.add(new UserPermissionOverride(
+                    this,
+                    permission,
+                    effect,
+                    "Direct permission override",
+                    null,
+                    null
+                ))
             );
+        authorizationVersion++;
+    }
+
+    public void replacePermissionOverrides(Set<UserPermissionOverride> overrides) {
+        permissionOverrides.clear();
+        permissionOverrides.addAll(overrides);
+        authorizationVersion++;
+    }
+
+    public void incrementAuthorizationVersion() {
+        authorizationVersion++;
     }
 
     public Long getId() {
@@ -139,4 +197,11 @@ public class UserAccount {
     public Set<UserPermissionOverride> getPermissionOverrides() {
         return Set.copyOf(permissionOverrides);
     }
+
+    public long getAuthorizationVersion() { return authorizationVersion; }
+    public long getAccessVersion() { return accessVersion; }
+    public Instant getLockedAt() { return lockedAt; }
+    public String getLockedReason() { return lockedReason; }
+    public boolean isLocked() { return lockedAt != null; }
+    public Instant getUpdatedAt() { return updatedAt; }
 }

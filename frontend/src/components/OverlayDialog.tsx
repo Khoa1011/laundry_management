@@ -1,7 +1,9 @@
 import { X } from 'lucide-react'
+import { AnimatePresence, m } from 'motion/react'
 import { createPortal } from 'react-dom'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { motionDuration, motionEase } from '../providers/motionPresets'
 
 interface OverlayDialogProps {
   open: boolean
@@ -54,23 +56,28 @@ export function OverlayDialog({ open, onClose, title, description, children, foo
     }
   }, [open, onClose])
 
-  if (!open) return null
   return createPortal(
-    <div className={`overlay overlay--${variant}`} role="presentation" onMouseDown={(event) => {
-      if (closeOnBackdrop && event.target === event.currentTarget) onClose()
-    }}>
-      <div ref={panelRef} className="overlay__panel" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
-        <header className="overlay__header">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            {description && <p id={descriptionId}>{description}</p>}
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label={t('close')}><X size={20} aria-hidden="true" /></button>
-        </header>
-        <div className="overlay__body">{children}</div>
-        {footer && <footer className="overlay__footer">{footer}</footer>}
-      </div>
-    </div>,
+    <AnimatePresence initial={false}>
+      {open && <m.div className={`overlay overlay--${variant}`} role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: motionDuration.primitive }} onMouseDown={(event) => {
+        if (closeOnBackdrop && event.target === event.currentTarget) onClose()
+      }}>
+        <m.div ref={panelRef} className="overlay__panel" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
+          initial={variant === 'drawer' ? { x: '100%' } : { opacity: 0, y: 18, scale: 0.985 }}
+          animate={variant === 'drawer' ? { x: 0 } : { opacity: 1, y: 0, scale: 1 }}
+          exit={variant === 'drawer' ? { x: '100%' } : { opacity: 0, y: 10, scale: 0.99 }}
+          transition={{ duration: variant === 'drawer' ? motionDuration.structural : motionDuration.overlay, ease: motionEase }}>
+          <header className="overlay__header">
+            <div>
+              <h2 id={titleId}>{title}</h2>
+              {description && <p id={descriptionId}>{description}</p>}
+            </div>
+            <button type="button" className="icon-button" onClick={onClose} aria-label={t('close')}><X size={20} aria-hidden="true" /></button>
+          </header>
+          <div className="overlay__body">{children}</div>
+          {footer && <footer className="overlay__footer">{footer}</footer>}
+        </m.div>
+      </m.div>}
+    </AnimatePresence>,
     document.body,
   )
 }

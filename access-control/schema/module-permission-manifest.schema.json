@@ -29,7 +29,7 @@
         "additionalProperties": false,
         "required": ["code", "resource", "action", "nameVi", "nameEn", "descriptionVi", "descriptionEn", "riskLevel", "displayOrder"],
         "properties": {
-          "code": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)+$" },
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$" },
           "resource": { "type": "string", "minLength": 1 },
           "action": { "type": "string", "minLength": 1 },
           "nameVi": { "type": "string", "minLength": 1 },

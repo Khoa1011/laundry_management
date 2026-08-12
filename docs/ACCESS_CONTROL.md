@@ -42,6 +42,49 @@ Backend enforcement is authoritative. Controllers may delegate authorization to 
 
 Frontend guards improve navigation and interaction but are not security boundaries. The frontend uses the effective permission list returned by the backend and never derives access from role names.
 
+## Employee module
+
+The employee module is declared in `access-control/modules/employee.yml`. Its permissions deliberately separate profile, status, account, branch, position, audit, and cross-branch capabilities.
+
+`employee.manage-all-branches` is a scope permission. It only widens the set of branches an already-authorized action may address. For example, a user with `employee.manage-all-branches` but without `employee.update` still cannot edit an employee.
+
+Default grants are explicit:
+
+- `OWNER` receives every employee permission.
+- `MANAGER` receives operational employee permissions plus masked identity and private-file metadata reads, but not compensation, full identity, file content, `employee.position.manage`, or `employee.manage-all-branches`.
+- `RECEPTIONIST` receives only `employee.read-self`.
+
+Sensitive employee capabilities use dedicated permissions for compensation current/history/update, identity masked/full/update, and document metadata/upload/replace/delete/download. These permissions do not bypass employee branch scope. `OWNER` receives them explicitly through role grants; no role-name shortcut exists.
+
+User overrides continue to apply with `DENY > ALLOW > ROLE`, including for OWNER and all employee permissions. The frontend protects `/employees`, `/employees/new`, `/employees/:id`, `/employees/:id/edit`, and `/employees/me` from the effective permission list returned by the backend. Backend method authorization remains authoritative.
+
+## Notification module
+
+The notification module is declared in `access-control/modules/notification.yml`. Repository convention uses kebab-case permission actions:
+
+- `notification.read-own`
+- `notification.mark-read-own`
+- `notification.mark-all-read-own`
+- `notification.dismiss-own`
+- `notification.preferences.manage-own`
+- `notification.send-specific`
+- `notification.send-employee`
+- `notification.broadcast-branch-users`
+- `notification.broadcast-branch-employees`
+- `notification.send-by-position`
+- `notification.send-by-permission`
+- `notification.manage`
+
+Personal permissions never accept a target `userId`; the backend derives it from the principal. Send permissions are selected by audience type and branch scope is checked independently. `notification.manage` does not grant another user's personal content.
+
+Default grants are explicit:
+
+- `OWNER` receives every notification permission.
+- `MANAGER` receives personal permissions plus specific user/employee, branch employee, position, and effective-permission sending.
+- `RECEPTIONIST` receives only personal notification and preference permissions.
+
+The `/notifications` route, bell, settings actions, and management controls use effective frontend permissions. REST and SSE services independently enforce generated Java constants. No role-name bypass exists.
+
 ## Legacy bypass scan
 
 Run:

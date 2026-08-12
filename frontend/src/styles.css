@@ -2,6 +2,14 @@
 @import "./styles/tokens.css";
 @import "./styles/themes.css";
 @import "./styles/global.css";
+@import "./styles/motion.css";
+@import "./styles/shared-fields.css";
+@import "./styles/access-control.css";
+@import "./styles/employee.css";
+@import "./styles/notification.css";
+@import "./styles/catalog.css";
+@import "./styles/redesign.css";
+@import "./styles/liquid-glass.css";
 
 @theme inline {
   --color-app-background: var(--app-background);
