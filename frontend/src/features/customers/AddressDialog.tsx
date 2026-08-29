@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus, Save } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -105,7 +106,7 @@ export function AddressDialog({ open, onClose, customerId, branchId, address }: 
   const mutationError = createMutation.error ?? updateMutation.error
   const conflict = mutationError instanceof ApiError && mutationError.problem.errorCode === 'CUSTOMER_VERSION_CONFLICT'
 
-  return <OverlayDialog open={open} onClose={() => !pending && onClose()} title={t(editing ? 'addresses:editTitle' : 'addresses:addTitle')} description={t('addresses:formDescription')} variant="drawer" footer={<><button type="button" className="button button--secondary" onClick={onClose} disabled={pending}>{t('cancel')}</button><button type="submit" form="address-form" className="button button--primary" disabled={pending}>{pending ? t('saving') : t(editing ? 'addresses:saveEdit' : 'addresses:saveAdd')}</button></>}>
+  return <OverlayDialog open={open} onClose={() => !pending && onClose()} title={t(editing ? 'addresses:editTitle' : 'addresses:addTitle')} description={t('addresses:formDescription')} variant="drawer" footer={<><button type="button" className="button button--secondary" onClick={onClose} disabled={pending}>{t('cancel')}</button><button type="submit" form="address-form" className={`button ${editing ? 'button--primary' : 'button--create'}`} disabled={pending}>{!pending && (editing ? <Save size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />)}{pending ? t('saving') : t(editing ? 'addresses:saveEdit' : 'addresses:saveAdd')}</button></>}>
     <form id="address-form" className="form-stack" onSubmit={(event) => void submit(event)} noValidate>
       {conflict && <div className="inline-alert inline-alert--warning" role="alert">{t('customers:conflictBody')}</div>}
       <Field label={t('addresses:receiverName')} error={errors.receiverName?.message} required><input {...register('receiverName')} autoComplete="name" /></Field>

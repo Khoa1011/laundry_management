@@ -1,6 +1,6 @@
 import {
   Activity, ArrowLeft, ChevronRight, CircleCheck, ClipboardClock, Copy, Ellipsis,
-  KeyRound, Layers3, Plus, Search, ShieldCheck, UserRoundCog, UsersRound,
+  KeyRound, Layers3, Plus, Search, ShieldAlert, ShieldCheck, UserRoundCog, UsersRound,
 } from 'lucide-react'
 import {
   useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode,
@@ -14,6 +14,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
+import { StatCard } from '../../components/ui/StatCard'
 import { useToast } from '../../providers/ToastProvider'
 import {
   useAccessMutations, useRole, useRoleAudit, useRoleMatrix, useRoles, useRoleUsers,
@@ -126,7 +127,7 @@ export function RoleListPage() {
         subtitle={t('access:rolesSubtitle')}
         back="/settings/access"
         actions={hasPermission(PERMISSION_CODES.ACCESS_ROLE_CREATE)
-          ? <Link to="/settings/access/roles/new" className="button button--primary"><Plus size={18} aria-hidden="true" />{t('access:createRole')}</Link>
+          ? <Link to="/settings/access/roles/new" className="button button--create"><Plus size={18} aria-hidden="true" />{t('access:createRole')}</Link>
           : undefined}
       />
       <label className="search-input access-search">
@@ -332,7 +333,7 @@ export function RoleFormPage() {
         {isDirty && <span className="unsaved-indicator" role="status">{t('access:unsaved')}</span>}
         {editing && hasPermission(PERMISSION_CODES.ACCESS_ROLE_PERMISSION_ASSIGN) && <Link className="button button--secondary role-matrix-secondary" to={`/settings/access/roles/${id}/permissions`}><KeyRound size={18} aria-hidden="true" />{t('access:openMatrix')}</Link>}
         <button type="button" className="button button--secondary" onClick={() => navigate(editing ? `/settings/access/roles/${id}` : '/settings/access/roles')} disabled={pending}>{t('cancel')}</button>
-        {!systemRole && <button type="submit" form="role-form" className="button button--primary" disabled={pending}>{pending ? t('saving') : t(editing ? 'access:saveChanges' : 'access:createAndConfigure')}</button>}
+        {!systemRole && <button type="submit" form="role-form" className={`button ${editing ? 'button--primary' : 'button--create'}`} disabled={pending}>{!pending && !editing && <Plus size={18} aria-hidden="true" />}{pending ? t('saving') : t(editing ? 'access:saveChanges' : 'access:createAndConfigure')}</button>}
       </div>
       <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()} onConfirm={() => blocker.proceed?.()} title={t('unsavedTitle')} body={t('unsavedBody')} confirmLabel={t('leave')} tone="danger" />
       <ConfirmDialog open={conflictOpen} onClose={() => setConflictOpen(false)} onConfirm={() => { setConflictOpen(false); void query.refetch() }} title={t('access:conflict')} body={t('access:conflict')} confirmLabel={t('reload')} />
@@ -447,11 +448,11 @@ export function RoleDetailPage() {
         </>}
       />
       <div className="role-identity-line"><code>{role.code}</code><StatusBadge status={role.status} /><TypeBadge system={role.system} /></div>
-      <section className="access-summary role-summary-grid" aria-label={t('access:roleDetails')}>
-        <SummaryCard icon={<CircleCheck />} label={t('access:status')} value={t(role.status === 'ACTIVE' ? 'access:active' : 'access:inactive')} />
-        <SummaryCard icon={<KeyRound />} label={t('access:permissions')} value={t('access:permissionCount', { count: role.permissionCount })} />
-        <SummaryCard icon={<UsersRound />} label={t('access:assignedUsers')} value={t('access:userCount', { count: role.assignedUsers })} />
-        <SummaryCard icon={<Layers3 />} label={t('access:roleType')} value={t(role.system ? 'access:systemRole' : 'access:customRole')} />
+      <section className="stat-card-grid role-summary-grid" aria-label={t('access:roleDetails')}>
+        <StatCard tone={role.status === 'ACTIVE' ? 'success' : 'neutral'} icon={<CircleCheck />} label={t('access:status')} value={t(role.status === 'ACTIVE' ? 'access:active' : 'access:inactive')} />
+        <StatCard tone="primary" icon={<KeyRound />} label={t('access:permissions')} value={t('access:permissionCount', { count: role.permissionCount })} />
+        <StatCard tone="operational" icon={<UsersRound />} label={t('access:assignedUsers')} value={t('access:userCount', { count: role.assignedUsers })} />
+        <StatCard tone="neutral" icon={<Layers3 />} label={t('access:roleType')} value={t(role.system ? 'access:systemRole' : 'access:customRole')} />
       </section>
       <div className="role-tabs" role="tablist" aria-label={t('access:roleDetails')}>
         {availableTabs.map((tab, index) => <button
@@ -490,10 +491,6 @@ export function RoleDetailPage() {
       </OverlayDialog>
     </div>
   )
-}
-
-function SummaryCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return <div className="role-summary-card"><span className="role-summary-icon" aria-hidden="true">{icon}</span><small>{label}</small><strong>{value}</strong></div>
 }
 
 function RoleOverview({ role, description, language }: { role: Role; description?: string | null; language: string }) {
@@ -544,9 +541,9 @@ function RolePermissionSummary({ role, modules, selected, highRisk, language, ca
         <div><h2>{t('access:permissionSummary')}</h2><p>{t('access:matrixUpdated')} {dateTime(role.updatedAt, language)} · {t('access:updatedBy')}: {role.updatedBy?.displayName ?? t('notAvailable')}</p></div>
         {canEdit && <Link className="button button--primary" to={`/settings/access/roles/${role.id}/permissions`}><KeyRound size={18} aria-hidden="true" />{t('access:editMatrix')}</Link>}
       </div>
-      <div className="permission-summary-totals">
-        <div><small>{t('access:selectedPermissions')}</small><strong>{selected.size}</strong></div>
-        <div><small>{t('access:highRisk')}</small><strong>{highRisk}</strong></div>
+      <div className="stat-card-grid stat-card-grid--two permission-summary-totals">
+        <StatCard tone="primary" icon={<KeyRound />} label={t('access:selectedPermissions')} value={selected.size} />
+        <StatCard tone={highRisk > 0 ? 'danger' : 'neutral'} icon={<ShieldAlert />} label={t('access:highRisk')} value={highRisk} />
       </div>
       {selectedModules.length === 0
         ? <StatePanel compact icon={<KeyRound />} title={t('access:noPermissions')} body={t('access:effectiveAccessNote')} />

@@ -1,14 +1,16 @@
-import { BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Filter, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, Settings2, UserRound, UsersRound } from 'lucide-react'
+import { PencilSimpleIcon, UserCircleIcon } from '@phosphor-icons/react'
+import { BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, Mail, Phone, Plus, Search, Settings2, UsersRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
-import { OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { Button, ButtonLink } from '../../components/ui/Button'
-import { IconButton, IconButtonLink } from '../../components/ui/IconButton'
+import { ActionMenu as FloatingActionMenu } from '../../components/ui/ActionMenu'
+import { CollapsibleFilterPanel } from '../../components/ui/CollapsibleFilterPanel'
+import { IconButton } from '../../components/ui/IconButton'
 import { useEmployeeBranchOptions, useEmployeePositions, useEmployees, type EmployeeFilters } from './api'
 import { EmployeeAccountBadge, EmployeeStatusBadge } from './EmployeeBadges'
 import { employeePositionName } from './format'
@@ -21,7 +23,6 @@ export function EmployeeListPage() {
   const { t, i18n } = useTranslation()
   const { hasPermission } = useAuth()
   const [params, setParams] = useSearchParams()
-  const [filterOpen, setFilterOpen] = useState(false)
   const filters: EmployeeFilters = {
     page: Math.max(0, Number(params.get('page') ?? 0) || 0), size: 20,
     search: params.get('search') ?? '', status: (params.get('status') as EmployeeStatus | null) ?? '',
@@ -37,7 +38,7 @@ export function EmployeeListPage() {
   const canUpdate = hasPermission(PERMISSION_CODES.EMPLOYEE_UPDATE)
   const canManagePositions = hasPermission(PERMISSION_CODES.EMPLOYEE_POSITION_MANAGE)
   const forbidden = query.error instanceof ApiError && query.error.status === 403
-  const activeFilterCount = [filters.status, filters.positionId, filters.branchId, filters.accountStatus].filter(Boolean).length
+  const activeFilterCount = [filters.status, filters.positionId, filters.branchId, filters.accountStatus, filters.sort !== 'employeeCode,asc' ? filters.sort : ''].filter(Boolean).length
   const hasFilters = activeFilterCount > 0 || Boolean(filters.search)
 
   const patchFilters = (updates: Record<string, string>) => setParams((current) => {
@@ -46,7 +47,7 @@ export function EmployeeListPage() {
     next.set('page', '0')
     return next
   })
-  const clearFilters = () => setParams(new URLSearchParams({ sort: filters.sort }))
+  const clearFilters = () => { setSearchInput(''); setParams(new URLSearchParams({ sort: 'employeeCode,asc' })) }
 
   useEffect(() => setSearchInput(filters.search), [filters.search])
   useEffect(() => {
@@ -64,20 +65,18 @@ export function EmployeeListPage() {
   }, [filters.search, searchInput, setParams])
 
   return <div className="page-container employee-list-page">
-    <header className="page-header"><div><p className="eyebrow">{t('employee:employee')}</p><h1>{t('employee:title')}</h1><p>{t('employee:subtitle')}</p></div>{(canCreate || canManagePositions) && <div className="page-header__actions">{canManagePositions && <ButtonLink variant="secondary" to="/employees/positions"><Settings2 size={18} aria-hidden="true" />{t('employee:positionsTitle')}</ButtonLink>}{canCreate && <ButtonLink renderLevel="premium" to="/employees/new"><Plus size={18} aria-hidden="true" />{t('employee:add')}</ButtonLink>}</div>}</header>
+    <header className="page-header"><div><p className="eyebrow">{t('employee:employee')}</p><h1>{t('employee:title')}</h1><p>{t('employee:subtitle')}</p></div>{(canCreate || canManagePositions) && <div className="page-header__actions">{canManagePositions && <ButtonLink variant="secondary" to="/employees/positions"><Settings2 size={18} aria-hidden="true" />{t('employee:positionsTitle')}</ButtonLink>}{canCreate && <ButtonLink to="/employees/new" variant="create"><Plus size={18} aria-hidden="true" />{t('employee:add')}</ButtonLink>}</div>}</header>
     <div className="employee-filter-bar">
       <label className="search-box"><Search size={18} aria-hidden="true" /><span className="sr-only">{t('search')}</span><input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('employee:searchPlaceholder')} /></label>
-      <div className="employee-desktop-filters"><EmployeeFiltersControl filters={filters} patch={patchFilters} positions={positions.data ?? []} branches={branches.data ?? []} t={t} language={i18n.language} /></div>
-      <Button type="button" variant="secondary" className="employee-mobile-filter" onClick={() => setFilterOpen(true)}><Filter size={18} aria-hidden="true" />{t('employee:filters')}{activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}</Button>
+      <CollapsibleFilterPanel label={t('employee:filters')} activeCount={activeFilterCount} fieldsClassName="employee-filter-fields"><EmployeeFiltersControl filters={filters} patch={patchFilters} positions={positions.data ?? []} branches={branches.data ?? []} t={t} language={i18n.language} /></CollapsibleFilterPanel>
     </div>
     {hasFilters && <div className="active-filter-chips"><FilterChip label={t('clear')} onClear={clearFilters} /></div>}
     <div className="list-meta"><strong>{query.data ? t('employee:count', { count: query.data.totalElements }) : t('loading')}</strong>{query.isFetching && query.data && <span className="subtle-progress" role="status">{t('loading')}</span>}</div>
-    {forbidden ? <PermissionDeniedState /> : query.isPending ? <LoadingState rows={6} /> : query.isError ? <ErrorState title={t('employee:loadErrorTitle')} body={t('employee:loadErrorBody')} onRetry={() => void query.refetch()} /> : query.data.items.length === 0 ? <StatePanel icon={<UsersRound />} title={hasFilters ? t('employee:filteredEmptyTitle') : t('employee:emptyTitle')} body={hasFilters ? t('employee:filteredEmptyBody') : t('employee:emptyBody')} action={hasFilters ? <Button variant="secondary" onClick={clearFilters}>{t('clear')}</Button> : canCreate ? <ButtonLink to="/employees/new"><Plus size={18} />{t('employee:add')}</ButtonLink> : undefined} /> : <>
+    {forbidden ? <PermissionDeniedState /> : query.isPending ? <LoadingState rows={6} /> : query.isError ? <ErrorState title={t('employee:loadErrorTitle')} body={t('employee:loadErrorBody')} onRetry={() => void query.refetch()} /> : query.data.items.length === 0 ? <StatePanel icon={<UsersRound />} title={hasFilters ? t('employee:filteredEmptyTitle') : t('employee:emptyTitle')} body={hasFilters ? t('employee:filteredEmptyBody') : t('employee:emptyBody')} action={hasFilters ? <Button variant="secondary" onClick={clearFilters}>{t('clear')}</Button> : canCreate ? <ButtonLink to="/employees/new" variant="create"><Plus size={18} aria-hidden="true" />{t('employee:add')}</ButtonLink> : undefined} /> : <>
       <div className="employee-table-wrap employee-desktop-view"><table className="employee-table"><thead><tr><th>{t('employee:employee')}</th><th>{t('employee:position')}</th><th>{t('employee:primaryBranch')}</th><th>{t('employee:hireDate')}</th><th>{t('status')}</th><th>{t('employee:account')}</th><th><span className="sr-only">{t('actions')}</span></th></tr></thead><tbody>{query.data.items.map((employee) => <EmployeeRow key={employee.id} employee={employee} canUpdate={canUpdate} t={t} language={i18n.language} />)}</tbody></table></div>
       <div className="employee-card-list employee-mobile-view">{query.data.items.map((employee) => <EmployeeCard key={employee.id} employee={employee} canUpdate={canUpdate} t={t} language={i18n.language} />)}</div>
       <Pagination page={query.data.page} totalPages={query.data.totalPages} onPage={(page) => setParams((current) => { const next = new URLSearchParams(current); next.set('page', String(page)); return next })} t={t} />
     </>}
-    <EmployeeFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} filters={filters} patch={patchFilters} reset={clearFilters} positions={positions.data ?? []} branches={branches.data ?? []} t={t} language={i18n.language} />
   </div>
 }
 
@@ -91,14 +90,8 @@ function EmployeeFiltersControl({ filters, patch, positions, branches, t, langua
   </>
 }
 
-function EmployeeFilterSheet({ open, onClose, filters, patch, reset, positions, branches, t, language }: { open: boolean; onClose: () => void; filters: EmployeeFilters; patch: (updates: Record<string, string>) => void; reset: () => void; positions: ReturnType<typeof useEmployeePositions>['data']; branches: ReturnType<typeof useEmployeeBranchOptions>['data']; t: ReturnType<typeof useTranslation>['t']; language: string }) {
-  const [draft, setDraft] = useState(filters)
-  useEffect(() => { if (open) setDraft(filters) }, [open, filters])
-  return <OverlayDialog open={open} onClose={onClose} title={t('employee:filters')} footer={<><Button variant="secondary" onClick={() => { reset(); onClose() }}>{t('reset')}</Button><Button onClick={() => { patch({ status: draft.status, positionId: draft.positionId, branchId: draft.branchId, accountStatus: draft.accountStatus, sort: draft.sort }); onClose() }}>{t('apply')}</Button></>}><div className="form-stack"><EmployeeFiltersControl filters={draft} patch={(updates) => setDraft((current) => ({ ...current, ...updates }))} positions={positions} branches={branches} t={t} language={language} /></div></OverlayDialog>
-}
-
 function EmployeeRow({ employee, canUpdate, t, language }: { employee: EmployeeListItem; canUpdate: boolean; t: ReturnType<typeof useTranslation>['t']; language: string }) {
-  return <tr><td><Link className="employee-identity" to={`/employees/${employee.id}`}><span className="avatar">{initials(employee.fullName)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeCode}{employee.phone ? ` · ${employee.phone}` : ''}</small></span></Link></td><td>{employeePositionName(employee.position, language)}</td><td>{employee.primaryBranch?.name ?? t('notAvailable')}{employee.activeBranchCount > 1 && <small className="employee-count-more">+{employee.activeBranchCount - 1}</small>}</td><td>{formatDate(employee.hireDate, language)}</td><td><EmployeeStatusBadge status={employee.status} t={t} /></td><td><EmployeeAccountBadge status={employee.account?.status ?? 'NO_ACCOUNT'} t={t} /></td><td><div className="employee-row-actions"><IconButtonLink to={`/employees/${employee.id}`} title={t('employee:profile')} label={t('employee:profile')}><UserRound size={17} /></IconButtonLink>{canUpdate && <IconButtonLink to={`/employees/${employee.id}/edit`} title={t('employee:editProfile')} label={t('employee:editProfile')}><Pencil size={17} /></IconButtonLink>}</div></td></tr>
+  return <tr><td><Link className="employee-identity" to={`/employees/${employee.id}`}><span className="avatar">{initials(employee.fullName)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeCode}{employee.phone ? ` · ${employee.phone}` : ''}</small></span></Link></td><td>{employeePositionName(employee.position, language)}</td><td>{employee.primaryBranch?.name ?? t('notAvailable')}{employee.activeBranchCount > 1 && <small className="employee-count-more">+{employee.activeBranchCount - 1}</small>}</td><td>{formatDate(employee.hireDate, language)}</td><td><EmployeeStatusBadge status={employee.status} t={t} /></td><td><EmployeeAccountBadge status={employee.account?.status ?? 'NO_ACCOUNT'} t={t} /></td><td><ActionMenu employee={employee} canUpdate={canUpdate} t={t} /></td></tr>
 }
 
 function EmployeeCard({ employee, canUpdate, t, language }: { employee: EmployeeListItem; canUpdate: boolean; t: ReturnType<typeof useTranslation>['t']; language: string }) {
@@ -106,7 +99,7 @@ function EmployeeCard({ employee, canUpdate, t, language }: { employee: Employee
 }
 
 function ActionMenu({ employee, canUpdate, t }: { employee: EmployeeListItem; canUpdate: boolean; t: ReturnType<typeof useTranslation>['t'] }) {
-  return <details className="action-menu"><summary className="icon-button" aria-label={t('openMenu')}><MoreHorizontal size={19} /></summary><div className="action-menu__content"><Link to={`/employees/${employee.id}`}><UserRound size={17} />{t('employee:profile')}</Link>{canUpdate && <Link to={`/employees/${employee.id}/edit`}><Pencil size={17} />{t('employee:editProfile')}</Link>}</div></details>
+  return <FloatingActionMenu label={t('openMenu')}><Link role="menuitem" to={`/employees/${employee.id}`}><UserCircleIcon size={27} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('employee:profile')}</span></Link>{canUpdate && <Link role="menuitem" to={`/employees/${employee.id}/edit`}><PencilSimpleIcon size={26} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('employee:editProfile')}</span></Link>}</FloatingActionMenu>
 }
 
 function Pagination({ page, totalPages, onPage, t }: { page: number; totalPages: number; onPage: (page: number) => void; t: ReturnType<typeof useTranslation>['t'] }) {

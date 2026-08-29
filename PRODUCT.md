@@ -70,7 +70,7 @@ The product voice should feel direct and steady: short Vietnamese labels, plain 
 
 Avoid marketing-page styling, decorative dashboards, playful consumer-app gestures, oversized hero sections, chart-heavy screens where task controls are needed, and dense desktop-first admin layouts compressed onto phones.
 
-Liquid Glass is allowed only according to root `DESIGN.md` and `docs/design/LIQUID_GLASS_ADMIN_RULES.md`. Avoid excessive decorative glass, glass-on-glass nesting, glass on dense tables or long forms, and glass on sensitive employee, finance, audit, permission, reconciliation, or private-file data surfaces.
+Use the solid admin direction defined by root `DESIGN.md` and `docs/design/SOLID_ADMIN_RULES.md`. Avoid translucent structural material, backdrop blur, decorative gradients, nested cards, and visual effects that reduce clarity on employee, finance, audit, permission, reconciliation, or private-file data surfaces.
 
 Avoid confirming or implying business rules that are still unresolved, including pricing behavior, payment timing, debt handling, inventory valuation, revenue recognition, and receipt numbering.
 

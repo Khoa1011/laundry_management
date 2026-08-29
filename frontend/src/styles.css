@@ -9,7 +9,10 @@
 @import "./styles/notification.css";
 @import "./styles/catalog.css";
 @import "./styles/redesign.css";
-@import "./styles/liquid-glass.css";
+@import "./styles/solid-admin.css";
+@import "./styles/auth.css";
+@import "./styles/landing.css";
+@import "./styles/shell.css";
 
 @theme inline {
   --color-app-background: var(--app-background);

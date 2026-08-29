@@ -12,6 +12,8 @@ import { MediaPreview } from '../../components/MediaPreview'
 import { MoneyInput } from '../../components/MoneyInput'
 import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, StatePanel } from '../../components/States'
+import { CollapsibleFilterPanel } from '../../components/ui/CollapsibleFilterPanel'
+import { StatCard } from '../../components/ui/StatCard'
 import { useToast } from '../../providers/ToastProvider'
 import { moneyInputToNumber } from '../../utils/money'
 import {
@@ -94,9 +96,16 @@ function CompensationPanel({ employeeId }: { employeeId: number }) {
 
 function CompensationItem({ label, value, language }: { label: string; value?: Compensation | null; language: string }) {
   const { t } = useTranslation()
-  return <article className="compensation-item"><span>{label}</span>{value ? <><strong>{formatMoney(value.baseSalary, value.currency, language)}</strong>
-    <div><StatusTag status={value.status} /> <small>{formatDate(value.effectiveFrom, language)}</small></div><p>{value.reason}</p></>
-    : <p className="muted">{t('employee:sensitive.noCompensation')}</p>}</article>
+  return <StatCard
+    className="compensation-stat-card"
+    icon={<BadgeDollarSign />}
+    label={label}
+    value={value ? formatMoney(value.baseSalary, value.currency, language) : '—'}
+    tone={value?.status === 'SCHEDULED' ? 'warning' : value ? 'operational' : 'neutral'}
+    supporting={value
+      ? <><div className="compensation-stat-card__meta"><StatusTag status={value.status} /><small>{formatDate(value.effectiveFrom, language)}</small></div><p>{value.reason}</p></>
+      : <p className="muted">{t('employee:sensitive.noCompensation')}</p>}
+  />
 }
 function CompensationHistoryRow({ item, language }: { item: Compensation; language: string }) {
   return <div className="sensitive-history__row"><div><strong>{formatMoney(item.baseSalary, item.currency, language)}</strong><small>{formatDate(item.effectiveFrom, language)}{item.effectiveTo ? ` - ${formatDate(item.effectiveTo, language)}` : ''}</small></div><StatusTag status={item.status} /><p>{item.reason}</p></div>
@@ -128,7 +137,7 @@ function IdentityPanel({ employeeId }: { employeeId: number }) {
   const missing = query.error instanceof ApiError && query.error.status === 404
   const identity = query.data
   const verifyNow = async (reason?: string) => { if (!identity || !verifyStatus) return; try { await verify.mutateAsync({ type: identity.identityType, status: verifyStatus, reason, version: identity.version }); notify(t('employee:sensitive.identityVerified')); setVerifyStatus(null) } catch (error) { notify(errorMessage(error, t('employee:sensitive.saveError')), 'error') } }
-  return <div className="sensitive-stack"><div className="sensitive-panel-heading"><div><h3>{t('employee:sensitive.identity')}</h3><p>{t('employee:sensitive.identityHint')}</p></div>{canUpdate && <button className="button button--primary" onClick={() => setEditOpen(true)}>{identity ? <Pencil size={17} /> : <Plus size={17} />}{identity ? t('employee:sensitive.editIdentity') : t('employee:sensitive.addIdentity')}</button>}</div>
+  return <div className="sensitive-stack"><div className="sensitive-panel-heading"><div><h3>{t('employee:sensitive.identity')}</h3><p>{t('employee:sensitive.identityHint')}</p></div>{canUpdate && <button className={`button ${identity ? 'button--primary' : 'button--create'}`} onClick={() => setEditOpen(true)}>{identity ? <Pencil size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}{identity ? t('employee:sensitive.editIdentity') : t('employee:sensitive.addIdentity')}</button>}</div>
     {query.isPending ? <LoadingState rows={3} /> : query.isError && !missing ? <ErrorState title={t('employee:sensitive.loadError')} body={t('employee:sensitive.retryBody')} onRetry={() => void query.refetch()} />
       : !identity ? <StatePanel compact title={t('employee:sensitive.noIdentity')} body={t('employee:sensitive.noIdentityBody')} />
         : <div className="identity-detail"><div className="identity-number"><span>{t('employee:sensitive.citizenId')}</span><strong>{identity.number}</strong>{canFull && <button type="button" className="icon-button" title={reveal ? t('employee:sensitive.hideNumber') : t('employee:sensitive.revealNumber')} aria-label={reveal ? t('employee:sensitive.hideNumber') : t('employee:sensitive.revealNumber')} onClick={() => setReveal((value) => !value)}>{reveal ? <EyeOff size={18} /> : <Eye size={18} />}</button>}</div>
@@ -174,7 +183,7 @@ function DocumentsPanel({ employeeId }: { employeeId: number }) {
   const download = async (document: EmployeeDocument) => { try { const blob = await loadEmployeeDocument(employeeId, document.id, true); const url = URL.createObjectURL(blob); const anchor = window.document.createElement('a'); anchor.href = url; anchor.download = document.originalFilename; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000) } catch (error) { notify(errorMessage(error, t('employee:sensitive.openError')), 'error') } }
   const deleteNow = async () => { if (!deleting || !deleteReason.trim()) return; try { await remove.mutateAsync({ documentId: deleting.id, reason: deleteReason.trim(), recordVersion: deleting.recordVersion }); notify(t('employee:sensitive.documentDeleted')); setDeleting(null); setDeleteReason('') } catch (error) { notify(errorMessage(error, t('employee:sensitive.saveError')), 'error') } }
   return <div className="sensitive-stack"><div className="sensitive-panel-heading"><div><h3>{t('employee:sensitive.documents')}</h3><p>{t('employee:sensitive.documentsHint')}</p></div>{canUpload && <button className="button button--primary" onClick={() => setUploadOpen(true)}><Upload size={17} />{t('employee:sensitive.uploadDocument')}</button>}</div>
-    {canRead && <><label className="document-status-filter"><span>{t('status')}</span><select value={status} onChange={(event) => setStatus(event.target.value as EmployeeDocumentStatus)}><option value="ACTIVE">{t('employee:sensitive.activeFiles')}</option><option value="REPLACED">{t('employee:sensitive.replacedFiles')}</option><option value="DELETED">{t('employee:sensitive.deletedFiles')}</option></select></label>
+    {canRead && <><CollapsibleFilterPanel className="document-filter-collapse" label={t('employee:filters')} activeCount={status === 'ACTIVE' ? 0 : 1}><label className="document-status-filter"><span>{t('status')}</span><select value={status} onChange={(event) => setStatus(event.target.value as EmployeeDocumentStatus)}><option value="ACTIVE">{t('employee:sensitive.activeFiles')}</option><option value="REPLACED">{t('employee:sensitive.replacedFiles')}</option><option value="DELETED">{t('employee:sensitive.deletedFiles')}</option></select></label></CollapsibleFilterPanel>
       {query.isPending ? <LoadingState rows={4} /> : query.isError ? <ErrorState title={t('employee:sensitive.loadError')} body={t('employee:sensitive.retryBody')} onRetry={() => void query.refetch()} /> : query.data?.items.length ? <div className="document-list">{query.data.items.map((document) => <article className="document-row" key={document.id}>
         <DocumentVisual employeeId={employeeId} document={document} canPreview={canDownload} onOpen={() => void openFile(document)} />
         <div className="document-row__main"><strong>{document.originalFilename}</strong><small>{documentTypeLabel(document.documentType, t)} · {formatBytes(document.sizeBytes)} · v{document.documentVersion}</small><small>{formatDateTime(document.createdAt, i18n.language)} · {document.actor.displayName}</small>{document.description && <p>{document.description}</p>}</div><StatusTag status={document.status} /><div className="document-row__actions">{canDownload && <><button className="icon-button" aria-label={t('employee:sensitive.preview')} title={t('employee:sensitive.preview')} disabled={openingId === document.id} onClick={() => void openFile(document)}>{openingId === document.id ? <RefreshCw className="spin" size={18} /> : <Eye size={18} />}</button><button className="icon-button" aria-label={t('employee:sensitive.download')} title={t('employee:sensitive.download')} onClick={() => void download(document)}><Download size={18} /></button></>}{canReplace && document.status === 'ACTIVE' && <button className="icon-button" aria-label={t('employee:sensitive.replace')} title={t('employee:sensitive.replace')} onClick={() => setReplace(document)}><RefreshCw size={18} /></button>}{canDelete && document.status !== 'DELETED' && <button className="icon-button icon-button--danger" aria-label={t('delete')} title={t('delete')} onClick={() => setDeleting(document)}><Trash2 size={18} /></button>}</div></article>)}</div> : <StatePanel compact title={t('employee:sensitive.noDocuments')} body={t('employee:sensitive.noDocumentsBody')} />}</>}

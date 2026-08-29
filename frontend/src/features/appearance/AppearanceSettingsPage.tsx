@@ -1,29 +1,17 @@
-import { Check, Palette, RotateCcw, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Check, Gauge, Palette, RotateCcw, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GlassSurface } from '../../components/GlassSurface'
+import { Button } from '../../components/ui/Button'
+import { Surface } from '../../components/ui/Surface'
 import {
   DEFAULT_APPEARANCE,
-  normalizeHex,
   type AppearancePreferences,
-  type BrandIntensity,
-  type GlassStrength,
   type MotionLevel,
-  type PaletteName,
 } from '../../providers/appearancePreferences'
 import { useTheme } from '../../providers/ThemeProvider'
 import { useToast } from '../../providers/ToastProvider'
 
-const paletteOptions: Array<{ value: PaletteName; label: string }> = [
-  { value: 'laundry-green', label: 'laundryGreen' },
-  { value: 'ocean-blue', label: 'oceanBlue' },
-  { value: 'aqua-teal', label: 'aquaTeal' },
-  { value: 'royal-violet', label: 'royalViolet' },
-  { value: 'warm-amber', label: 'warmAmber' },
-  { value: 'rose-red', label: 'roseRed' },
-]
-
-const validHex = (value: string) => /^#[0-9A-F]{6}$/i.test(value.trim())
+const motionOptions: MotionLevel[] = ['full', 'balanced', 'reduced', 'off']
 
 export function AppearanceSettingsPage() {
   const { t } = useTranslation()
@@ -37,14 +25,13 @@ export function AppearanceSettingsPage() {
   const { notify } = useToast()
   const [draft, setDraft] = useState<AppearancePreferences>(appliedPreferences)
   const [savedMessage, setSavedMessage] = useState(false)
-  const colorsValid = validHex(draft.customPrimary) && validHex(draft.customAccent)
-  const hasChanges = JSON.stringify(draft) !== JSON.stringify(appliedPreferences)
+  const hasChanges = draft.motionLevel !== appliedPreferences.motionLevel
 
   useEffect(() => () => cancelPreview(), [cancelPreview])
 
-  const update = (patch: Partial<AppearancePreferences>) => {
+  const updateMotion = (motionLevel: MotionLevel) => {
+    const next = { motionLevel }
     setSavedMessage(false)
-    const next = { ...draft, ...patch }
     setDraft(next)
     previewPreferences(next)
   }
@@ -62,14 +49,8 @@ export function AppearanceSettingsPage() {
   }
 
   const apply = () => {
-    if (!colorsValid || !hasChanges) return
-    const normalized = {
-      ...draft,
-      customPrimary: normalizeHex(draft.customPrimary),
-      customAccent: normalizeHex(draft.customAccent, DEFAULT_APPEARANCE.customAccent),
-    }
-    applyPreferences(normalized)
-    setDraft(normalized)
+    if (!hasChanges) return
+    applyPreferences(draft)
     setSavedMessage(true)
     notify(t('appearance:applied'), 'success')
   }
@@ -86,221 +67,58 @@ export function AppearanceSettingsPage() {
 
       {(hasPreview || savedMessage) && (
         <div className={`appearance-notice${savedMessage ? ' appearance-notice--success' : ''}`} role="status">
-          <Sparkles size={18} aria-hidden="true" />
+          {savedMessage ? <Check size={18} aria-hidden="true" /> : <Sparkles size={18} aria-hidden="true" />}
           <span>{t(savedMessage ? 'appearance:applied' : 'appearance:previewing')}</span>
         </div>
       )}
 
-      <section className="appearance-section" aria-labelledby="palette-heading">
+      <Surface as="section" className="appearance-section appearance-system" aria-labelledby="system-heading">
         <div className="section-heading">
           <div>
-            <h2 id="palette-heading">{t('appearance:paletteTitle')}</h2>
-            <p>{t('appearance:paletteDescription')}</p>
+            <h2 id="system-heading">{t('appearance:systemTitle')}</h2>
+            <p>{t('appearance:systemDescription')}</p>
           </div>
         </div>
-        <div className="palette-grid" role="radiogroup" aria-label={t('appearance:paletteTitle')}>
-          {paletteOptions.map((option) => (
+        <div className="appearance-system__preview" aria-label={t('appearance:palettePreview')}>
+          <span className="appearance-swatch appearance-swatch--primary" />
+          <span className="appearance-swatch appearance-swatch--operational" />
+          <span className="appearance-swatch appearance-swatch--warning" />
+          <span className="appearance-swatch appearance-swatch--attention" />
+          <span className="appearance-swatch appearance-swatch--canvas" />
+          <span className="appearance-swatch appearance-swatch--surface" />
+        </div>
+      </Surface>
+
+      <Surface as="section" variant="subtle" className="preference-group appearance-motion">
+        <h2><span aria-hidden="true"><Gauge size={19} /></span>{t('appearance:motionTitle')}</h2>
+        <p>{t('appearance:motionDescription')}</p>
+        <div className="segmented-control" role="radiogroup" aria-label={t('appearance:motionTitle')}>
+          {motionOptions.map((option) => (
             <button
-              key={option.value}
+              key={option}
               type="button"
               role="radio"
-              aria-checked={draft.palette === option.value}
-              className={`palette-card${draft.palette === option.value ? ' palette-card--selected' : ''}`}
-              data-palette-preview={option.value}
-              onClick={() => update({ palette: option.value })}
+              aria-checked={draft.motionLevel === option}
+              className={draft.motionLevel === option ? 'is-selected' : ''}
+              onClick={() => updateMotion(option)}
             >
-              <span className="palette-card__preview" aria-hidden="true">
-                <span className="palette-card__sidebar" />
-                <span className="palette-card__content">
-                  <span className="palette-card__nav" />
-                  <span className="palette-card__glass" />
-                  <span className="palette-card__button" />
-                  <span className="palette-card__chart" />
-                </span>
-              </span>
-              <span className="palette-card__label">{t(`appearance:${option.label}`)}</span>
-              {draft.palette === option.value && <Check size={18} aria-hidden="true" />}
+              {t(`appearance:${option}`)}
             </button>
           ))}
         </div>
-      </section>
-
-      <GlassSurface as="section" variant="opaque" className="appearance-section appearance-custom" aria-labelledby="custom-heading">
-        <div className="section-heading">
-          <div>
-            <h2 id="custom-heading">{t('appearance:customTitle')}</h2>
-            <p>{t('appearance:customDescription')}</p>
-          </div>
-        </div>
-        <div className="custom-color-grid">
-          <ColorField
-            label={t('appearance:primaryColor')}
-            value={draft.customPrimary}
-            invalid={!validHex(draft.customPrimary)}
-            onChange={(value) => update({ customPrimary: value, palette: 'custom' })}
-          />
-          <ColorField
-            label={t('appearance:accentColor')}
-            value={draft.customAccent}
-            invalid={!validHex(draft.customAccent)}
-            onChange={(value) => update({ customAccent: value, palette: 'custom' })}
-          />
-        </div>
-        {!colorsValid
-          ? <p className="field-error" role="alert">{t('appearance:invalidHex')}</p>
-          : <p className="field-hint"><Check size={15} aria-hidden="true" />{t('appearance:contrastReady')}</p>}
-      </GlassSurface>
-
-      <div className="appearance-controls-grid">
-        <PreferenceGroup
-          icon={<SlidersHorizontal size={19} />}
-          title={t('appearance:intensityTitle')}
-          value={draft.brandIntensity}
-          options={['subtle', 'balanced', 'prominent']}
-          onChange={(value) => update({ brandIntensity: value as BrandIntensity })}
-        />
-        <PreferenceGroup
-          icon={<Sparkles size={19} />}
-          title={t('appearance:glassTitle')}
-          value={draft.glassStrength}
-          options={['subtle', 'medium', 'strong']}
-          onChange={(value) => update({ glassStrength: value as GlassStrength })}
-        />
-        <PreferenceGroup
-          icon={<SlidersHorizontal size={19} />}
-          title={t('appearance:motionTitle')}
-          value={draft.motionLevel}
-          options={['full', 'balanced', 'reduced', 'off']}
-          onChange={(value) => update({ motionLevel: value as MotionLevel })}
-        />
-      </div>
-
-      <section className="appearance-section appearance-effects" aria-labelledby="effects-heading">
-        <div className="section-heading">
-          <div>
-            <h2 id="effects-heading">{t('appearance:effectsTitle')}</h2>
-          </div>
-        </div>
-        <ToggleRow
-          checked={draft.reduceTransparency}
-          onChange={(checked) => update({ reduceTransparency: checked })}
-          label={t('appearance:reduceTransparency')}
-          hint={t('appearance:reduceTransparencyHint')}
-        />
-        <ToggleRow
-          checked={draft.advancedEffects}
-          onChange={(checked) => update({ advancedEffects: checked })}
-          label={t('appearance:advancedEffects')}
-          hint={t('appearance:advancedEffectsHint')}
-        />
-        <ToggleRow
-          checked={draft.autoReduceEffects}
-          onChange={(checked) => update({ autoReduceEffects: checked })}
-          label={t('appearance:autoReduceEffects')}
-          hint={t('appearance:autoReduceEffectsHint')}
-        />
-      </section>
+      </Surface>
 
       <div className="appearance-actions sticky-action-bar">
-        <button type="button" className="button button--ghost" onClick={restore}>
+        <Button type="button" variant="ghost" onClick={restore}>
           <RotateCcw size={18} aria-hidden="true" />{t('appearance:restoreDefault')}
-        </button>
-        <button type="button" className="button button--secondary" onClick={cancel} disabled={!hasPreview}>
+        </Button>
+        <Button type="button" variant="secondary" onClick={cancel} disabled={!hasPreview}>
           {t('appearance:cancelPreview')}
-        </button>
-        <button type="button" className="button button--primary" onClick={apply} disabled={!colorsValid || !hasChanges}>
+        </Button>
+        <Button type="button" onClick={apply} disabled={!hasChanges}>
           <Check size={18} aria-hidden="true" />{t('appearance:applyChanges')}
-        </button>
+        </Button>
       </div>
     </div>
-  )
-}
-
-function ColorField({
-  label,
-  value,
-  invalid,
-  onChange,
-}: {
-  label: string
-  value: string
-  invalid: boolean
-  onChange: (value: string) => void
-}) {
-  return (
-    <label className="color-field">
-      <span className="form-field__label">{label}</span>
-      <span className={`color-field__control${invalid ? ' color-field__control--invalid' : ''}`}>
-        <input
-          className="color-field__picker"
-          type="color"
-          value={validHex(value) ? value : DEFAULT_APPEARANCE.customPrimary}
-          onChange={(event) => onChange(event.target.value.toUpperCase())}
-          aria-label={label}
-        />
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value.toUpperCase())}
-          spellCheck={false}
-          inputMode="text"
-          aria-invalid={invalid}
-        />
-      </span>
-    </label>
-  )
-}
-
-function PreferenceGroup({
-  icon,
-  title,
-  value,
-  options,
-  onChange,
-}: {
-  icon: React.ReactNode
-  title: string
-  value: string
-  options: string[]
-  onChange: (value: string) => void
-}) {
-  const { t } = useTranslation()
-  return (
-    <GlassSurface as="section" variant="subtle" className="preference-group">
-      <h2><span aria-hidden="true">{icon}</span>{title}</h2>
-      <div className="segmented-control" role="radiogroup" aria-label={title}>
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={value === option}
-            className={value === option ? 'is-selected' : ''}
-            onClick={() => onChange(option)}
-          >
-            {t(`appearance:${option}`)}
-          </button>
-        ))}
-      </div>
-    </GlassSurface>
-  )
-}
-
-function ToggleRow({
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-  label: string
-  hint: string
-}) {
-  return (
-    <label className="toggle-row">
-      <span><strong>{label}</strong><small>{hint}</small></span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span className="toggle-control" aria-hidden="true"><span /></span>
-    </label>
   )
 }

@@ -1,0 +1,602 @@
+/* Authentication is the single spatial-brand surface in the solid admin system. */
+
+.login-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: var(--space-sm);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 8% 10%, var(--primary-soft-strong), transparent 28%),
+    radial-gradient(circle at 88% 86%, var(--operational-soft), transparent 30%),
+    linear-gradient(135deg, var(--auth-canvas-start), var(--auth-canvas-middle) 50%, var(--auth-canvas-end));
+}
+
+.login-shell {
+  --login-pointer-x: 0;
+  --login-pointer-y: 0;
+  width: min(100%, 1180px);
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface);
+  box-shadow: var(--auth-depth-shadow);
+}
+
+.login-context {
+  position: relative;
+  min-width: 0;
+  display: none;
+  overflow: hidden;
+  padding: var(--space-xl);
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 82% 30%, var(--primary-soft-strong), transparent 34%),
+    linear-gradient(150deg, var(--auth-panel-start), var(--auth-panel-end));
+  transform: perspective(1100px)
+    rotateX(calc(var(--login-pointer-y) * var(--auth-tilt-x) * -1))
+    rotateY(calc(var(--login-pointer-x) * var(--auth-tilt-y)));
+  transform-style: preserve-3d;
+  transform-origin: right center;
+  transition: transform var(--auth-pointer-settle) var(--ease-out-quint);
+}
+
+.login-context::before,
+.login-context::after {
+  position: absolute;
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-full);
+  content: "";
+  pointer-events: none;
+}
+
+.login-context::before {
+  width: 210px;
+  height: 210px;
+  top: -120px;
+  left: -84px;
+  opacity: 0.55;
+}
+
+.login-context::after {
+  width: 270px;
+  height: 270px;
+  right: -170px;
+  bottom: -155px;
+  opacity: 0.45;
+}
+
+.login-shell[data-tilting="true"] .login-context {
+  transition-duration: var(--motion-fast);
+}
+
+.login-spatial-layer {
+  --login-depth-x: 14px;
+  --login-depth-y: 9px;
+  translate:
+    calc(var(--login-pointer-x) * var(--login-depth-x))
+    calc(var(--login-pointer-y) * var(--login-depth-y));
+  transition: translate var(--auth-pointer-settle) var(--ease-out-quint);
+}
+
+.login-shell[data-tilting="true"] .login-spatial-layer {
+  transition-duration: var(--motion-fast);
+}
+
+.login-spatial-layer--mid {
+  --login-depth-x: 22px;
+  --login-depth-y: 14px;
+}
+
+.login-spatial-layer--near {
+  --login-depth-x: 30px;
+  --login-depth-y: 18px;
+}
+
+.login-spatial-layer--far {
+  --login-depth-x: 38px;
+  --login-depth-y: 24px;
+}
+
+.login-spatial-layer--front {
+  --login-depth-x: 46px;
+  --login-depth-y: 28px;
+}
+
+.login-context__top,
+.login-context__hero {
+  position: relative;
+  z-index: 3;
+}
+
+.login-context__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.login-brand,
+.login-mobile-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.login-brand__mark {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-xl);
+  color: var(--primary-foreground);
+  background: linear-gradient(145deg, var(--operational), var(--primary));
+  box-shadow: var(--shadow-sm);
+}
+
+.login-brand__copy,
+.login-mobile-brand > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.login-brand__copy strong,
+.login-mobile-brand strong {
+  color: var(--text-primary);
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.login-brand__copy small,
+.login-mobile-brand small {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.login-brand__signal {
+  width: var(--control-height);
+  height: var(--control-height);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-full);
+  color: var(--primary);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.login-context__hero {
+  margin-top: var(--space-xl);
+}
+
+.login-context__hero h2 {
+  max-width: 500px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(2rem, 3.2vw, 3rem);
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+}
+
+.login-context__hero h2 span {
+  color: var(--primary);
+}
+
+.login-context__hero p {
+  max-width: 470px;
+  margin: var(--space-md) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  line-height: 1.65;
+}
+
+.login-laundry-scene {
+  position: absolute;
+  z-index: 1;
+  right: var(--space-lg);
+  bottom: var(--space-md);
+  left: var(--space-lg);
+  height: 286px;
+  transform-style: preserve-3d;
+}
+
+.login-machine {
+  position: absolute;
+  z-index: 2;
+  bottom: var(--space-sm);
+  left: 18%;
+  width: 218px;
+  height: 232px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-xl) var(--radius-xl);
+  background: linear-gradient(155deg, var(--auth-machine-front), var(--auth-machine-side));
+  box-shadow: var(--auth-object-shadow);
+}
+
+.login-machine__controls {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.login-machine__slot {
+  width: 62px;
+  height: 10px;
+  border-radius: var(--radius-xs);
+  background: var(--auth-machine-control);
+}
+
+.login-machine__knob {
+  width: 27px;
+  height: 27px;
+  border: 5px solid var(--auth-machine-control);
+  border-radius: var(--radius-full);
+}
+
+.login-machine__display {
+  width: 50px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: var(--radius-sm);
+  background: var(--auth-machine-display);
+}
+
+.login-machine__door {
+  position: absolute;
+  top: 78px;
+  left: 45px;
+  width: 128px;
+  height: 128px;
+  border: 17px solid var(--auth-machine-side);
+  border-radius: var(--radius-full);
+  background:
+    radial-gradient(circle at 43% 37%, var(--auth-machine-door-light) 0 10%, transparent 11%),
+    radial-gradient(circle at 45% 45%, var(--auth-machine-door-mid) 0 25%, var(--auth-machine-door-dark) 76%);
+  box-shadow: inset 0 0 0 var(--space-xs) var(--auth-white-highlight), var(--shadow-sm);
+}
+
+.login-shirt {
+  position: absolute;
+  z-index: 4;
+  right: 14%;
+  bottom: 54px;
+  width: 142px;
+  height: 166px;
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(160deg, var(--auth-shirt-start), var(--auth-shirt-end));
+  clip-path: polygon(21% 8%, 39% 0, 50% 9%, 61% 0, 79% 8%, 100% 28%, 86% 42%, 77% 31%, 76% 100%, 24% 100%, 23% 31%, 14% 42%, 0 28%);
+  filter: drop-shadow(var(--auth-object-shadow));
+}
+
+.login-shirt::after {
+  position: absolute;
+  right: var(--space-md);
+  bottom: var(--space-xl);
+  width: 34px;
+  height: 45px;
+  border: 1px solid var(--auth-shirt-seam);
+  border-radius: var(--radius-sm);
+  content: "";
+}
+
+.login-basket {
+  position: absolute;
+  z-index: 3;
+  right: 1%;
+  bottom: var(--space-xs);
+  width: 148px;
+  height: 86px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(var(--auth-machine-front), var(--auth-machine-side));
+  box-shadow: var(--auth-object-shadow);
+}
+
+.login-basket::before {
+  position: absolute;
+  inset: var(--space-md) var(--space-md) var(--space-sm);
+  border-radius: var(--radius-md);
+  background: repeating-linear-gradient(90deg, var(--border-strong) 0 4px, transparent 4px 18px);
+  opacity: 0.55;
+  content: "";
+}
+
+.login-towels {
+  position: absolute;
+  z-index: 5;
+  bottom: var(--space-2xs);
+  left: 0;
+  width: 130px;
+  height: 92px;
+}
+
+.login-towels i {
+  position: absolute;
+  left: var(--space-xs);
+  width: 114px;
+  height: 25px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(var(--auth-machine-front), var(--auth-machine-side));
+  box-shadow: var(--shadow-sm);
+}
+
+.login-towels i:nth-child(1) { bottom: 0; background: linear-gradient(var(--auth-shirt-start), var(--auth-shirt-end)); }
+.login-towels i:nth-child(2) { bottom: 23px; left: var(--space-2xs); }
+.login-towels i:nth-child(3) { bottom: 46px; left: var(--space-sm); }
+.login-towels i:nth-child(4) { bottom: 67px; left: 0; }
+
+.login-plant {
+  position: absolute;
+  z-index: 3;
+  bottom: var(--space-md);
+  left: 2%;
+  width: 70px;
+  height: 122px;
+}
+
+.login-plant__pot {
+  position: absolute;
+  bottom: 0;
+  left: var(--space-xs);
+  width: 54px;
+  height: 50px;
+  border-radius: var(--radius-md) var(--radius-md) var(--radius-2xl) var(--radius-2xl);
+  background: linear-gradient(var(--auth-machine-front), var(--auth-machine-side));
+  box-shadow: var(--shadow-sm);
+}
+
+.login-plant__leaf {
+  position: absolute;
+  bottom: 44px;
+  left: 26px;
+  width: 32px;
+  height: 54px;
+  border-radius: 70% var(--radius-xl) 70% var(--radius-xl);
+  background: linear-gradient(135deg, var(--auth-plant-light), var(--auth-plant-dark));
+  transform-origin: bottom center;
+}
+
+.login-plant__leaf--one { bottom: 43px; left: var(--space-xs); transform: rotate(-34deg); }
+.login-plant__leaf--two { bottom: 50px; left: 36px; transform: rotate(28deg); }
+.login-plant__leaf--three { bottom: 65px; transform: rotate(-4deg); }
+
+.login-bubble {
+  position: absolute;
+  z-index: 1;
+  border: 2px solid var(--auth-white-line);
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle at 30% 25%, var(--surface), transparent 48%);
+  box-shadow: inset 0 0 18px var(--primary-soft-strong);
+}
+
+.login-bubble--one { width: 38px; height: 38px; top: 8px; right: 12%; }
+.login-bubble--two { width: 26px; height: 26px; top: 42px; left: 4%; }
+.login-bubble--three { width: 52px; height: 52px; right: 38%; bottom: 48%; }
+
+.login-card {
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-xl) var(--space-lg);
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.login-mobile-brand {
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.login-mobile-brand .login-brand__mark {
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--radius-lg);
+}
+
+.login-card__heading {
+  text-align: center;
+}
+
+.login-card__heading h1 {
+  margin: var(--space-md) 0 var(--space-xs);
+  font-size: clamp(1.75rem, 7vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.login-card__heading p {
+  max-width: 390px;
+  margin: 0 auto;
+  line-height: 1.55;
+}
+
+.login-lock {
+  width: 60px;
+  height: 60px;
+  margin-inline: auto;
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-2xl);
+  color: var(--primary);
+  background: linear-gradient(145deg, var(--surface), var(--primary-soft-strong));
+  box-shadow: var(--shadow-sm);
+}
+
+.login-input,
+.password-input {
+  position: relative;
+  min-height: var(--control-height-lg);
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  color: var(--text-muted);
+  background: var(--surface);
+  transition: border-color var(--motion-base) ease, box-shadow var(--motion-base) ease;
+}
+
+.login-input:focus-within,
+.password-input:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.login-input > svg {
+  flex: 0 0 auto;
+  margin-left: var(--space-md);
+}
+
+.login-input input,
+.password-input input {
+  min-height: calc(var(--control-height-lg) - 2px);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-input input {
+  padding-left: var(--space-sm);
+}
+
+.login-input input:focus,
+.password-input input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.login-card .button--wide {
+  min-height: var(--control-height-lg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--primary-fab-shadow);
+}
+
+.login-card .button--wide:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--auth-primary-button-shadow);
+}
+
+.login-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-xl);
+  color: var(--primary-active);
+  background: var(--primary-soft);
+}
+
+.login-security-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.login-security-note p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .login-page {
+    padding: var(--space-xl);
+  }
+
+  .login-shell {
+    min-height: clamp(560px, calc(100dvh - var(--space-3xl)), 690px);
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+  }
+
+  .login-context {
+    display: block;
+  }
+
+  .login-mobile-brand {
+    display: none;
+  }
+
+  .login-card {
+    min-width: 0;
+    padding: var(--space-xl);
+  }
+}
+
+@media (min-width: 1024px) {
+  .login-context {
+    padding: var(--space-2xl);
+  }
+
+  .login-card {
+    padding: var(--space-2xl);
+  }
+}
+
+@media (max-height: 680px) and (min-width: 768px) {
+  .login-context__hero {
+    margin-top: var(--space-lg);
+  }
+
+  .login-context__hero h2 {
+    font-size: var(--text-3xl);
+  }
+
+  .login-context__hero p {
+    margin-top: var(--space-xs);
+  }
+
+  .login-laundry-scene {
+    height: 230px;
+    scale: 0.84;
+    transform-origin: bottom center;
+  }
+
+  .login-card {
+    gap: var(--space-md);
+    padding-block: var(--space-lg);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .login-context,
+  .login-spatial-layer {
+    translate: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-context,
+  .login-spatial-layer,
+  .login-card .button--wide {
+    translate: none !important;
+    transform: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:root[data-motion-level="reduced"] .login-context,
+:root[data-motion-level="reduced"] .login-spatial-layer,
+:root[data-motion-level="off"] .login-context,
+:root[data-motion-level="off"] .login-spatial-layer {
+  translate: none;
+  transform: none;
+  transition-duration: 0.01ms;
+}

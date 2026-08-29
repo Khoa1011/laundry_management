@@ -160,14 +160,6 @@
 .sensitive-panel-heading .button { width: 100%; min-height: 44px; }
 
 .compensation-summary { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.compensation-item {
-  display: grid; gap: 8px; min-width: 0; padding: 16px; border: 1px solid var(--border-default);
-  border-radius: 8px; background: var(--surface-subtle);
-}
-.compensation-item > span { color: var(--text-muted); font-size: 13px; }
-.compensation-item > strong { font-size: 21px; overflow-wrap: anywhere; }
-.compensation-item > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.compensation-item p { margin: 0; color: var(--text-muted); font-size: 14px; overflow-wrap: anywhere; }
 .sensitive-subsection { display: grid; gap: 12px; }
 .sensitive-subsection h4 { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .sensitive-history { display: grid; border-top: 1px solid var(--border-default); }

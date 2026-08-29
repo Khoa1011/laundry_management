@@ -8,7 +8,6 @@ import { ThemeProvider } from './providers/ThemeProvider'
 import { ToastProvider } from './providers/ToastProvider'
 import { MotionProvider } from './providers/MotionProvider'
 import { NotificationProvider } from './features/notifications/providers/NotificationProvider'
-import { LiquidInteractionRoot } from './components/motion/LiquidInteractionRoot'
 import './styles.css'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false }, mutations: { retry: false } } })
@@ -17,7 +16,6 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <MotionProvider>
-        <LiquidInteractionRoot />
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <ToastProvider>

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowLeft, Building2, MapPin, Save, UserRound } from 'lucide-react'
+import { ArrowLeft, Building2, MapPin, Plus, Save, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -207,7 +207,7 @@ export function CustomerFormPage() {
         </section>
       )}
     </form>
-    <div className="sticky-action-bar"><button type="button" className="button button--secondary" onClick={() => navigate(editing ? `/customers/${customerId}` : '/customers')} disabled={pending}>{t('cancel')}</button><button type="submit" form="customer-form" className="button button--primary" disabled={pending}><Save size={18} />{pending ? t('saving') : t(editing ? 'customers:saveEdit' : 'customers:saveCreate')}</button></div>
+    <div className="sticky-action-bar"><button type="button" className="button button--secondary" onClick={() => navigate(editing ? `/customers/${customerId}` : '/customers')} disabled={pending}>{t('cancel')}</button><button type="submit" form="customer-form" className={`button ${editing ? 'button--primary' : 'button--create'}`} disabled={pending}>{editing ? <Save size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}{pending ? t('saving') : t(editing ? 'customers:saveEdit' : 'customers:saveCreate')}</button></div>
     <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()} onConfirm={() => blocker.proceed?.()} title={t('unsavedTitle')} body={t('unsavedBody')} confirmLabel={t('leave')} tone="danger" />
     <ConfirmDialog open={conflictOpen} onClose={() => setConflictOpen(false)} onConfirm={() => { setConflictOpen(false); void query.refetch().then((result) => { if (result.data) reset(valuesFromCustomer(result.data)) }) }} title={t('customers:conflictTitle')} body={t('customers:conflictBody')} confirmLabel={t('reload')} />
   </div>

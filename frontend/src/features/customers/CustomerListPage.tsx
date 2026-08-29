@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight, Filter, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, SlidersHorizontal, UserRound, Users } from 'lucide-react'
+import { PencilSimpleIcon, UserCircleIcon } from '@phosphor-icons/react'
+import { ChevronLeft, ChevronRight, Mail, Phone, Plus, Search, SlidersHorizontal, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -6,9 +7,10 @@ import { ApiError } from '../../api/client'
 import type { CustomerListItem, CustomerSource, CustomerStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
-import { OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { Button, ButtonLink } from '../../components/ui/Button'
+import { ActionMenu as FloatingActionMenu } from '../../components/ui/ActionMenu'
+import { CollapsibleFilterPanel } from '../../components/ui/CollapsibleFilterPanel'
 import { IconButton } from '../../components/ui/IconButton'
 import { useCustomers, type CustomerFilters } from './api'
 import { formatDate, initials, sourceLabel, statusLabel, typeLabel } from './format'
@@ -24,7 +26,6 @@ export function CustomerListPage() {
   const { t, i18n } = useTranslation()
   const { branchId, hasPermission } = useAuth()
   const [params, setParams] = useSearchParams()
-  const [filterOpen, setFilterOpen] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
   const searchParam = params.get('search') ?? ''
   const [searchInput, setSearchInput] = useState(searchParam)
@@ -73,33 +74,24 @@ export function CustomerListPage() {
   const forbidden = query.error instanceof ApiError && query.error.status === 403
 
   return <div className="page-container customer-list-page">
-    <header className="page-header"><div><p className="eyebrow">{t('navigation:customers')}</p><h1>{t('customers:title')}</h1><p>{t('customers:subtitle')}</p></div><div className="page-header__actions">{canCreate && <><Button type="button" variant="secondary" className="quick-create-desktop" onClick={() => setQuickOpen(true)}><Plus size={18} />{t('customers:quickAdd')}</Button><ButtonLink renderLevel="premium" to="/customers/new"><Plus size={18} />{t('customers:add')}</ButtonLink></>}</div></header>
+    <header className="page-header"><div><p className="eyebrow">{t('navigation:customers')}</p><h1>{t('customers:title')}</h1><p>{t('customers:subtitle')}</p></div><div className="page-header__actions">{canCreate && <><Button type="button" variant="create" className="quick-create-desktop" onClick={() => setQuickOpen(true)}><Plus size={18} aria-hidden="true" />{t('customers:quickAdd')}</Button><ButtonLink to="/customers/new" variant="create"><Plus size={18} aria-hidden="true" />{t('customers:add')}</ButtonLink></>}</div></header>
     <section className="filter-panel" aria-label={t('customers:filters')}>
       <label className="search-input"><Search size={19} aria-hidden="true" /><span className="sr-only">{t('search')}</span><input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('customers:searchPlaceholder')} /></label>
-      <div className="desktop-filters"><Filters filters={filters} patch={patchFilters} t={t} />{hasFilters && <Button variant="ghost" size="sm" className="text-button" type="button" onClick={clearFilters}>{t('clear')}</Button>}</div>
-      <Button type="button" variant="secondary" className="mobile-filter-button" onClick={() => setFilterOpen(true)} aria-expanded={filterOpen}><Filter size={18} />{t('customers:filters')}{appliedCount > 0 && <span className="filter-count">{appliedCount}</span>}</Button>
+      <CollapsibleFilterPanel label={t('customers:filters')} activeCount={appliedCount} fieldsClassName="customer-filter-fields"><Filters filters={filters} patch={patchFilters} t={t} />{hasFilters && <Button variant="ghost" size="sm" className="text-button" type="button" onClick={clearFilters}>{t('clear')}</Button>}</CollapsibleFilterPanel>
     </section>
-    <div className="active-filter-chips mobile-only">{filters.status && <FilterChip label={statusLabel(filters.status, t)} onClear={() => patchFilters({ status: '' })} />}{filters.customerType && <FilterChip label={typeLabel(filters.customerType, t)} onClear={() => patchFilters({ customerType: '' })} />}{filters.source && <FilterChip label={sourceLabel(filters.source, t)} onClear={() => patchFilters({ source: '' })} />}{hasFilters && <Button variant="ghost" size="sm" className="text-button" onClick={clearFilters}>{t('clear')}</Button>}</div>
+    {hasFilters && <div className="active-filter-chips">{filters.status && <FilterChip label={statusLabel(filters.status, t)} onClear={() => patchFilters({ status: '' })} />}{filters.customerType && <FilterChip label={typeLabel(filters.customerType, t)} onClear={() => patchFilters({ customerType: '' })} />}{filters.source && <FilterChip label={sourceLabel(filters.source, t)} onClear={() => patchFilters({ source: '' })} />}<Button variant="ghost" size="sm" className="text-button" onClick={clearFilters}>{t('clear')}</Button></div>}
     <div className="list-meta"><strong>{query.data ? t('customers:count', { count: query.data.totalElements }) : t('loading')}</strong>{query.isFetching && query.data && <span className="subtle-progress" role="status">{t('loading')}</span>}</div>
-    {forbidden ? <PermissionDeniedState /> : query.isPending ? <LoadingState rows={6} /> : query.isError ? <ErrorState title={query.error instanceof ApiError && query.error.status === 0 ? t('errors:networkTitle') : t('customers:loadErrorTitle')} body={query.error instanceof ApiError && query.error.status === 0 ? t('errors:networkBody') : t('customers:loadErrorBody')} onRetry={() => void query.refetch()} /> : query.data.items.length === 0 ? <StatePanel icon={hasFilters ? <SlidersHorizontal /> : <Users />} title={hasFilters ? t('customers:filteredEmptyTitle') : t('customers:emptyTitle')} body={hasFilters ? t('customers:filteredEmptyBody') : t('customers:emptyBody')} action={hasFilters ? <Button variant="secondary" onClick={clearFilters}>{t('clear')}</Button> : canCreate ? <ButtonLink to="/customers/new"><Plus size={18} />{t('customers:add')}</ButtonLink> : undefined} /> : <>
+    {forbidden ? <PermissionDeniedState /> : query.isPending ? <LoadingState rows={6} /> : query.isError ? <ErrorState title={query.error instanceof ApiError && query.error.status === 0 ? t('errors:networkTitle') : t('customers:loadErrorTitle')} body={query.error instanceof ApiError && query.error.status === 0 ? t('errors:networkBody') : t('customers:loadErrorBody')} onRetry={() => void query.refetch()} /> : query.data.items.length === 0 ? <StatePanel icon={hasFilters ? <SlidersHorizontal /> : <Users />} title={hasFilters ? t('customers:filteredEmptyTitle') : t('customers:emptyTitle')} body={hasFilters ? t('customers:filteredEmptyBody') : t('customers:emptyBody')} action={hasFilters ? <Button variant="secondary" onClick={clearFilters}>{t('clear')}</Button> : canCreate ? <ButtonLink to="/customers/new" variant="create"><Plus size={18} aria-hidden="true" />{t('customers:add')}</ButtonLink> : undefined} /> : <>
       <div className="customer-table-wrap desktop-data-view"><table className="customer-table"><thead><tr><th>{t('customers:customer')}</th><th>{t('customers:phone')}</th><th>{t('customers:type')}</th><th>{t('customers:source')}</th><th>{t('status')}</th><th>{t('customers:created')}</th><th>{t('customers:updated')}</th><th><span className="sr-only">{t('actions')}</span></th></tr></thead><tbody>{query.data.items.map((customer) => <CustomerRow key={customer.id} customer={customer} canUpdate={canUpdate} language={i18n.language} t={t} />)}</tbody></table></div>
       <div className="customer-card-list mobile-data-view">{query.data.items.map((customer) => <CustomerCard key={customer.id} customer={customer} canUpdate={canUpdate} language={i18n.language} t={t} />)}</div>
       <Pagination page={query.data.page} totalPages={query.data.totalPages} onPage={(page) => setParams((current) => { const next = new URLSearchParams(current); next.set('page', String(page)); return next })} t={t} />
     </>}
-    <CustomerFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} filters={filters} apply={patchFilters} reset={clearFilters} t={t} />
     <QuickCustomerDialog open={quickOpen} onClose={() => setQuickOpen(false)} />
   </div>
 }
 
 function Filters({ filters, patch, t }: { filters: CustomerFilters; patch: (updates: Record<string, string>) => void; t: ReturnType<typeof useTranslation>['t'] }) {
   return <><label><span className="sr-only">{t('status')}</span><select value={filters.status} onChange={(e) => patch({ status: e.target.value })}><option value="">{t('customers:allStatuses')}</option><option value="ACTIVE">{t('active')}</option><option value="INACTIVE">{t('inactive')}</option></select></label><label><span className="sr-only">{t('customers:type')}</span><select value={filters.customerType} onChange={(e) => patch({ customerType: e.target.value })}><option value="">{t('customers:allTypes')}</option><option value="INDIVIDUAL">{t('individual')}</option><option value="BUSINESS">{t('business')}</option></select></label><label><span className="sr-only">{t('customers:source')}</span><select value={filters.source} onChange={(e) => patch({ source: e.target.value })}><option value="">{t('customers:allSources')}</option>{sources.map((source) => <option key={source} value={source}>{sourceLabel(source, t)}</option>)}</select></label><label><span className="sr-only">{t('customers:sort')}</span><select value={filters.sort} onChange={(e) => patch({ sort: e.target.value })}><option value="updatedAt,desc">{t('customers:newest')}</option><option value="createdAt,asc">{t('customers:oldest')}</option><option value="fullName,asc">{t('customers:nameAsc')}</option><option value="customerCode,asc">{t('customers:codeAsc')}</option></select></label></>
-}
-
-function CustomerFilterSheet({ open, onClose, filters, apply, reset, t }: { open: boolean; onClose: () => void; filters: CustomerFilters; apply: (updates: Record<string, string>) => void; reset: () => void; t: ReturnType<typeof useTranslation>['t'] }) {
-  const [draft, setDraft] = useState({ status: filters.status, customerType: filters.customerType, source: filters.source, sort: filters.sort })
-  useEffect(() => { if (open) setDraft({ status: filters.status, customerType: filters.customerType, source: filters.source, sort: filters.sort }) }, [open, filters])
-  const draftFilters = { ...filters, ...draft }
-  return <OverlayDialog open={open} onClose={onClose} title={t('customers:filters')} footer={<><Button variant="secondary" onClick={() => { reset(); onClose() }}>{t('reset')}</Button><Button onClick={() => { apply(draft); onClose() }}>{t('apply')}</Button></>}><div className="form-stack filter-sheet-fields"><Filters filters={draftFilters} patch={(update) => setDraft((current) => ({ ...current, ...update }))} t={t} /></div></OverlayDialog>
 }
 
 function CustomerRow({ customer, canUpdate, language, t }: { customer: CustomerListItem; canUpdate: boolean; language: string; t: ReturnType<typeof useTranslation>['t'] }) {
@@ -113,7 +105,7 @@ function CustomerCard({ customer, canUpdate, language, t }: { customer: Customer
 function StatusBadge({ status, t }: { status: CustomerStatus; t: ReturnType<typeof useTranslation>['t'] }) { return <span className={`badge badge--status-${status.toLowerCase()}`}><span className="badge__dot" />{statusLabel(status, t)}</span> }
 
 function ActionMenu({ customer, canUpdate, t }: { customer: CustomerListItem; canUpdate: boolean; t: ReturnType<typeof useTranslation>['t'] }) {
-  return <details className="action-menu"><summary className="icon-button" aria-label={t('openMenu')}><MoreHorizontal size={19} /></summary><div className="action-menu__content"><Link to={`/customers/${customer.id}`}><UserRound size={17} />{t('customers:view')}</Link>{canUpdate && <Link to={`/customers/${customer.id}/edit`}><Pencil size={17} />{t('edit')}</Link>}</div></details>
+  return <FloatingActionMenu label={t('openMenu')}><Link role="menuitem" to={`/customers/${customer.id}`}><UserCircleIcon size={27} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('customers:view')}</span></Link>{canUpdate && <Link role="menuitem" to={`/customers/${customer.id}/edit`}><PencilSimpleIcon size={26} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></Link>}</FloatingActionMenu>
 }
 
 function Pagination({ page, totalPages, onPage, t }: { page: number; totalPages: number; onPage: (page: number) => void; t: ReturnType<typeof useTranslation>['t'] }) {

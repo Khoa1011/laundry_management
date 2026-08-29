@@ -6,10 +6,9 @@ Use this checklist before declaring a frontend UI task complete.
 
 - [ ] Read the closest `AGENTS.md`.
 - [ ] Use `impeccable`.
-- [ ] Use `.agents/skills/laundry-admin-liquid-glass/SKILL.md`.
 - [ ] Read `PRODUCT.md`.
 - [ ] Read root `DESIGN.md`.
-- [ ] Read `docs/design/LIQUID_GLASS_ADMIN_RULES.md`.
+- [ ] Read `docs/design/SOLID_ADMIN_RULES.md`.
 - [ ] Identify the exact pages/components in scope.
 - [ ] Identify business logic, APIs, permissions, i18n keys, and routes that must remain unchanged.
 - [ ] Inspect existing shared components and style tokens before adding new primitives.
@@ -18,15 +17,14 @@ Use this checklist before declaring a frontend UI task complete.
 
 - [ ] Uses semantic tokens from the project theme/style layer.
 - [ ] Reuses or extends repository-owned components.
-- [ ] No page-local duplicate glass primitive.
+- [ ] No page-local duplicate surface or navigation primitive.
 - [ ] No raw hex, RGB, blur, radius, shadow, z-index, or motion values inside feature modules.
-- [ ] Liquid Glass strength matches the surface purpose.
-- [ ] Dense tables/forms remain readable and opaque or nearly opaque.
+- [ ] Structural and data surfaces are opaque and use the correct shared variant.
+- [ ] Dense tables/forms remain readable and opaque.
 - [ ] Status colors include text and/or icon.
 - [ ] Sidebar/header information architecture is preserved unless explicitly changed.
 - [ ] External UI effects are wrapped behind repository-owned components if approved.
 - [ ] New commands use shared `Button`/`IconButton` primitives; new navigation uses shared navigation primitives.
-- [ ] Premium rendering is limited and degrades to standard/reduced without semantic or layout changes.
 
 ## C. State Completeness
 
@@ -65,16 +63,14 @@ Use this checklist before declaring a frontend UI task complete.
 
 - [ ] Touch targets are at least 44 x 44 CSS pixels.
 - [ ] Keyboard navigation works.
-- [ ] Focus is visible on glass and opaque surfaces.
+- [ ] Focus is visible on every surface.
 - [ ] Focus returns correctly after dialog/sheet closes.
 - [ ] Icon-only controls have accessible names.
 - [ ] Critical meaning does not depend on color alone.
 - [ ] Reduced motion works.
-- [ ] Reduced transparency/no-blur fallback works where glass is used.
 - [ ] Touch devices do not rely on hover or pointer-following effects.
 - [ ] Long Vietnamese and English text does not overflow containers.
-- [ ] Pointer ripple originates at the press location; keyboard feedback originates at center.
-- [ ] Disabled/loading controls emit no ripple and repeated feedback cleans up.
+- [ ] Disabled/loading controls do not animate or accept repeated actions.
 - [ ] Motion-off removes decorative feedback; reduced motion uses a brief non-spatial alternative.
 
 ## F. Motion And Performance
@@ -82,8 +78,7 @@ Use this checklist before declaring a frontend UI task complete.
 - [ ] Motion is meaningful and does not delay actions.
 - [ ] No excessive bounce or page-load choreography.
 - [ ] Transform and opacity are preferred.
-- [ ] No backdrop blur on every row/cell.
-- [ ] Weak-device and no-blur fallbacks are available.
+- [ ] No backdrop blur or translucent structural material.
 - [ ] No unnecessary continuous animation.
 - [ ] Large lists are handled appropriately.
 - [ ] Scrolling and typing remain responsive.
@@ -99,8 +94,9 @@ Use this checklist before declaring a frontend UI task complete.
 - [ ] No hard-coded production data.
 - [ ] No unrelated API or workflow changes.
 - [ ] No unused dependencies or dead code introduced.
-- [ ] No unapproved dependency installation.
-- [ ] Feature code does not depend on `LiquidInteractionRoot`; it uses shared primitives directly.
+- [ ] Dependencies are necessary, scoped, and recorded.
+- [ ] Feature code uses shared surface, button, icon-button, and navigation primitives.
+- [ ] Operational metrics and count/status tiles use the shared `StatCard` primitive rather than feature-local metric cards.
 
 ## H. Validation Commands
 

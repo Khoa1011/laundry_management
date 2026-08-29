@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../auth/AuthProvider'
 import { useToast } from '../../../providers/ToastProvider'
 import { IconButton } from '../../../components/ui/IconButton'
-import { usePressRipple } from '../../../components/motion/LiquidRipple'
 import { motionDuration } from '../../../providers/motionPresets'
 import { useDismissNotification, useMarkNotificationRead } from '../hooks/useNotifications'
 import type { NotificationItem as NotificationItemModel } from '../model/types'
@@ -31,7 +30,6 @@ export function NotificationItem({
   const navigate = useNavigate()
   const markRead = useMarkNotificationRead()
   const dismiss = useDismissNotification()
-  const press = usePressRipple<HTMLButtonElement>()
   const text = notificationText(item, t)
   const branchName = user?.branches.find((branch) => branch.id === item.branchId)?.name
 
@@ -67,11 +65,7 @@ export function NotificationItem({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: motionDuration.primitive }}
       data-realtime={realtime ? 'true' : undefined}>
-      <button ref={press.ref} type="button" className="notification-item__main" data-liquid-managed="true"
-        onPointerDown={press.onPointerDown} onPointerUp={press.onPointerUp}
-        onPointerCancel={press.onPointerCancel} onPointerLeave={press.onPointerLeave}
-        onKeyDown={press.onKeyDown} onKeyUp={press.onKeyUp} onBlur={press.onBlur}
-        onClick={() => void open()}>
+      <button type="button" className="notification-item__main" onClick={() => void open()}>
         <span className={`notification-item__icon notification-item__icon--${item.severity.toLowerCase()}`}>
           <NotificationSeverityIcon severity={item.severity} />
         </span>

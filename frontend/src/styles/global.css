@@ -59,7 +59,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .inline-alert--neutral { color: var(--text-secondary); border-color: var(--border-default); background: var(--surface-subtle); }
 
 .application-shell { min-height: 100vh; min-height: 100dvh; }
-.app-header { position: sticky; z-index: 30; top: 0; min-height: 60px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-default); background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(10px); }
+.app-header { position: sticky; z-index: 30; top: 0; min-height: 60px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-default); background: var(--surface); }
 .mobile-brand { display: flex; align-items: center; gap: 8px; color: var(--primary); }
 .header-spacer { flex: 1; }
 .header-select { max-width: 160px; position: relative; display: flex; align-items: center; }
@@ -118,7 +118,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .search-input svg { position: absolute; left: 13px; color: var(--text-muted); }
 .search-input input { padding-left: 42px; }
 .mobile-filter-button { padding-inline: 13px; }
-.mobile-filter-button > span:not(.filter-count) { display: none; }
+.mobile-filter-button .mobile-filter-label { display: none; }
 .filter-count { min-width: 22px; height: 22px; display: grid; place-items: center; padding: 0 5px; border-radius: var(--radius-full); color: var(--primary); background: var(--primary-soft-strong); font-size: 12px; }
 .active-filter-chips { flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
 .filter-chip { min-height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--primary-border); border-radius: var(--radius-full); color: var(--primary); background: var(--primary-soft); font-size: 12px; font-weight: 650; cursor: pointer; }
@@ -147,11 +147,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .badge--type-individual, .badge--default { color: var(--primary); background: var(--primary-soft); }
 .badge--type-business { color: var(--info-foreground); background: var(--info-surface); }
 .action-menu { position: relative; }
-.action-menu summary { list-style: none; }
-.action-menu summary::-webkit-details-marker { display: none; }
-.action-menu__content { position: absolute; z-index: 25; top: calc(100% + 4px); right: 0; min-width: 190px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-elevated); box-shadow: var(--shadow-md); }
-.action-menu__content a, .action-menu__content button { min-height: 42px; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 0; border-radius: 9px; color: var(--text-primary); background: transparent; font-size: 14px; text-align: left; cursor: pointer; }
-.action-menu__content a:hover, .action-menu__content button:hover { background: var(--surface-subtle); }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 20px; color: var(--text-secondary); font-size: 13px; }
 
 .customer-table-wrap { overflow-x: auto; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface); }
@@ -243,7 +238,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .route-loading { min-height: 50dvh; display: grid; place-items: center; color: var(--text-secondary); }
 
 @media (min-width: 600px) {
-  .page-header__actions .button span { display: inline; }
   .address-card__header { grid-template-columns: 40px minmax(0,1fr) auto; align-items: start; padding-right: 36px; }
   .address-card__badges { grid-column: auto; justify-content: flex-end; }
 }

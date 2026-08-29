@@ -1,5 +1,36 @@
 :root {
-  /* Primitive palette: cranberry brand, teal operations, neutral work surfaces. */
+  /* Approved solid-admin palette. */
+  --sky-50: #eff6ff;
+  --sky-100: #dbeafe;
+  --sky-200: #bfdbfe;
+  --sky-400: #60a5fa;
+  --sky-500: #3b82f6;
+  --sky-600: #2563eb;
+  --sky-700: #1d4ed8;
+  --cyan-50: #ecfeff;
+  --cyan-100: #cffafe;
+  --cyan-500: #06b6d4;
+  --cyan-600: #0891b2;
+  --yellow-50: #fffbeb;
+  --yellow-100: #fef3c7;
+  --yellow-400: #fbbf24;
+  --yellow-700: #a16207;
+  --coral-50: #fff1f2;
+  --coral-100: #ffe4e6;
+  --coral-400: #fb7185;
+  --coral-600: #e11d48;
+  --navy-950: #0f172a;
+  --slate-700: #334155;
+  --slate-600: #475569;
+  --slate-500: #64748b;
+  --slate-400: #94a3b8;
+  --slate-300: #cbd5e1;
+  --slate-200: #e2e8f0;
+  --slate-100: #f1f5f9;
+  --canvas: #f5f9fd;
+  --white: #ffffff;
+
+  /* Compatibility palette retained while feature styles migrate to semantic roles. */
   --cranberry-50: oklch(0.975 0.014 354);
   --cranberry-100: oklch(0.944 0.032 354);
   --cranberry-200: oklch(0.887 0.066 354);
@@ -129,10 +160,10 @@
   --radius-2xl: 16px;
   --radius-full: 999px;
 
-  --shadow-xs: 0 1px 2px oklch(0.18 0.015 165 / 0.05);
-  --shadow-sm: 0 3px 8px oklch(0.18 0.015 165 / 0.07);
-  --shadow-md: 0 6px 14px oklch(0.18 0.015 165 / 0.1);
-  --shadow-lg: 0 12px 28px oklch(0.18 0.015 165 / 0.14);
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 4px 12px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 10px 28px rgb(15 23 42 / 0.09);
+  --shadow-lg: 0 22px 54px rgb(15 23 42 / 0.14);
 
   --font-ui: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   --text-xs: 0.75rem;
@@ -148,10 +179,28 @@
   --motion-fast: 120ms;
   --motion-base: 180ms;
   --motion-slow: 240ms;
-  --motion-ripple: 520ms;
+  --motion-create-fill: 250ms;
+  --auth-pointer-settle: var(--motion-slow);
+  --auth-tilt-x: 5deg;
+  --auth-tilt-y: 7deg;
   --motion-flash: 160ms;
   --control-press-scale: 0.98;
-  --control-hover-lift: -1px;
+
+  /* Portaled table-action fan. Semantic aliases keep feature modules color-free. */
+  --action-fan-trigger: var(--primary-soft);
+  --action-fan-trigger-hover: var(--primary-soft-strong);
+  --action-fan-border: var(--primary-border);
+  --action-fan-view: var(--operational);
+  --action-fan-view-hover: var(--operational-hover);
+  --action-fan-edit: var(--primary);
+  --action-fan-edit-hover: var(--primary-hover);
+  --action-fan-neutral: var(--slate-700);
+  --action-fan-neutral-hover: var(--slate-600);
+  --action-fan-trigger-icon: var(--primary-active);
+  --action-fan-item-icon: var(--text-inverse);
+  --action-fan-shadow: var(--shadow-sm);
+  --action-fan-motion: 240ms;
+  --action-fan-exit: 180ms;
 
   --z-dropdown: 25;
   --z-sticky: 30;
@@ -161,34 +210,13 @@
   --z-toast: 100;
   --z-tooltip: 110;
 
-  --glass-blur-subtle: 8px;
-  --glass-blur-standard: 14px;
-  --glass-blur-strong: 20px;
-  --glass-saturation: 1.18;
-  --glass-contrast: 1.03;
-  --glass-refraction-strength: 0.14;
-  --glass-edge-shade: color-mix(in oklch, var(--primary) 12%, transparent);
-  --glass-shadow-subtle:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 -1px 0 color-mix(in oklch, var(--primary) 7%, transparent),
-    0 1px 2px oklch(0.22 0.035 165 / 0.04),
-    0 6px 14px oklch(0.22 0.035 165 / 0.08);
-  --glass-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 -1px 0 var(--glass-edge-shade),
-    0 1px 2px oklch(0.22 0.035 165 / 0.05),
-    0 10px 28px oklch(0.22 0.035 165 / 0.14);
-  --glass-shadow-raised:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 -1px 0 var(--glass-edge-shade),
-    0 2px 4px oklch(0.22 0.035 165 / 0.07),
-    0 20px 48px oklch(0.22 0.035 165 / 0.18);
-  --data-surface-shadow:
-    0 1px 2px oklch(0.22 0.035 165 / 0.04),
-    0 4px 10px oklch(0.22 0.035 165 / 0.07);
-  --sidebar-expanded: 232px;
-  --sidebar-collapsed: 76px;
+  --data-surface-shadow: var(--shadow-xs);
+  --sidebar-expanded: 248px;
+  --sidebar-collapsed: 84px;
   --header-height: 60px;
+  --desktop-header-height: 72px;
+  --shell-gutter: 12px;
+  --shell-radius: var(--radius-2xl);
   --mobile-navigation-height: 72px;
   --mobile-fab-size: 54px;
   --content-width-wide: 1440px;

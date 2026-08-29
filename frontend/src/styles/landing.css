@@ -1,0 +1,253 @@
+.landing-page {
+  display: grid;
+  align-content: start;
+  gap: var(--space-lg);
+}
+
+.landing-page .page-header {
+  margin-bottom: 0;
+}
+
+.overview-welcome {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-lg);
+  overflow: hidden;
+  padding: var(--space-lg);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(135deg, var(--surface), var(--primary-soft));
+  box-shadow: var(--shadow-sm);
+}
+
+.overview-welcome::after {
+  position: absolute;
+  right: -76px;
+  bottom: -102px;
+  width: 220px;
+  height: 220px;
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-full);
+  content: "";
+  pointer-events: none;
+}
+
+.overview-welcome > div:first-child {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+}
+
+.overview-welcome__badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-full);
+  color: var(--primary-active);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.overview-welcome h2 {
+  max-width: 620px;
+  margin: var(--space-md) 0 var(--space-xs);
+  color: var(--text-primary);
+  font-size: clamp(1.5rem, 5vw, 2.25rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.overview-welcome p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.overview-welcome__scene {
+  position: relative;
+  z-index: 1;
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overview-welcome__scene span {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 5px solid var(--surface);
+  border-radius: var(--radius-2xl);
+  color: var(--primary);
+  background: var(--primary-soft-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.overview-welcome__scene span:nth-child(2) {
+  z-index: 2;
+  color: var(--warning-foreground);
+  background: var(--warning-surface);
+  transform: translateY(-12px) rotate(4deg);
+}
+
+.overview-welcome__scene span:nth-child(3) {
+  color: var(--operational-hover);
+  background: var(--operational-soft);
+}
+
+.landing-section {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.landing-section .section-header {
+  margin: 0;
+}
+
+.module-launch-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-sm);
+}
+
+.module-launch-card {
+  --module-accent: var(--primary);
+  --module-soft: var(--primary-soft);
+  min-width: 0;
+  min-height: 154px;
+  display: grid;
+  grid-template-columns: var(--control-height) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon copy"
+    "action action";
+  align-content: stretch;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  color: var(--text-primary);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  text-decoration: none;
+  transition: border-color var(--motion-base) ease, box-shadow var(--motion-base) ease, transform var(--motion-base) var(--ease-out-quart);
+}
+
+.module-launch-card--operational { --module-accent: var(--operational-hover); --module-soft: var(--operational-soft); }
+.module-launch-card--success { --module-accent: var(--success-foreground); --module-soft: var(--success-surface); }
+.module-launch-card--warning { --module-accent: var(--warning-foreground); --module-soft: var(--warning-surface); }
+.module-launch-card--violet { --module-accent: var(--chart-3); --module-soft: var(--surface-selected); }
+
+.module-launch-card:hover,
+.module-launch-card:focus-visible {
+  border-color: var(--primary-border);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.module-launch-card:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.module-launch-card__icon {
+  grid-area: icon;
+  width: var(--control-height);
+  height: var(--control-height);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  color: var(--module-accent);
+  background: var(--module-soft);
+}
+
+.module-launch-card__copy {
+  grid-area: copy;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+.module-launch-card__copy strong {
+  font-size: var(--text-lg);
+  line-height: 1.35;
+}
+
+.module-launch-card__copy small {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.module-launch-card__action {
+  grid-area: action;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--module-accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.module-launch-card__action svg {
+  transition: transform var(--motion-base) var(--ease-out-quart);
+}
+
+.module-launch-card:hover .module-launch-card__action svg,
+.module-launch-card:focus-visible .module-launch-card__action svg {
+  transform: translateX(var(--space-2xs));
+}
+
+.orders-unavailable .state-panel {
+  max-width: 720px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-2xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 640px) {
+  .module-launch-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .overview-welcome {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+    align-items: center;
+    padding: var(--space-xl);
+  }
+}
+
+@media (min-width: 1180px) {
+  .module-launch-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .module-launch-card,
+  .module-launch-card__action svg {
+    transition-duration: 0.01ms;
+  }
+
+  .module-launch-card:hover,
+  .module-launch-card:focus-visible,
+  .module-launch-card:hover .module-launch-card__action svg,
+  .module-launch-card:focus-visible .module-launch-card__action svg {
+    transform: none;
+  }
+}

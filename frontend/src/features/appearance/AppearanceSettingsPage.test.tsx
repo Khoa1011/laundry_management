@@ -8,10 +8,11 @@ import { AppearanceSettingsPage } from './AppearanceSettingsPage'
 
 describe('AppearanceSettingsPage', () => {
   beforeEach(async () => {
+    localStorage.clear()
     await i18n.changeLanguage('en')
   })
 
-  it('previews, cancels, and explicitly applies a palette', async () => {
+  it('previews, cancels, and explicitly applies motion preferences', async () => {
     const user = userEvent.setup()
     const { container } = render(
       <ThemeProvider>
@@ -23,22 +24,20 @@ describe('AppearanceSettingsPage', () => {
 
     expect(container.firstElementChild).toHaveClass('page-container', 'appearance-page')
 
-    await user.click(screen.getByRole('radio', { name: 'Ocean Blue' }))
-
-    expect(document.documentElement.dataset.palette).toBe('ocean-blue')
-    expect(localStorage.getItem('laundry.ui.palette')).toBeNull()
+    await user.click(screen.getByRole('radio', { name: 'Reduced' }))
+    expect(document.documentElement.dataset.motionLevel).toBe('reduced')
+    expect(localStorage.getItem('laundry.ui.motionLevel')).toBeNull()
     expect(screen.getByText(/Changes have not been saved/i)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Cancel preview' }))
+    expect(document.documentElement.dataset.motionLevel).toBe('balanced')
+    expect(screen.getByRole('radio', { name: 'Balanced' })).toHaveAttribute('aria-checked', 'true')
 
-    expect(document.documentElement.dataset.palette).toBe('laundry-green')
-    expect(screen.getByRole('radio', { name: 'Laundry Green' })).toHaveAttribute('aria-checked', 'true')
-
-    await user.click(screen.getByRole('radio', { name: 'Aqua Teal' }))
+    await user.click(screen.getByRole('radio', { name: 'Off' }))
     await user.click(screen.getByRole('button', { name: 'Apply changes' }))
 
-    expect(localStorage.getItem('laundry.ui.palette')).toBe('aqua-teal')
-    expect(document.documentElement.dataset.palette).toBe('aqua-teal')
+    expect(localStorage.getItem('laundry.ui.motionLevel')).toBe('off')
+    expect(document.documentElement.dataset.motionLevel).toBe('off')
     expect(screen.getAllByText(/settings were applied/i)).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled()
   })

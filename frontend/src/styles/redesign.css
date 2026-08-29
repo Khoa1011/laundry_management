@@ -665,8 +665,7 @@ textarea::placeholder {
 .address-icon,
 .employee-profile-section > header > span,
 .employee-position-list__icon,
-.employee-sensitive__icon,
-.role-summary-icon {
+.employee-sensitive__icon {
   border-radius: var(--radius-md);
   color: var(--operational);
   background: var(--operational-soft);
@@ -720,15 +719,6 @@ textarea::placeholder {
 .employee-sensitive__tabs button.active::after {
   opacity: 1;
   transform: scaleX(1);
-}
-
-.compensation-item,
-.access-summary > div,
-.role-summary-card {
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--surface-subtle);
-  box-shadow: none;
 }
 
 .money-input__summary {
@@ -883,10 +873,6 @@ textarea::placeholder {
 .role-list-card__stats > span {
   display: grid;
   gap: var(--space-3xs);
-}
-
-.access-summary {
-  gap: var(--space-xs);
 }
 
 .permission-module > header,

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowLeft, BriefcaseBusiness, Building2, KeyRound, Save, UserRound } from 'lucide-react'
+import { ArrowLeft, BriefcaseBusiness, Building2, KeyRound, Plus, Save, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -194,7 +194,7 @@ export function EmployeeFormPage() {
 
       {!editing && canLinkAccount && <section className="form-section"><div className="section-heading"><span className="section-icon"><KeyRound size={20} /></span><div><h2>{t('employee:accountInfo')}</h2><p>{t('employee:accountScopeWarning')}</p></div></div><div className="form-stack"><Field label={t('employee:accountSearch')}><input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} /></Field><Field label={t('employee:account')} error={errors.linkedUserId?.message}><select {...register('linkedUserId')}><option value="">{t('employee:noAccount')}</option>{accounts.data?.items.map((account) => <option key={account.id} value={account.id}>{account.displayName} · {account.username}</option>)}</select></Field></div></section>}
     </form>
-    <div className="sticky-action-bar"><button type="button" className="button button--secondary" onClick={() => navigate(editing ? `/employees/${employeeId}` : '/employees')} disabled={pending}>{t('cancel')}</button><button type="submit" form="employee-form" className="button button--primary" disabled={pending}><Save size={18} />{pending ? t('saving') : t(editing ? 'employee:saveEdit' : 'employee:saveCreate')}</button></div>
+    <div className="sticky-action-bar"><button type="button" className="button button--secondary" onClick={() => navigate(editing ? `/employees/${employeeId}` : '/employees')} disabled={pending}>{t('cancel')}</button><button type="submit" form="employee-form" className={`button ${editing ? 'button--primary' : 'button--create'}`} disabled={pending}>{editing ? <Save size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}{pending ? t('saving') : t(editing ? 'employee:saveEdit' : 'employee:saveCreate')}</button></div>
     <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()} onConfirm={() => blocker.proceed?.()} title={t('unsavedTitle')} body={t('unsavedBody')} confirmLabel={t('leave')} tone="danger" />
     <ConfirmDialog open={conflictOpen} onClose={() => setConflictOpen(false)} onConfirm={() => { setConflictOpen(false); void query.refetch() }} title={t('customers:conflictTitle')} body={t('customers:conflictBody')} confirmLabel={t('reload')} />
   </div>

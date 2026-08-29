@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Archive, ArrowLeft, Boxes, Calculator, ChevronRight, CircleAlert, Clock3, Edit3,
+  Activity, Archive, ArrowLeft, Boxes, Calculator, CalendarDays, ChevronRight, CircleAlert, Clock3, Edit3,
   Layers3, PackagePlus, Plus, Search, Send, Shirt, Sparkles, Trash2,
 } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
@@ -11,11 +11,12 @@ import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { Field } from '../../components/Field'
 import { MoneyInput } from '../../components/MoneyInput'
-import { LiquidNavLink } from '../../components/navigation/LiquidNavLink'
+import { AppNavLink } from '../../components/navigation/AppNavLink'
 import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, StatePanel } from '../../components/States'
-import { GlassSurface } from '../../components/glass/GlassSurface'
+import { Surface } from '../../components/ui/Surface'
 import { Button, ButtonLink } from '../../components/ui/Button'
+import { StatCard, type StatCardTone } from '../../components/ui/StatCard'
 import { useToast } from '../../providers/ToastProvider'
 import { CatalogAuditHistory } from './CatalogAuditHistory'
 import { catalogApi } from './api'
@@ -36,6 +37,13 @@ function statusTone(status: string) {
   if (status === 'SCHEDULED') return 'warning'
   if (status === 'ARCHIVED' || status === 'EXPIRED') return 'neutral'
   return 'warning'
+}
+
+function statCardTone(status: string): StatCardTone {
+  if (status === 'ACTIVE') return 'success'
+  if (status === 'DRAFT' || status === 'SCHEDULED') return 'warning'
+  if (status === 'ARCHIVED' || status === 'EXPIRED') return 'neutral'
+  return 'operational'
 }
 
 function useCatalogFormat() {
@@ -75,14 +83,14 @@ function PageHeader({ title, subtitle, actions }: { title: string; subtitle: str
 
 function CatalogTabs() {
   const { t } = useTranslation()
-  return <GlassSurface variant="subtle" as="nav" className="catalog-module-tabs" aria-label={t('catalog:navigation')}>
-    <LiquidNavLink to="/catalog/services" className="catalog-module-tab" activeClassName="catalog-module-tab--active"
-      indicatorId="catalog-module-active"><Shirt size={18} />{t('catalog:services')}</LiquidNavLink>
-    <LiquidNavLink to="/catalog/item-types" className="catalog-module-tab" activeClassName="catalog-module-tab--active"
-      indicatorId="catalog-module-active"><Boxes size={18} />{t('catalog:itemTypes')}</LiquidNavLink>
-    <LiquidNavLink to="/catalog/price-lists" className="catalog-module-tab" activeClassName="catalog-module-tab--active"
-      indicatorId="catalog-module-active"><Layers3 size={18} />{t('catalog:priceLists')}</LiquidNavLink>
-  </GlassSurface>
+  return <Surface variant="subtle" as="nav" className="catalog-module-tabs" aria-label={t('catalog:navigation')}>
+    <AppNavLink to="/catalog/services" className="catalog-module-tab" activeClassName="catalog-module-tab--active"
+      indicatorId="catalog-module-active"><Shirt size={18} />{t('catalog:services')}</AppNavLink>
+    <AppNavLink to="/catalog/item-types" className="catalog-module-tab" activeClassName="catalog-module-tab--active"
+      indicatorId="catalog-module-active"><Boxes size={18} />{t('catalog:itemTypes')}</AppNavLink>
+    <AppNavLink to="/catalog/price-lists" className="catalog-module-tab" activeClassName="catalog-module-tab--active"
+      indicatorId="catalog-module-active"><Layers3 size={18} />{t('catalog:priceLists')}</AppNavLink>
+  </Surface>
 }
 
 export function ServiceCatalogPage() {
@@ -108,10 +116,10 @@ export function ServiceCatalogPage() {
   return <div className="catalog-page">
     <PageHeader title={t('catalog:services')} subtitle={t('catalog:servicesSubtitle')} actions={
       hasPermission(PERMISSION_CODES.SERVICE_CREATE)
-        ? <Button onClick={() => setEditor('new')}><Plus size={18} />{t('catalog:addService')}</Button> : undefined
+        ? <Button variant="create" onClick={() => setEditor('new')}><Plus size={18} aria-hidden="true" />{t('catalog:addService')}</Button> : undefined
     } />
     <CatalogTabs />
-    <GlassSurface variant="subtle" className="catalog-toolbar">
+    <Surface variant="subtle" className="catalog-toolbar">
       <label className="catalog-search"><Search size={18} /><span className="sr-only">{t('search')}</span>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('catalog:searchServices')} />
       </label>
@@ -121,12 +129,12 @@ export function ServiceCatalogPage() {
         <option value="INACTIVE">{t('catalog:statuses.INACTIVE')}</option>
         <option value="ARCHIVED">{t('catalog:statuses.ARCHIVED')}</option>
       </select>
-    </GlassSurface>
+    </Surface>
     {query.isLoading ? <LoadingState rows={5} /> : query.isError
       ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void query.refetch()} />
       : services.length === 0
         ? <StatePanel icon={<Shirt />} title={t('catalog:noServicesTitle')} body={t('catalog:noServicesBody')} action={
-          hasPermission(PERMISSION_CODES.SERVICE_CREATE) ? <Button onClick={() => setEditor('new')}>{t('catalog:addService')}</Button> : undefined
+          hasPermission(PERMISSION_CODES.SERVICE_CREATE) ? <Button variant="create" onClick={() => setEditor('new')}><Plus size={18} aria-hidden="true" />{t('catalog:addService')}</Button> : undefined
         } />
         : <>
           <div className="catalog-mobile-list">
@@ -232,7 +240,7 @@ export function ItemTypeCatalogPage() {
   return <div className="catalog-page">
     <PageHeader title={t('catalog:itemTypes')} subtitle={t('catalog:itemTypesSubtitle')} actions={
       hasPermission(PERMISSION_CODES.ITEM_TYPE_CREATE)
-        ? <Button onClick={() => setEditor({})}><Plus size={18} />{t('catalog:addItemType')}</Button> : undefined
+        ? <Button variant="create" onClick={() => setEditor({})}><Plus size={18} aria-hidden="true" />{t('catalog:addItemType')}</Button> : undefined
     } />
     <CatalogTabs />
     {query.isLoading ? <LoadingState rows={5} /> : query.isError
@@ -251,7 +259,7 @@ export function ItemTypeCatalogPage() {
                 <div><dt>{t('catalog:separateWash')}</dt><dd>{selected.requiresSeparateWash ? t('yes') : t('no')}</dd></div></dl>
               <div className="item-detail__actions">
                 {hasPermission(PERMISSION_CODES.ITEM_TYPE_UPDATE) && selected.status !== 'ARCHIVED' && <Button variant="secondary" onClick={() => setEditor({ item: selected })}><Edit3 size={17} />{t('edit')}</Button>}
-                {hasPermission(PERMISSION_CODES.ITEM_TYPE_CREATE) && selected.status !== 'ARCHIVED' && <Button variant="subtle" onClick={() => setEditor({ parentId: selected.id })}><PackagePlus size={17} />{t('catalog:addChild')}</Button>}
+                {hasPermission(PERMISSION_CODES.ITEM_TYPE_CREATE) && selected.status !== 'ARCHIVED' && <Button variant="create" onClick={() => setEditor({ parentId: selected.id })}><PackagePlus size={17} aria-hidden="true" />{t('catalog:addChild')}</Button>}
                 {hasPermission(PERMISSION_CODES.ITEM_TYPE_ARCHIVE) && selected.status !== 'ARCHIVED' && <>
                   <Button variant="outline" onClick={() => setStatusTarget({
                     item: selected, next: selected.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
@@ -332,10 +340,10 @@ export function PriceListPage() {
   return <div className="catalog-page">
     <PageHeader title={t('catalog:priceLists')} subtitle={t('catalog:priceListsSubtitle')} actions={
       hasPermission(PERMISSION_CODES.PRICE_LIST_CREATE)
-        ? <Button onClick={() => setEditorOpen(true)}><Plus size={18} />{t('catalog:addPriceList')}</Button> : undefined
+        ? <Button variant="create" onClick={() => setEditorOpen(true)}><Plus size={18} aria-hidden="true" />{t('catalog:addPriceList')}</Button> : undefined
     } />
     <CatalogTabs />
-    <GlassSurface variant="subtle" className="catalog-toolbar"><label className="catalog-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('catalog:searchPriceLists')} /></label></GlassSurface>
+    <Surface variant="subtle" className="catalog-toolbar"><label className="catalog-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('catalog:searchPriceLists')} /></label></Surface>
     {query.isLoading ? <LoadingState rows={4} /> : query.isError
       ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void query.refetch()} />
       : lists.length === 0 ? <StatePanel icon={<Layers3 />} title={t('catalog:noPricesTitle')} body={t('catalog:noPricesBody')} />
@@ -485,14 +493,18 @@ export function PriceListDetailPage() {
     <PageHeader title={priceList.name} subtitle={`${priceList.code} · ${priceList.branch.name}`} actions={<>
       {priceList.status === 'DRAFT' && hasPermission(PERMISSION_CODES.PRICE_LIST_UPDATE_DRAFT) &&
         <Button variant="secondary" onClick={() => setPriceListEditorOpen(true)}><Edit3 size={17} />{t('edit')}</Button>}
-      {priceList.status === 'DRAFT' && hasPermission(PERMISSION_CODES.PRICE_RULE_CREATE) && <Button variant="secondary" onClick={() => setRuleEditor('new')}><Plus size={17} />{t('catalog:addRule')}</Button>}
+      {priceList.status === 'DRAFT' && hasPermission(PERMISSION_CODES.PRICE_RULE_CREATE) && <Button variant="create" onClick={() => setRuleEditor('new')}><Plus size={17} aria-hidden="true" />{t('catalog:addRule')}</Button>}
       {hasPermission(PERMISSION_CODES.PRICE_LIST_DUPLICATE) &&
         <Button variant="subtle" onClick={() => setDuplicateOpen(true)}>{t('catalog:duplicate')}</Button>}
       {priceList.status === 'DRAFT' && hasPermission(PERMISSION_CODES.PRICE_LIST_PUBLISH) && <Button onClick={() => setConfirm('publish')}><Send size={17} />{new Date(priceList.effectiveFrom) > new Date() ? t('catalog:schedule') : t('catalog:publish')}</Button>}
       {priceList.status !== 'ARCHIVED' && hasPermission(PERMISSION_CODES.PRICE_LIST_ARCHIVE) && <Button variant="danger" onClick={() => setConfirm('archive')}><Archive size={17} />{t('catalog:archive')}</Button>}
     </>} />
-    <GlassSurface variant="standard" className="price-list-summary"><span className={`status-badge status-badge--${statusTone(priceList.status)}`}>{t(`catalog:statuses.${priceList.status}`)}</span>
-      <dl><div><dt>{t('catalog:effectiveFrom')}</dt><dd>{format.date(priceList.effectiveFrom)}</dd></div><div><dt>{t('catalog:effectiveTo')}</dt><dd>{format.date(priceList.effectiveTo)}</dd></div><div><dt>{t('catalog:ruleCount', { count: rules.length })}</dt><dd>{rules.length}</dd></div></dl></GlassSurface>
+    <section className="stat-card-grid price-list-summary" aria-label={t('catalog:priceLists')}>
+      <StatCard tone={statCardTone(priceList.status)} icon={<Activity />} label={t('status')} value={t(`catalog:statuses.${priceList.status}`)} />
+      <StatCard tone="primary" icon={<CalendarDays />} label={t('catalog:effectiveFrom')} value={format.date(priceList.effectiveFrom)} />
+      <StatCard tone="neutral" icon={<CalendarDays />} label={t('catalog:effectiveTo')} value={format.date(priceList.effectiveTo)} />
+      <StatCard tone="operational" icon={<Layers3 />} label={t('catalog:rules')} value={t('catalog:ruleCount', { count: rules.length })} />
+    </section>
     <div className="catalog-segmented" role="tablist">
       {(['rules', 'preview', 'history'] as const).map((value) => <button key={value} role="tab" aria-selected={tab === value} onClick={() => setTab(value)}>{t(`catalog:${value}`)}</button>)}
     </div>
@@ -598,7 +610,7 @@ function RuleEditor({ open, rule, priceList, onClose, onSaved }: { open: boolean
         <Button type="button" variant="danger" size="sm" onClick={() => set('tiers', form.tiers.filter((_, i) => i !== index))}>
           <Trash2 size={16} />{t('catalog:removeTier')}
         </Button>
-      </div>)}<Button type="button" variant="subtle" size="sm" onClick={() => set('tiers', [...form.tiers, { fromQuantity: form.tiers.at(-1)?.toQuantity ?? 0, unitPrice: 0, sortOrder: form.tiers.length }])}><Plus size={16} />{t('add')}</Button></div>}
+      </div>)}<Button type="button" variant="create" size="sm" onClick={() => set('tiers', [...form.tiers, { fromQuantity: form.tiers.at(-1)?.toQuantity ?? 0, unitPrice: 0, sortOrder: form.tiers.length }])}><Plus size={16} aria-hidden="true" />{t('add')}</Button></div>}
     </div>
   </OverlayDialog>
 }
@@ -617,14 +629,14 @@ function PricePreviewPanel({ priceList }: { priceList: PriceList }) {
       quantity: form.quantity, effectiveAt: new Date(form.effectiveAt).toISOString(),
     }),
   })
-  return <div className="preview-layout"><GlassSurface variant="subtle" className="preview-form"><h2>{t('catalog:preview')}</h2>
+  return <div className="preview-layout"><Surface variant="subtle" className="preview-form"><h2>{t('catalog:preview')}</h2>
     <Field label={t('catalog:service')} required><select value={form.serviceId || ''} onChange={(e) => setForm({ ...form, serviceId: Number(e.target.value) })}><option value="">—</option>{services.data?.items.map((service) => <option value={service.id} key={service.id}>{service.nameVi}</option>)}</select></Field>
     <Field label={t('catalog:itemType')}><select value={form.itemTypeId || ''} onChange={(e) => setForm({ ...form, itemTypeId: Number(e.target.value) })}><option value="">{t('catalog:anyItemType')}</option>{items.map((item) => <option value={item.id} key={item.id}>{item.nameVi}</option>)}</select></Field>
     <Field label={t('catalog:sharingMode')}><select value={form.sharingMode} onChange={(e) => setForm({ ...form, sharingMode: e.target.value })}>{SHARING_MODES.map((mode) => <option value={mode} key={mode}>{t(`catalog:modes.${mode}`)}</option>)}</select></Field>
     <Field label={t('catalog:quantity')} required><input inputMode="decimal" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} /></Field>
     <Field label={t('catalog:effectiveAt')}><input type="datetime-local" value={form.effectiveAt} onChange={(e) => setForm({ ...form, effectiveAt: e.target.value })} /></Field>
     <Button loading={preview.isPending} disabled={!form.serviceId || form.quantity <= 0} onClick={() => preview.mutate()}><Calculator size={18} />{t('catalog:calculate')}</Button>
-  </GlassSurface>
+  </Surface>
     <section className="preview-result">{preview.isError ? <StatePanel compact icon={<CircleAlert />} title={t('catalog:loadErrorTitle')} body={errorMessage(preview.error, t)} />
       : !preview.data ? <StatePanel compact icon={<Sparkles />} title={t('catalog:noPreviewTitle')} body={t('catalog:noPreviewBody')} />
         : <><div className="preview-result__total"><small>{t('catalog:total')}</small><strong>{format.money(preview.data.finalAmount)}</strong><span>{preview.data.serviceName}</span></div>

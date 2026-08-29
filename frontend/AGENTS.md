@@ -7,22 +7,19 @@ These rules apply to all files under `frontend/`.
 Before any frontend visual or interaction change, read:
 
 1. root `DESIGN.md`;
-2. `docs/design/LIQUID_GLASS_ADMIN_RULES.md`;
+2. `docs/design/SOLID_ADMIN_RULES.md`;
 3. `docs/design/UI_IMPLEMENTATION_CHECKLIST.md`;
-4. `.agents/skills/laundry-admin-liquid-glass/SKILL.md`.
+4. the repository-owned shared component and token implementations.
 
-Use `impeccable` and the repository Liquid Glass skill for UI work.
+Use `impeccable` for UI work.
 
 ## Shared Interaction Foundation
 
 - Reuse semantic tokens from `src/styles/tokens.css` and `src/styles/themes.css`.
-- Reuse `src/components/ui/Button.tsx`, `src/components/ui/IconButton.tsx`, `src/components/navigation/LiquidNavLink.tsx`, and the glass/motion primitives before adding a feature-local control.
-- Do not add raw brand colors, blur, shadow, radius, z-index, spacing, or motion constants inside a feature.
-- New feature code must not depend on `LiquidInteractionRoot`; it is only a compatibility bridge during migration.
-- Pointer ripple, keyboard feedback, press state, loading, disabled behavior, and cleanup belong to shared primitives.
-- Preserve the three render levels: `premium`, `standard`, and `reduced`. Premium must fall back without changing semantics or layout.
-- Keep dense tables, permission matrices, sensitive employee data, audit data, and notification rows opaque or nearly opaque.
-- Keep both `-webkit-backdrop-filter` and `backdrop-filter` in shared glass implementations.
+- Reuse `src/components/ui/Button.tsx`, `src/components/ui/IconButton.tsx`, `src/components/ui/Surface.tsx`, `src/components/navigation/AppNavLink.tsx`, and shared motion primitives before adding a feature-local control.
+- Do not add raw brand colors, shadow, radius, z-index, spacing, or motion constants inside a feature.
+- Pointer and keyboard feedback, press state, loading, disabled behavior, and cleanup belong to shared primitives.
+- Keep all structural and data surfaces opaque. Do not add backdrop blur or translucent material.
 
 ## Behavior Protection
 
@@ -30,4 +27,4 @@ Preserve routes, APIs, payloads, i18n, auth, branch scope, permissions, SSE beha
 
 ## Validation
 
-Run lint, typecheck, relevant tests, and production build. Verify mobile, tablet/POS, desktop, reduced height, reduced motion, reduced transparency, keyboard use, and page-level horizontal overflow.
+Run lint, typecheck, relevant tests, and production build. Verify mobile, tablet/POS, desktop, reduced height, reduced motion, keyboard use, and page-level horizontal overflow.

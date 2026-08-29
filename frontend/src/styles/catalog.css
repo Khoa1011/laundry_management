@@ -159,7 +159,6 @@
 .catalog-record-card dl,
 .price-list-card dl,
 .rule-card dl,
-.price-list-summary dl,
 .catalog-detail-list,
 .preview-breakdown {
   display: grid;
@@ -170,7 +169,6 @@
 .catalog-record-card dl > div,
 .price-list-card dl > div,
 .rule-card dl > div,
-.price-list-summary dl > div,
 .catalog-detail-list > div,
 .preview-breakdown > div {
   display: flex;
@@ -181,7 +179,6 @@
 .catalog-record-card dt,
 .price-list-card dt,
 .rule-card dt,
-.price-list-summary dt,
 .catalog-detail-list dt,
 .preview-breakdown dt {
   color: var(--text-secondary);
@@ -190,7 +187,6 @@
 .catalog-record-card dd,
 .price-list-card dd,
 .rule-card dd,
-.price-list-summary dd,
 .catalog-detail-list dd,
 .preview-breakdown dd {
   margin: 0;
@@ -341,7 +337,6 @@
 
 .price-list-summary {
   margin-bottom: var(--space-md);
-  padding: var(--space-md);
 }
 
 .catalog-segmented {
@@ -571,19 +566,6 @@
   .preview-result {
     position: sticky;
     top: calc(var(--header-height) + var(--space-md));
-  }
-
-  .price-list-summary dl {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .price-list-summary dl > div {
-    flex-direction: column;
-    gap: var(--space-2xs);
-  }
-
-  .price-list-summary dd {
-    text-align: start;
   }
 
   .tier-row {

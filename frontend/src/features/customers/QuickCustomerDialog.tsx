@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -94,7 +95,7 @@ export function QuickCustomerDialog({ open, onClose }: { open: boolean; onClose:
   return (
     <OverlayDialog open={open} onClose={close} title={t('customers:quickAdd')} description={t('customers:quickAddDescription')} variant="drawer" footer={<>
       <button type="button" className="button button--secondary" onClick={close} disabled={mutation.isPending}>{t('cancel')}</button>
-      <button type="submit" form="quick-customer-form" className="button button--primary" disabled={mutation.isPending}>{mutation.isPending ? t('saving') : t('customers:add')}</button>
+      <button type="submit" form="quick-customer-form" className="button button--create" disabled={mutation.isPending}>{!mutation.isPending && <Plus size={18} aria-hidden="true" />}{mutation.isPending ? t('saving') : t('customers:add')}</button>
     </>}>
       <form id="quick-customer-form" className="form-stack" onSubmit={(event) => void submit(event)} noValidate>
         <Field label={t('customers:fullName')} error={errors.fullName?.message} required><input {...register('fullName')} autoComplete="name" /></Field>

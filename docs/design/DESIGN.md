@@ -2,11 +2,11 @@
 
 Root `DESIGN.md` is the canonical design contract for this project.
 
-This file intentionally does not duplicate the design system. For Liquid Glass UI work, read:
+This file intentionally does not duplicate the design system. For solid admin UI work, read:
 
 ```text
 ../../DESIGN.md
-LIQUID_GLASS_ADMIN_RULES.md
+SOLID_ADMIN_RULES.md
 UI_IMPLEMENTATION_CHECKLIST.md
 ```
 

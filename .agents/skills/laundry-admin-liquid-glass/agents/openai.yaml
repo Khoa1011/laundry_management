@@ -1,4 +1,0 @@
-interface:
-  display_name: "Laundry Admin Liquid Glass"
-  short_description: "Apply the laundry admin Liquid Glass design system."
-  default_prompt: "Use the laundry admin Liquid Glass design system for this UI task."

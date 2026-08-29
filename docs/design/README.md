@@ -10,11 +10,10 @@ Canonical sources:
 ../../AGENTS.md
 ```
 
-Liquid Glass support:
+Solid admin support:
 
 ```text
-../../.agents/skills/laundry-admin-liquid-glass/SKILL.md
-LIQUID_GLASS_ADMIN_RULES.md
+SOLID_ADMIN_RULES.md
 UI_IMPLEMENTATION_CHECKLIST.md
 CODEX_UI_TASK_TEMPLATE.md
 ```

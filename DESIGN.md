@@ -2,222 +2,153 @@
 
 ## Overview
 
-This document is the canonical design contract for the React, TypeScript, and Tailwind CSS v4 frontend. Every new screen, module, shared component, and visual refactor must follow it unless this document is deliberately updated first.
+This is the canonical visual contract for the React, TypeScript, and Tailwind CSS v4 frontend. Update this file before making a deliberate system-wide visual change.
 
-The interface language is Vietnamese. Mobile phones and Android POS devices are the primary surfaces; tablet, POS landscape, laptop, and desktop administration layouts are currently supported surfaces that extend the same information architecture and business workflows.
+The product is a Vietnamese laundry operations application. Mobile browsers and Android POS devices are the primary surfaces; tablet and desktop administration layouts extend the same workflows and state.
 
-## Design Intent
+## Design intent
 
-Physical scene: a laundry counter during a bright morning rush, one hand on a phone-sized screen, customers waiting, receipt printer nearby, and staff needing calm confirmation instead of visual noise.
+The interface is a calm, bright operational workspace inspired by the approved admin reference: an icy-blue canvas, opaque white panels, deep navy text, sky-blue primary actions, cyan operational accents, soft yellow warnings, and coral attention states.
 
-Use a restrained product UI. The surface should stay bright and practical; brand color is an accent for primary action and selection, not a decorative wash over the app.
+The system is intentionally solid and opaque. Do not use backdrop blur, translucent glass, liquid refraction, decorative gradient orbs, or glass-on-glass nesting. Visual quality comes from hierarchy, spacing, typography, restrained borders, and short state-driven motion.
+
+The authentication entry surface is the only bounded spatial-brand exception. Its illustration may use opaque CSS-built laundry objects, layered depth, soft palette gradients, and pointer-driven parallax to match the approved login reference. The form panel itself remains opaque, stable, and fully usable without motion. Spatial movement is available only to fine pointers at `full` or `balanced` motion levels; `reduced`, `off`, coarse-pointer, and narrow-screen presentations use a static composition. This exception must not spread into operational tables, forms, dialogs, or navigation.
 
 ## Color
 
-Use OKLCH tokens. The Liquid Glass refresh direction uses a balanced laundry green as the primary brand family, with a restrained teal operational accent and explicit semantic status colors. The legacy cranberry tokens may exist during migration, but new UI work should depend on semantic tokens rather than raw palette names.
+Feature code must consume semantic tokens from `frontend/src/styles/tokens.css` and `frontend/src/styles/themes.css`. Raw colors belong only in those theme files.
+
+Core palette:
 
 ```css
 :root {
-  --color-bg: oklch(1.000 0.000 0);
-  --color-surface: oklch(0.985 0.006 165);
-  --color-surface-raised: oklch(0.965 0.008 165);
-  --color-ink: oklch(0.235 0.030 165);
-  --color-muted: oklch(0.505 0.030 165);
-  --color-border: oklch(0.880 0.018 165);
-  --color-primary: oklch(0.500 0.115 165);
-  --color-primary-hover: oklch(0.430 0.105 165);
-  --color-primary-soft: oklch(0.940 0.030 165);
-  --color-accent: oklch(0.560 0.105 190);
-  --color-accent-soft: oklch(0.925 0.035 190);
+  --sky-500: #3b82f6;
+  --cyan-500: #06b6d4;
+  --yellow-400: #fbbf24;
+  --coral-400: #fb7185;
+  --navy-950: #0f172a;
+  --slate-600: #475569;
+  --slate-400: #94a3b8;
+  --slate-200: #e2e8f0;
+  --canvas: #f5f9fd;
+  --white: #ffffff;
 }
 ```
 
-Semantic colors should be explicit rather than inferred from the brand palette:
-
-```css
-:root {
-  --color-success: oklch(0.520 0.130 150);
-  --color-success-soft: oklch(0.930 0.040 150);
-  --color-warning: oklch(0.700 0.145 80);
-  --color-warning-soft: oklch(0.955 0.050 80);
-  --color-danger: oklch(0.500 0.180 28);
-  --color-danger-soft: oklch(0.940 0.040 28);
-  --color-info: oklch(0.540 0.125 250);
-  --color-info-soft: oklch(0.935 0.035 250);
-}
-```
-
-Use white text on saturated filled colors. Muted text must remain readable against white and raised surfaces.
+- Sky blue: primary actions, active navigation, focus, selected controls.
+- Cyan: operational information, secondary highlights, selected data cues.
+- Yellow: warnings and time-sensitive attention.
+- Coral: destructive actions, errors, overdue or exceptional states.
+- Navy and slate: readable content hierarchy.
+- Semantic status must always include text or an icon; color is never the only cue.
 
 ## Typography
 
-Use a single UI sans stack:
+Use one UI stack:
 
 ```css
 --font-ui: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
 ```
 
-Type should be compact and steady:
+- Page title: 24px / 32px, 700.
+- Section title: 18px / 26px, 700.
+- Body: 15px / 22px, 400.
+- Dense body and table: 14px / 20px, 400.
+- Label: 13px / 18px, 600.
+- Helper text: 13px / 18px, 400.
 
-- Page title: 24px / 32px, 700
-- Section title: 18px / 26px, 700
-- Body: 15px / 22px, 400
-- Dense body and table text: 14px / 20px, 400
-- Labels: 13px / 18px, 600
-- Helper text: 13px / 18px, 400
-
-Avoid display typography in operational screens. Vietnamese labels should not be uppercase-tracked by default because tone marks and quick scanning matter more than styling.
+Keep Vietnamese labels concise and normally cased. Avoid display typography, excessive weight changes, and uppercase tracking in operational screens.
 
 ## Layout
 
-Design mobile-first. The default workflow assumption is a phone-width or Android POS counter experience, but tablet, POS landscape, laptop, and desktop administration layouts must be intentionally designed and verified.
+Build mobile first, then enhance at tablet and desktop widths. Mobile is not a scaled desktop layout.
 
-- Preserve the same business state and information architecture across mobile and desktop.
-- Use one primary task column on mobile.
-- Keep mobile primary actions in reach near the bottom or immediately after the active form section.
-- Use sticky headers only when they preserve task context.
-- Avoid nested cards. Use panels for grouped forms, repeated cards for order/customer rows, and full-width bands for major screen regions.
-- Tablet and POS landscape layouts should use the extra space intentionally with compact two-column or split-context views where useful.
-- Desktop layouts should use supported administration patterns such as sidebar navigation, split panes, denser filters, and comparison tables without changing the underlying workflow model.
+- Mobile: one task column, 16px page gutter, card-based data, filter sheet, safe-area-aware bottom navigation.
+- Tablet: use extra width for paired fields and split context only where it improves the task.
+- Desktop: 248px expanded or 84px collapsed inset sidebar, 72px inset header, dense filters and tables, main content capped at 1440px.
+- Standard panels use opaque white backgrounds, 12-16px radii, a subtle border, and little or no shadow.
+- Stat cards are a deliberate elevated exception: use an opaque white surface, no decorative border, a short `--shadow-sm`, a 12px radius, and a semantic tinted icon tile. Labels remain quiet while the primary value carries the strongest type weight. Stat cards must use the shared `StatCard` primitive and responsive `stat-card-grid`; do not recreate metric tiles inside a feature.
+- Avoid nested cards and avoid stretching simple forms across wide displays.
+- Focused transaction screens hide bottom navigation and use a clear back action plus fixed action area when needed.
 
-Recommended structural breakpoints:
+Required test viewports are defined in `docs/design/UI_IMPLEMENTATION_CHECKLIST.md`.
 
-- `0-479px`: phone counter flow, single column, bottom action area
-- `480-767px`: large phone and POS, denser rows, larger touch controls
-- `768-1199px`: tablet, POS landscape, and small desktop, two-column detail views where useful
-- `1200px+`: desktop administration, persistent navigation and comparison tables
+## Navigation
+
+Desktop navigation uses an opaque icy-blue inset sidebar with a restrained 16px outer radius and canvas gutter. Each destination owns a 40px semantic icon tile; the active item uses one shared moving pale-blue full-row fill and a primary icon tile, without a side-stripe indicator. Hover may change the tile and row fill subtly but must not move layout. Collapsed items remain direct links with accessible labels and desktop tooltips.
+
+The desktop header is an opaque white inset panel aligned to the application canvas, with a restrained 16px radius and compact shadow. Branch context stays on the left; notification, appearance, language, user identity, and logout controls form a coherent right-hand command cluster. It must remain readable at laptop heights and may collapse secondary labels before controls become compressed.
+
+Mobile uses a drawer plus an opaque bottom navigation bar with no more than five destinations. It must never overlap the final page content. Desktop sidebar and mobile bottom navigation are never visible together.
 
 ## Components
 
-Canonical component vocabulary:
+Canonical shared primitives include:
 
-- App shell: compact top bar, current shop/context area, primary navigation, user/session affordance
-- Bottom navigation or task switcher for mobile-first core areas
-- Order list row with status, customer cue, promised time, payment cue, and next action
-- Order detail sections for items, notes, totals, payment, and receipt activity
-- Customer lookup and customer summary
-- Payment entry panel with clear collected/remaining/change/debt language after rules are confirmed
-- Inventory item row with stock state and action controls
-- Revenue and expense entry forms
-- Employee list/detail surfaces
-- Receipt print status and retry/reprint affordances
+- `Button`, `ButtonLink`, `IconButton`, `IconButtonLink`, portaled `ActionMenu`, and `CollapsibleFilterPanel`.
+- `Surface` for opaque panels and grouped regions.
+- `StatCard` for single operational metrics, counts, status summaries, and compact comparison values.
+- `AppNavLink` for sidebar, drawer, bottom navigation, and module tabs.
+- `OverlayDialog`, state panels, toasts, badges, fields, filters, tables, and fixed actions.
 
-Every interactive component needs default, hover where relevant, pressed, focus-visible, disabled, loading, error, and success states. Loading should prefer skeletons in context rather than centered spinners.
+Every interactive component needs default, hover where relevant, active, focus-visible, disabled, and loading states. Data-driven screens also need loading, empty, error, success, long-content, and permission-denied behavior.
 
-Shared buttons and icon buttons own their interaction behavior. Feature modules must use the repository primitives instead of recreating hover, press, loading, focus, or ripple logic. Navigation destinations remain direct links; the active desktop sidebar destination uses one shared moving indicator rather than mounting an unrelated active decoration inside every item.
+Shared primitives own interaction styling. Feature modules must not recreate buttons, moving navigation indicators, surface elevation, focus rings, or motion curves.
 
-## Interaction
+## Interaction and motion
 
-Primary actions should use clear Vietnamese verbs such as `Tạo đơn`, `Lưu`, `Thu tiền`, `In hóa đơn`, and `Xác nhận` only where the underlying behavior is confirmed. When business behavior is unresolved, UI copy should be framed as placeholders or design examples, not final rules.
+- Touch targets are at least 44 x 44px.
+- Routine control feedback runs for 120-180ms.
+- Drawers, dialogs, sidebar transitions, and shared indicators run for 180-240ms.
+- Create and add commands use the shared `create` button variant. It keeps the leading action icon and uses one left-to-right primary fill over 250ms with standard `ease` timing on hover, keyboard focus, and press; disabled and loading states do not animate, and reduced motion changes state instantly.
+- No bounce, elastic movement, page-load choreography, pointer ripples, or decorative looping animation.
+- Use CSS for primitive states and `motion` for mounted overlays and shared indicators.
+- Respect reduced-motion preferences. Motion-off must remain fully usable.
+- Motion must never delay navigation, form submission, or business commands.
+- Login parallax responds directly to pointer position and returns to rest on pointer exit. It must not run as a decorative loop, move form controls, or exceed the shared 240ms structural timing when settling.
+- Table action menus use the shared portaled fan-out interaction. A compact sky-blue Phosphor trigger expands semantic filled action icons away from the nearest viewport edge over 240ms; the icons begin overlapped with distinct rotations and settle upright. View actions use operational cyan, edit actions use primary sky blue, and a third generic action uses neutral slate unless its business meaning requires a dedicated semantic tone. Click and hover must play the same entrance motion; touch, keyboard, Escape, outside press, and reduced motion must all remain usable.
+- Advanced filter groups start collapsed behind the shared `CollapsibleFilterPanel` toggle while primary search remains visible. The toggle uses a restrained sky-blue surface with a cyan Phosphor icon tile. On tablet and desktop, search and the collapsed toggle share the first toolbar row; the expanded controls occupy a full-width row below. Mobile may stack the search and toggle to preserve usable control widths. Opening uses the action-menu motion language: the filled funnel settles upright while filter controls fan from a slightly overlapped, rotated state into a responsive grid over 240ms. Closing reverses the movement. Active-filter counts remain visible when collapsed; collapsed controls are inert and hidden from assistive technology.
 
-Touch targets should be at least 44px high. Destructive or irreversible actions should require clear confirmation space once domain rules define what is reversible.
+## Forms and data
 
-Forms should support fast correction: inline validation, field-level hints, and visible summaries for totals or required missing data. Error messages should explain what to fix, not only that something failed.
+Inputs have visible labels, appropriate input modes, nearby validation, and visible focus. On invalid submit, focus or scroll to the first invalid field. Important forms warn before leaving only after actual changes.
 
-Pointer press feedback may originate from the exact click or tap location and expand to the farthest control corner. Keyboard activation originates from the control center. This feedback is visual only: it must never delay navigation, form submission, or command execution; disabled controls must not emit it; repeated activation must clean up completed effects. Reduced motion uses a brief static highlight, while motion-off uses no decorative feedback.
+Desktop may use tables for comparison and bulk work. Mobile uses cards for primary business lists unless the data is inherently tabular. Mobile and desktop presentations share the same query, filters, permissions, mutations, and business state.
 
-## Motion
+## Content and accessibility
 
-Use short, state-driven motion only:
+Vietnamese is the default language. Use concise operational verbs only where behavior is confirmed by `docs/BUSINESS_RULES.md`. Do not turn unresolved rules into final copy.
 
-- 120-180ms for primitive controls, tabs, badges, and pressed states.
-- 180-240ms for dialogs, sheets, sidebar transitions, and mounted/unmounted overlays.
-- No visible bounce, elastic movement, or page-load choreography.
-- Respect `prefers-reduced-motion: reduce`.
+Target WCAG 2.2 AA:
 
-Motion should confirm state changes, loading progress, selection, and panel transitions. It should not decorate routine operations.
+- Visible focus on every interactive control.
+- Programmatic labels and field-linked errors.
+- Minimum 4.5:1 contrast for normal text.
+- Keyboard, mouse, touch, and reduced-motion support.
+- No unintended horizontal scrolling at 360px.
+- Essential information and actions must not depend on hover.
 
-Press feedback begins immediately and releases with a restrained spring or equivalent non-bouncing easing. A ripple may outlive the 120-180ms press transition only as a non-blocking opacity/scale afterimage; it must not change layout, retain event handlers after completion, or replay on mount.
-
-React Router view transitions are optional enhancements. They must never be the only transition path; every route or overlay interaction must remain usable with a non-blocking CSS transition, Motion transition, or instant reduced-motion fallback.
-
-## Content
-
-Vietnamese should be the default UI language. Prefer concise operational copy:
-
-- Short labels for repeated controls
-- Specific status text
-- Plain error explanations
-- No marketing copy inside task screens
-
-Do not encode unresolved business rules as final UI language. For example, payment timing, refund behavior, debt handling, order cancellation, stock adjustments, revenue recognition, and receipt numbering all depend on future confirmation in `docs/BUSINESS_RULES.md`.
-
-## Accessibility
-
-Design toward WCAG 2.2 AA unless the project later confirms a different target.
-
-- Visible focus state on all interactive controls
-- Form labels always visible or programmatically associated
-- Error text tied to fields
-- Color never used as the only status cue
-- Minimum 4.5:1 contrast for normal text
-- Reduced-motion alternatives
-- Layouts usable at mobile widths without horizontal scrolling except intentional data tables
-
-## Implementation Notes
-
-Tailwind CSS v4 should map these OKLCH values into theme tokens before components are built. Use semantic token names in components rather than raw colors so future business states and themes can evolve safely.
-
-## Liquid Glass Direction
-
-Liquid Glass is part of the project design contract for frontend UI work. Before creating, redesigning, polishing, or auditing any interface, read:
-
-```text
-.agents/skills/laundry-admin-liquid-glass/SKILL.md
-docs/design/LIQUID_GLASS_ADMIN_RULES.md
-docs/design/UI_IMPLEMENTATION_CHECKLIST.md
-```
-
-Use medium-strength Liquid Glass on structural surfaces where it helps hierarchy: sidebar, header, mobile bottom navigation, dialogs, sheets, notification center, command palette, selected KPI cards, and high-priority action affordances. Dense forms, tables, permission matrices, audit logs, finance records, and reconciliation views should stay opaque or nearly opaque.
-
-Structural glass uses an iOS-inspired material treatment: layered translucency, backdrop saturation, a bright inner top edge, a restrained lower edge, and soft depth. The shared application canvas may use broad, static, semantic Laundry Green and teal radial washes solely to make translucent material depth perceptible; these washes must remain very pale, non-animated, and subordinate to operational content. On mobile, persistent navigation and context-specific actions may use separate floating glass docks only when they are physically separated, remain reachable, preserve safe-area spacing, and never cover page content. This direction does not authorize decorative gradients, discrete gradient orbs, decorative glass, glass-on-glass nesting, proprietary Apple assets, or reduced information clarity.
-
-Glass must be implemented through repository-owned shared components and semantic tokens. Feature modules must not hard-code blur, tint, border, shadow, z-index, motion timing, or direct third-party glass effects. Every glass surface needs a readable solid fallback for browsers, weak devices, reduced transparency, and high-density data screens.
-
-Shared Liquid Glass components expose three rendering levels:
-
-- `premium`: progressive enhancement for selected high-priority controls on capable devices with advanced effects enabled.
-- `standard`: the normal repository-owned translucent material for structural surfaces and controls.
-- `reduced`: opaque or nearly opaque material with no backdrop blur for reduced transparency, weak devices, unsupported browsers, and lower-cost mobile/POS presentation.
-
-Premium rendering is never a feature-level dependency. It must degrade to `standard` and then `reduced` without changing control semantics, dimensions, focus order, accessible names, or command timing.
-
-Balanced green is the Liquid Glass brand direction. Use it for primary actions, active navigation, focus, selection, restrained glass tint, and positive KPI emphasis. Do not wash every surface green, and do not let visual treatment redefine business status meaning.
-
-## Canonical Design-System Rule
-
-The following existing files and directories are the implementation source of truth:
+## Canonical implementation sources
 
 ```text
 frontend/src/styles/tokens.css
 frontend/src/styles/themes.css
+frontend/src/styles/global.css
 frontend/src/styles/redesign.css
-frontend/src/styles/liquid-glass.css
+frontend/src/styles/solid-admin.css
+frontend/src/styles/auth.css
+frontend/src/styles/landing.css
 frontend/src/styles/motion.css
 frontend/src/providers/ThemeProvider.tsx
 frontend/src/providers/MotionProvider.tsx
-frontend/src/components/glass/GlassSurface.tsx
-frontend/src/components/glass/PremiumLiquidSurface.tsx
-frontend/src/components/motion/LiquidRipple.tsx
-frontend/src/components/motion/LiquidInteractionRoot.tsx
-frontend/src/components/navigation/LiquidNavLink.tsx
+frontend/src/components/ui/Surface.tsx
+frontend/src/components/auth/LoginBrandScene.tsx
 frontend/src/components/ui/Button.tsx
 frontend/src/components/ui/IconButton.tsx
+frontend/src/components/navigation/AppNavLink.tsx
 frontend/src/components
-docs/design/LIQUID_GLASS_ADMIN_RULES.md
+docs/design/SOLID_ADMIN_RULES.md
 docs/design/UI_IMPLEMENTATION_CHECKLIST.md
 ```
 
-These paths are the current implementation architecture. If the architecture changes later, update this list to match actual files and directories; do not create empty files just to satisfy this document.
-
-Feature modules must reuse semantic tokens and shared primitives. They must not introduce raw brand colors, arbitrary spacing, radii, shadows, z-index values, blur values, glass tints, or animation curves.
-
-Use CSS transitions for primitive control states and the `motion` package for mounted/unmounted overlays, toast layout changes, shared indicators, and structural transitions. React Router view transitions may be layered on top only as optional enhancements with non-blocking CSS, Motion, or instant fallbacks. Routine motion stays within the timing bands in this document, avoids visible bounce and page-load choreography, and respects reduced motion.
-
-The shared interaction layer owns pointer-origin ripple geometry, keyboard-origin feedback, press state, cleanup, and compatibility behavior for legacy shared control classes during migration. New feature code must consume shared button, icon-button, glass, and navigation primitives directly; it must not depend on the compatibility layer as its long-term API.
-
-Money input, evidence capture, media preview, overlays, state panels, toast behavior, buttons, fields, badges, tabs, filters, tables, and fixed actions must remain visually and behaviorally consistent across modules.
-
-Desktop navigation uses a 232px expanded sidebar and a 76px collapsed sidebar. The collapse preference is stored per browser. In collapsed mode, every navigation icon remains a direct link; it must keep its active and focus-visible states and expose an accessible label plus a desktop tooltip. Mobile navigation continues to use the drawer and bottom navigation rather than inheriting the desktop collapse state.
-
-Update this document first when a deliberate system-wide visual decision changes. Visual changes do not change backend behavior, API contracts, permissions, branch scope, or business rules.
+Feature code must not introduce raw brand colors, arbitrary spacing, radii, shadows, z-index values, or animation curves. Preserve API contracts, permissions, branch scope, validation, loading, empty, error, success, and keyboard behavior during visual changes.

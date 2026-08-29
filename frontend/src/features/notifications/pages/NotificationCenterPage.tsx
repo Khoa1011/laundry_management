@@ -1,9 +1,10 @@
-import { Bell, CheckCheck, RefreshCw, Settings2, SlidersHorizontal } from 'lucide-react'
+import { Bell, CheckCheck, RefreshCw, Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../../auth/permissionCodes.generated'
 import { Button } from '../../../components/ui/Button'
+import { CollapsibleFilterPanel } from '../../../components/ui/CollapsibleFilterPanel'
 import { IconButton } from '../../../components/ui/IconButton'
 import { useToast } from '../../../providers/ToastProvider'
 import { NotificationItem } from '../components/NotificationItem'
@@ -36,6 +37,7 @@ export function NotificationCenterPage() {
   const query = useNotifications(filters)
   const markAll = useMarkAllNotificationsRead()
   const canManagePreferences = hasPermission(PERMISSION_CODES.NOTIFICATION_PREFERENCES_MANAGE_OWN)
+  const activeFilterCount = [status !== 'ALL' ? status : '', severity, type, branchId].filter(Boolean).length
 
   const markEverythingRead = async () => {
     try {
@@ -74,9 +76,8 @@ export function NotificationCenterPage() {
 
       {settingsOpen && <div className="notification-center__settings"><NotificationPreferencesPanel /></div>}
 
-      <section className="notification-center__filters" aria-label={t('notification:filter.label')}>
-        <div className="notification-filter-heading"><SlidersHorizontal size={18} aria-hidden="true" />
-          <strong>{t('notification:filter.label')}</strong></div>
+      <CollapsibleFilterPanel className="notification-filter-collapse" fieldsClassName="notification-center__filters"
+        label={t('notification:filter.label')} activeCount={activeFilterCount}>
         <div className="segmented-control notification-status-filter">
           {(['ALL', 'UNREAD', 'READ'] as const).map((value) => <Button key={value} type="button" variant="ghost" size="sm"
             className={status === value ? 'active' : ''} onClick={() => { setStatus(value); setPage(0) }}>
@@ -100,7 +101,7 @@ export function NotificationCenterPage() {
             <option value="">{t('notification:filter.allBranches')}</option>
             {user.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </select></label>}
-      </section>
+      </CollapsibleFilterPanel>
 
       <section className="notification-center__list" aria-live="polite">
         {query.isLoading && <NotificationListSkeleton count={7} />}

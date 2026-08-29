@@ -51,7 +51,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {toasts.map((toast) => {
             const Icon = toast.tone === 'success' ? CheckCircle2 : toast.tone === 'error' ? CircleAlert : Info
             return (
-              <m.div layout key={toast.id} className={`toast toast--${toast.tone} glass-surface glass-surface--strong`} role={toast.tone === 'error' ? 'alert' : 'status'}
+              <m.div layout key={toast.id} className={`toast toast--${toast.tone} surface surface--raised`} role={toast.tone === 'error' ? 'alert' : 'status'}
                 initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 16, scale: 0.98 }} transition={{ duration: motionDuration.overlay }}>
                 <Icon size={20} aria-hidden="true" />

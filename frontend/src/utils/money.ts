@@ -20,7 +20,7 @@ export function sanitizeMoneyInput(input: string, options: SanitizeMoneyOptions 
 export function formatMoneyInput(value: string) {
   if (!value) return ''
   const [integer = '', fraction] = value.split('.')
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   return fraction === undefined ? grouped : `${grouped}.${fraction}`
 }
 
