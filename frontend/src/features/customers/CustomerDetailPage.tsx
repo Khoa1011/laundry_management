@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Building2, CalendarDays, Check, CircleUserRound, Mail, MapPin, MoreHorizontal, Pencil, Phone, Plus, Power, PowerOff, StickyNote } from 'lucide-react'
+import { Activity, ArrowLeft, Building2, CalendarDays, Check, CircleUserRound, Mail, MapPin, Pencil, Phone, Plus, Power, PowerOff, StickyNote } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ConfirmDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, NotFoundState, PermissionDeniedState, StatePanel } from '../../components/States'
+import { ActionMenu } from '../../components/ui/ActionMenu'
 import { useToast } from '../../providers/ToastProvider'
 import { AddressDialog } from './AddressDialog'
 import { useChangeAddressStatus, useChangeCustomerStatus, useCustomer, useCustomerActivities, useSetDefaultAddress } from './api'
@@ -76,7 +77,7 @@ export function CustomerDetailPage() {
 }
 
 function AddressCard({ address, canManage, onEdit, onDefault, onStatus, t }: { address: CustomerAddress; canManage: boolean; onEdit: () => void; onDefault: () => void; onStatus: () => void; t: ReturnType<typeof useTranslation>['t'] }) {
-  return <article className={`address-card${address.status === 'INACTIVE' ? ' address-card--inactive' : ''}`}><div className="address-card__header"><span className="address-icon"><MapPin size={20} /></span><div><h3>{address.receiverName}</h3><a href={`tel:${address.receiverPhone}`}>{address.receiverPhone}</a></div><div className="address-card__badges">{address.isDefault && <span className="badge badge--default"><Check size={14} />{t('addresses:default')}</span>}<span className={`badge badge--status-${address.status.toLowerCase()}`}><span className="badge__dot" />{address.status === 'ACTIVE' ? t('active') : t('inactive')}</span></div></div><p>{formatAddress(address)}</p>{address.deliveryNote && <small>{address.deliveryNote}</small>}{canManage && <details className="action-menu address-card__menu"><summary className="icon-button" aria-label={t('openMenu')}><MoreHorizontal size={19} /></summary><div className="action-menu__content"><button onClick={onEdit}><Pencil size={17} />{t('edit')}</button>{!address.isDefault && address.status === 'ACTIVE' && <button onClick={onDefault}><Check size={17} />{t('addresses:setDefault')}</button>}<button onClick={onStatus}>{address.status === 'ACTIVE' ? <PowerOff size={17} /> : <Power size={17} />}{t(address.status === 'ACTIVE' ? 'addresses:deactivate' : 'addresses:reactivate')}</button></div></details>}</article>
+  return <article className={`address-card${address.status === 'INACTIVE' ? ' address-card--inactive' : ''}`}><div className="address-card__header"><span className="address-icon"><MapPin size={20} /></span><div><h3>{address.receiverName}</h3><a href={`tel:${address.receiverPhone}`}>{address.receiverPhone}</a></div><div className="address-card__badges">{address.isDefault && <span className="badge badge--default"><Check size={14} />{t('addresses:default')}</span>}<span className={`badge badge--status-${address.status.toLowerCase()}`}><span className="badge__dot" />{address.status === 'ACTIVE' ? t('active') : t('inactive')}</span></div></div><p>{formatAddress(address)}</p>{address.deliveryNote && <small>{address.deliveryNote}</small>}{canManage && <ActionMenu className="address-card__menu" label={t('openMenu')}><button type="button" role="menuitem" data-tone="edit" onClick={onEdit}><Pencil size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>{!address.isDefault && address.status === 'ACTIVE' && <button type="button" role="menuitem" data-tone="success" onClick={onDefault}><Check size={25} aria-hidden="true" /><span className="action-menu__label">{t('addresses:setDefault')}</span></button>}<button type="button" role="menuitem" data-tone={address.status === 'ACTIVE' ? 'danger' : 'success'} onClick={onStatus}>{address.status === 'ACTIVE' ? <PowerOff size={25} aria-hidden="true" /> : <Power size={25} aria-hidden="true" />}<span className="action-menu__label">{t(address.status === 'ACTIVE' ? 'addresses:deactivate' : 'addresses:reactivate')}</span></button></ActionMenu>}</article>
 }
 
 function ActivityItem({ item, language, t }: { item: CustomerActivity; language: string; t: ReturnType<typeof useTranslation>['t'] }) {

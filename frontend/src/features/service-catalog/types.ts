@@ -79,7 +79,7 @@ export interface ItemTypePayload {
   requiresSeparateWash: boolean
   defaultColorRisk?: string
   defaultHygieneLevel?: string
-  sortOrder: number
+  sortOrder?: number
   version?: number
 }
 

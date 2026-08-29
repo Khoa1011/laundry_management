@@ -55,6 +55,7 @@ public interface PriceRuleRepository extends JpaRepository<PriceRule, Long> {
     List<PriceListRuleCount> countByPriceListIds(@Param("priceListIds") Collection<Long> priceListIds);
 
     boolean existsByServiceId(Long serviceId);
+    boolean existsByPriceListIdAndServiceIdAndItemTypeId(Long priceListId, Long serviceId, Long itemTypeId);
     long countByServiceId(Long serviceId);
 
     boolean existsByItemTypeId(Long itemTypeId);

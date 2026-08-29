@@ -35,6 +35,8 @@ public interface LaundryServiceRepository extends JpaRepository<LaundryService, 
 
     Optional<LaundryService> findByIdAndStatus(Long id, CatalogStatus status);
 
+    Optional<LaundryService> findByNameViIgnoreCase(String nameVi);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select service from LaundryService service where service.id = :id")
     Optional<LaundryService> lockById(@Param("id") Long id);

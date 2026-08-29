@@ -196,11 +196,18 @@
   --action-fan-edit-hover: var(--primary-hover);
   --action-fan-neutral: var(--slate-700);
   --action-fan-neutral-hover: var(--slate-600);
+  --action-fan-danger: var(--danger);
+  --action-fan-danger-hover: var(--danger-foreground);
+  --action-fan-success: var(--success);
+  --action-fan-success-hover: var(--success-foreground);
   --action-fan-trigger-icon: var(--primary-active);
   --action-fan-item-icon: var(--text-inverse);
   --action-fan-shadow: var(--shadow-sm);
   --action-fan-motion: 240ms;
   --action-fan-exit: 180ms;
+  --action-fan-size-compact: 36px;
+  --action-fan-step: 52px;
+  --action-fan-step-compact: 44px;
 
   --z-dropdown: 25;
   --z-sticky: 30;
@@ -221,5 +228,6 @@
   --mobile-fab-size: 54px;
   --content-width-wide: 1440px;
   --control-height: 44px;
+  --control-height-compact: 36px;
   --control-height-lg: 48px;
 }

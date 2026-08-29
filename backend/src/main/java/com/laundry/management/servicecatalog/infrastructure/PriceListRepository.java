@@ -36,6 +36,8 @@ public interface PriceListRepository extends JpaRepository<PriceList, Long> {
     @EntityGraph(attributePaths = {"branch", "updatedBy", "publishedBy"})
     Optional<PriceList> findByIdAndBranchId(Long id, Long branchId);
 
+    Optional<PriceList> findByNameIgnoreCaseAndBranchId(String name, Long branchId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select list from PriceList list join fetch list.branch where list.id = :id")
     Optional<PriceList> lockById(@Param("id") Long id);

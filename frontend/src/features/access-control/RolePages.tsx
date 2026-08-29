@@ -1,5 +1,5 @@
 import {
-  Activity, ArrowLeft, ChevronRight, CircleCheck, ClipboardClock, Copy, Ellipsis,
+  Activity, ArrowLeft, ChevronRight, CircleCheck, ClipboardClock, Copy,
   KeyRound, Layers3, Plus, Search, ShieldAlert, ShieldCheck, UserRoundCog, UsersRound,
 } from 'lucide-react'
 import {
@@ -15,6 +15,7 @@ import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { StatCard } from '../../components/ui/StatCard'
+import { ActionMenu } from '../../components/ui/ActionMenu'
 import { useToast } from '../../providers/ToastProvider'
 import {
   useAccessMutations, useRole, useRoleAudit, useRoleMatrix, useRoles, useRoleUsers,
@@ -436,15 +437,12 @@ export function RoleDetailPage() {
         actions={<>
           {hasPermission(PERMISSION_CODES.ACCESS_ROLE_UPDATE) && <Link className="button button--secondary role-edit-action" to={`/settings/access/roles/${id}/edit`}>{t('edit')}</Link>}
           {hasPermission(PERMISSION_CODES.ACCESS_ROLE_PERMISSION_ASSIGN) && <Link className="button button--primary" to={`/settings/access/roles/${id}/permissions`}><KeyRound size={18} aria-hidden="true" />{t('access:openMatrix')}</Link>}
-          <details className="action-menu role-more-menu">
-            <summary className="icon-button" aria-label={t('access:moreActions')}><Ellipsis size={21} aria-hidden="true" /></summary>
-            <div className="action-menu__content">
-              {hasPermission(PERMISSION_CODES.ACCESS_ROLE_UPDATE) && <Link className="role-menu-edit" to={`/settings/access/roles/${id}/edit`}>{t('edit')}</Link>}
-              {hasPermission(PERMISSION_CODES.ACCESS_ROLE_CLONE) && <button type="button" onClick={() => setCloneOpen(true)}><Copy size={17} aria-hidden="true" />{t('access:cloneRole')}</button>}
-              {!role.system && hasPermission(PERMISSION_CODES.ACCESS_ROLE_DEACTIVATE) && <button type="button" onClick={() => setStatusOpen(true)}><Activity size={17} aria-hidden="true" />{t(role.status === 'ACTIVE' ? 'access:deactivate' : 'access:reactivate')}</button>}
-              {canReadAudit && <button type="button" onClick={() => setTab('history')}><ClipboardClock size={17} aria-hidden="true" />{t('access:viewHistory')}</button>}
-            </div>
-          </details>
+          <ActionMenu className="role-more-menu" label={t('access:moreActions')}>
+            {hasPermission(PERMISSION_CODES.ACCESS_ROLE_UPDATE) && <Link role="menuitem" data-tone="edit" to={`/settings/access/roles/${id}/edit`}><UserRoundCog size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></Link>}
+            {hasPermission(PERMISSION_CODES.ACCESS_ROLE_CLONE) && <button type="button" role="menuitem" data-tone="neutral" onClick={() => setCloneOpen(true)}><Copy size={25} aria-hidden="true" /><span className="action-menu__label">{t('access:cloneRole')}</span></button>}
+            {!role.system && hasPermission(PERMISSION_CODES.ACCESS_ROLE_DEACTIVATE) && <button type="button" role="menuitem" data-tone={role.status === 'ACTIVE' ? 'danger' : 'success'} onClick={() => setStatusOpen(true)}><Activity size={25} aria-hidden="true" /><span className="action-menu__label">{t(role.status === 'ACTIVE' ? 'access:deactivate' : 'access:reactivate')}</span></button>}
+            {canReadAudit && <button type="button" role="menuitem" data-tone="view" onClick={() => setTab('history')}><ClipboardClock size={25} aria-hidden="true" /><span className="action-menu__label">{t('access:viewHistory')}</span></button>}
+          </ActionMenu>
         </>}
       />
       <div className="role-identity-line"><code>{role.code}</code><StatusBadge status={role.status} /><TypeBadge system={role.system} /></div>

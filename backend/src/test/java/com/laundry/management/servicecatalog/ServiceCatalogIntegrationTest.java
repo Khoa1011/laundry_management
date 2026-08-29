@@ -22,6 +22,7 @@ import com.laundry.management.servicecatalog.infrastructure.LaundryServiceReposi
 import com.laundry.management.servicecatalog.infrastructure.PriceListRepository;
 import com.laundry.management.servicecatalog.infrastructure.PriceRuleRepository;
 import com.laundry.management.servicecatalog.infrastructure.PricingAuditRepository;
+import com.laundry.management.servicecatalog.infrastructure.ServiceItemEligibilityRepository;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +54,7 @@ class ServiceCatalogIntegrationTest {
     @Autowired PriceListRepository listRepository;
     @Autowired ItemTypeRepository itemTypeRepository;
     @Autowired LaundryServiceRepository serviceRepository;
+    @Autowired ServiceItemEligibilityRepository eligibilityRepository;
 
     private Branch branchA;
     private String managerAToken;
@@ -64,6 +66,7 @@ class ServiceCatalogIntegrationTest {
         auditRepository.deleteAll();
         ruleRepository.deleteAll();
         listRepository.deleteAll();
+        eligibilityRepository.deleteAll();
         itemTypeRepository.deleteAll();
         serviceRepository.deleteAll();
 
@@ -160,6 +163,38 @@ class ServiceCatalogIntegrationTest {
             .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
     }
 
+    @Test
+    void appendsNewItemTypesWithinTheirSiblingGroupAndPreservesOrderOnEdit() throws Exception {
+        JsonNode firstRoot = createItemType("Nhóm đầu", null, 999);
+        JsonNode secondRoot = createItemType("Nhóm sau", null, 0);
+        JsonNode firstChild = createItemType("Loại con đầu", firstRoot.path("id").asLong(), 500);
+        JsonNode secondChild = createItemType("Loại con sau", firstRoot.path("id").asLong(), 1);
+
+        org.assertj.core.api.Assertions.assertThat(firstRoot.path("sortOrder").asInt()).isEqualTo(10);
+        org.assertj.core.api.Assertions.assertThat(secondRoot.path("sortOrder").asInt()).isEqualTo(20);
+        org.assertj.core.api.Assertions.assertThat(firstChild.path("sortOrder").asInt()).isEqualTo(10);
+        org.assertj.core.api.Assertions.assertThat(secondChild.path("sortOrder").asInt()).isEqualTo(20);
+
+        ObjectNode update = itemTypeRequest("Loại con đã sửa", firstRoot.path("id").asLong(), 999);
+        update.put("version", firstChild.path("version").asLong());
+        mockMvc.perform(put("/api/item-types/{id}", firstChild.path("id").asLong())
+                .header("Authorization", bearer(managerAToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(update.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.sortOrder").value(10));
+
+        ObjectNode move = itemTypeRequest("Loại con đã chuyển", secondRoot.path("id").asLong(), 0);
+        move.put("version", secondChild.path("version").asLong());
+        mockMvc.perform(put("/api/item-types/{id}", secondChild.path("id").asLong())
+                .header("Authorization", bearer(managerAToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(move.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.parentId").value(secondRoot.path("id").asLong()))
+            .andExpect(jsonPath("$.sortOrder").value(10));
+    }
+
     private JsonNode createService() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/services")
                 .header("Authorization", bearer(managerAToken))
@@ -168,6 +203,25 @@ class ServiceCatalogIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
         return body(result);
+    }
+
+    private JsonNode createItemType(String name, Long parentId, int requestedSortOrder) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/item-types")
+                .header("Authorization", bearer(managerAToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(itemTypeRequest(name, parentId, requestedSortOrder).toString()))
+            .andExpect(status().isCreated())
+            .andReturn();
+        return body(result);
+    }
+
+    private ObjectNode itemTypeRequest(String name, Long parentId, int requestedSortOrder) {
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("nameVi", name);
+        if (parentId != null) request.put("parentId", parentId);
+        request.put("requiresSeparateWash", false);
+        request.put("sortOrder", requestedSortOrder);
+        return request;
     }
 
     private void assignItemType(long serviceId) throws Exception {

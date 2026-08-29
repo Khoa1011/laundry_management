@@ -254,6 +254,17 @@ function flattenItems(items: ItemType[], depth = 0): Array<{ item: ItemType; dep
   return items.flatMap((item) => [{ item, depth }, ...flattenItems(item.children, depth + 1)])
 }
 
+function flattenVisibleItems(
+  items: ItemType[],
+  expandedIds: ReadonlySet<number>,
+  depth = 0,
+): Array<{ item: ItemType; depth: number }> {
+  return items.flatMap((item) => [
+    { item, depth },
+    ...(expandedIds.has(item.id) ? flattenVisibleItems(item.children, expandedIds, depth + 1) : []),
+  ])
+}
+
 export function ItemTypeCatalogPage() {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
@@ -262,8 +273,21 @@ export function ItemTypeCatalogPage() {
   const [selected, setSelected] = useState<ItemType | undefined>()
   const [editor, setEditor] = useState<{ item?: ItemType; parentId?: number } | null>(null)
   const [statusTarget, setStatusTarget] = useState<{ item: ItemType; next: CatalogStatus } | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
   const query = useQuery({ queryKey: ['catalog-item-types'], queryFn: catalogApi.itemTypes })
-  const flattened = useMemo(() => flattenItems(query.data ?? []), [query.data])
+  const allItems = useMemo(() => flattenItems(query.data ?? []), [query.data])
+  const visibleItems = useMemo(
+    () => flattenVisibleItems(query.data ?? [], expandedIds),
+    [expandedIds, query.data],
+  )
+  const toggleGroup = (itemId: number) => {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+  }
   const statusMutation = useMutation({
     mutationFn: ({ item, next }: { item: ItemType; next: CatalogStatus }) =>
       catalogApi.itemTypeStatus(item.id, next, item.version),
@@ -283,12 +307,23 @@ export function ItemTypeCatalogPage() {
     <CatalogTabs />
     {query.isLoading ? <LoadingState rows={5} /> : query.isError
       ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void query.refetch()} />
-      : flattened.length === 0 ? <StatePanel icon={<Boxes />} title={t('catalog:noItemsTitle')} body={t('catalog:noItemsBody')} />
+      : allItems.length === 0 ? <StatePanel icon={<Boxes />} title={t('catalog:noItemsTitle')} body={t('catalog:noItemsBody')} />
         : <div className="item-type-layout">
-          <section className="item-tree" aria-label={t('catalog:itemTypes')}>{flattened.map(({ item, depth }) =>
-            <button key={item.id} type="button" className={selected?.id === item.id ? 'is-selected' : ''} style={{ '--tree-depth': depth } as React.CSSProperties} onClick={() => setSelected(item)}>
-              <span><Boxes size={17} /><strong>{item.nameVi}</strong></span><span>{item.effectiveUnitType ? t(`catalog:units.${item.effectiveUnitType}`) : '—'}<ChevronRight size={16} /></span>
-            </button>)}</section>
+          <section className="item-tree" role="tree" aria-label={t('catalog:itemTypes')}>{visibleItems.map(({ item, depth }) => {
+            const hasChildren = item.children.length > 0
+            const expanded = expandedIds.has(item.id)
+            return <div key={item.id} role="treeitem" aria-level={depth + 1} aria-expanded={hasChildren ? expanded : undefined}
+              aria-selected={selected?.id === item.id} className={selected?.id === item.id ? 'item-tree__row is-selected' : 'item-tree__row'}
+              style={{ '--tree-depth': depth } as React.CSSProperties}>
+              {hasChildren ? <button type="button" className="item-tree__toggle" aria-label={t(expanded ? 'catalog:collapseItemGroup' : 'catalog:expandItemGroup', { name: item.nameVi })}
+                aria-expanded={expanded} onClick={() => toggleGroup(item.id)}><ChevronRight size={17} aria-hidden="true" /></button>
+                : <span className="item-tree__spacer" aria-hidden="true" />}
+              <button type="button" className="item-tree__select" onClick={() => setSelected(item)}>
+                <span className="item-tree__identity"><Boxes size={17} aria-hidden="true" /><strong>{item.nameVi}</strong></span>
+                <span className="item-tree__meta">{item.effectiveUnitType ? t(`catalog:units.${item.effectiveUnitType}`) : '—'}</span>
+              </button>
+            </div>
+          })}</section>
           <section className="item-detail">
             {selected ? <>
               <div className="item-detail__title"><div><h2>{selected.nameVi}</h2><p>{selected.code}</p></div>
@@ -298,10 +333,10 @@ export function ItemTypeCatalogPage() {
                 <div><dt>{t('catalog:services')}</dt><dd>{selected.applicableServiceCount}</dd></div>
                 <div><dt>{t('catalog:ruleCount', { count: selected.relatedPriceRuleCount })}</dt><dd>{selected.relatedPriceRuleCount}</dd></div></dl>
               <div className="item-detail__actions">
-                {hasPermission(PERMISSION_CODES.ITEM_TYPE_UPDATE) && selected.status !== 'ARCHIVED' && <Button variant="secondary" onClick={() => setEditor({ item: selected })}><Edit3 size={17} />{t('edit')}</Button>}
+                {hasPermission(PERMISSION_CODES.ITEM_TYPE_UPDATE) && selected.status !== 'ARCHIVED' && <Button variant="primary" onClick={() => setEditor({ item: selected })}><Edit3 size={17} />{t('edit')}</Button>}
                 {hasPermission(PERMISSION_CODES.ITEM_TYPE_CREATE) && selected.status !== 'ARCHIVED' && <Button variant="create" onClick={() => setEditor({ parentId: selected.id })}><PackagePlus size={17} aria-hidden="true" />{t('catalog:addChild')}</Button>}
                 {hasPermission(PERMISSION_CODES.ITEM_TYPE_ARCHIVE) && selected.status !== 'ARCHIVED' && <>
-                  <Button variant="outline" onClick={() => setStatusTarget({
+                  <Button variant={selected.status === 'ACTIVE' ? 'danger' : 'success'} onClick={() => setStatusTarget({
                     item: selected, next: selected.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
                   })}>{selected.status === 'ACTIVE' ? t('catalog:deactivate') : t('catalog:activate')}</Button>
                   <Button variant="danger" onClick={() => setStatusTarget({ item: selected, next: 'ARCHIVED' })}>
@@ -313,7 +348,7 @@ export function ItemTypeCatalogPage() {
           </section>
         </div>}
     <ItemTypeEditor key={editor?.item?.id ?? editor?.parentId ?? 'closed'} open={editor !== null}
-      item={editor?.item} parentId={editor?.parentId} items={flattened.map((entry) => entry.item)}
+      item={editor?.item} parentId={editor?.parentId} items={allItems.map((entry) => entry.item)}
       onClose={() => setEditor(null)} onSaved={() => { setEditor(null); setSelected(undefined); void queryClient.invalidateQueries({ queryKey: ['catalog-item-types'] }) }} />
     <ConfirmDialog open={statusTarget !== null} onClose={() => setStatusTarget(null)}
       onConfirm={() => statusTarget && statusMutation.mutate(statusTarget)} pending={statusMutation.isPending}
@@ -334,8 +369,8 @@ function ItemTypeEditor({ open, item, parentId, items, onClose, onSaved }: {
     parentId: item.parentId, nameVi: item.nameVi, nameEn: item.nameEn, descriptionVi: item.descriptionVi,
     descriptionEn: item.descriptionEn, defaultUnitType: item.defaultUnitType,
     requiresSeparateWash: item.requiresSeparateWash, defaultColorRisk: item.defaultColorRisk,
-    defaultHygieneLevel: item.defaultHygieneLevel, sortOrder: item.sortOrder, version: item.version,
-  } : { parentId, nameVi: '', requiresSeparateWash: false, sortOrder: 0 })
+    defaultHygieneLevel: item.defaultHygieneLevel, version: item.version,
+  } : { parentId, nameVi: '', requiresSeparateWash: false })
   const mutation = useMutation({
     mutationFn: () => item ? catalogApi.updateItemType(item.id, form) : catalogApi.createItemType(form),
     onSuccess: onSaved,
@@ -356,7 +391,6 @@ function ItemTypeEditor({ open, item, parentId, items, onClose, onSaved }: {
         </Field>
         <Field label={t('catalog:parent')}><select value={form.parentId ?? ''} onChange={(e) => set('parentId', e.target.value ? Number(e.target.value) : undefined)}>
           <option value="">{t('catalog:rootItem')}</option>{items.filter((candidate) => candidate.id !== item?.id && candidate.status !== 'ARCHIVED').map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.nameVi}</option>)}</select></Field>
-        <Field label={t('catalog:sortOrder')}><input inputMode="numeric" value={form.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value))} /></Field>
         <Field label={t('catalog:description')}><textarea rows={3} value={form.descriptionVi ?? ''} onChange={(e) => set('descriptionVi', e.target.value)} /></Field></div>
       </section>
       <section className="catalog-drawer-section"><DrawerSectionHeading icon={<Settings2 size={19} />} title={t('catalog:itemDefaults')} body={t('catalog:itemDefaultsHint')} />
@@ -372,7 +406,9 @@ export function PriceListPage() {
   const { t } = useTranslation()
   const { branchId, hasPermission } = useAuth()
   const navigate = useNavigate()
+  const canReadPrices = hasPermission(PERMISSION_CODES.PRICE_RULE_READ)
   const [search, setSearch] = useState('')
+  const [workspaceView, setWorkspaceView] = useState<'prices' | 'lists'>(() => canReadPrices ? 'prices' : 'lists')
   const [editorTarget, setEditorTarget] = useState<PriceList | 'new' | null>(null)
   const [duplicateTarget, setDuplicateTarget] = useState<PriceList | null>(null)
   const [mainRuleEditorOpen, setMainRuleEditorOpen] = useState(false)
@@ -389,7 +425,7 @@ export function PriceListPage() {
   const primaryDetail = useQuery({
     queryKey: ['price-list', primaryList?.id],
     queryFn: () => catalogApi.priceList(primaryList!.id),
-    enabled: Boolean(primaryList) && hasPermission(PERMISSION_CODES.PRICE_RULE_READ),
+    enabled: Boolean(primaryList) && canReadPrices,
   })
   const primaryRuleGroups = (primaryDetail.data?.rules ?? []).reduce<Record<string, PriceRule[]>>((groups, rule) => {
     groups[rule.service.nameVi] = [...(groups[rule.service.nameVi] ?? []), rule]
@@ -407,42 +443,67 @@ export function PriceListPage() {
       <StatCard tone="success" icon={<Calculator />} label={t('catalog:configuredPrices', { count: summary.data.coveredCombinationCount })} value={summary.data.coveredCombinationCount} />
       <StatCard tone={summary.data.configurationIssueCount ? 'warning' : 'neutral'} icon={<CircleAlert />} label={t('catalog:missingPrices', { count: summary.data.configurationIssueCount })} value={summary.data.configurationIssueCount} />
     </section>}
-    {primaryList && <Surface variant="base" className="current-price-list"><div><span>{t('catalog:selectedPriceList')}</span><h2>{primaryList.name}</h2><p>{primaryList.branch.name} · {format.date(primaryList.effectiveFrom)} → {format.date(primaryList.effectiveTo)}</p></div>
-      <div><span className={`status-badge status-badge--${statusTone(primaryList.status)}`}>{t(`catalog:statuses.${primaryList.status}`)}</span>
-        {primaryList.status === 'DRAFT' && hasPermission(PERMISSION_CODES.PRICE_RULE_READ) && hasPermission(PERMISSION_CODES.PRICE_RULE_CREATE)
-          && hasPermission(PERMISSION_CODES.SERVICE_READ) && hasPermission(PERMISSION_CODES.ITEM_TYPE_READ)
-          ? <Button variant="create" onClick={() => setMainRuleEditorOpen(true)}><Plus size={17} />{t('catalog:addRule')}</Button>
-          : <ButtonLink to={`/catalog/price-lists/${primaryList.id}`} variant="primary">{t('catalog:view')}<ChevronRight size={17} /></ButtonLink>}</div></Surface>}
-    {primaryList && hasPermission(PERMISSION_CODES.PRICE_RULE_READ) && <section className="catalog-selling-prices"><div className="catalog-section-heading"><div><h2>{t('catalog:currentSellingPrices')}</h2><p>{primaryList.name}</p></div><ButtonLink to={`/catalog/price-lists/${primaryList.id}`} variant="secondary">{t('catalog:managePriceLists')}</ButtonLink></div>
-      {primaryDetail.isLoading ? <LoadingState rows={3} /> : Object.keys(primaryRuleGroups).length === 0
-        ? <StatePanel compact icon={<Layers3 />} title={t('catalog:noRulesTitle')} body={t('catalog:noRulesBody')} />
-        : <div className="rule-service-groups">{Object.entries(primaryRuleGroups).map(([serviceName, serviceRules]) => <section className="rule-service-group" key={serviceName}><header><div><h3>{serviceName}</h3><p>{t('catalog:ruleCount', { count: serviceRules.length })}</p></div></header><div className="rule-list">{serviceRules.map((rule) => <article className="rule-card" key={rule.id}><div className="rule-card__title"><div><strong>{rule.itemType?.nameVi ?? t('catalog:anyItemType')}</strong></div><span className={`status-badge status-badge--${statusTone(rule.status)}`}>{t(`catalog:methods.${rule.pricingMethod}`)}</span></div><PriceRuleSummary rule={rule} formatMoney={format.money} t={t} /></article>)}</div></section>)}</div>}
-    </section>}
-    <div className="catalog-section-heading"><div><h2>{t('catalog:managePriceLists')}</h2><p>{t('catalog:priceListsSubtitle')}</p></div></div>
-    <Surface variant="subtle" className="catalog-toolbar"><label className="catalog-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('catalog:searchPriceLists')} /></label></Surface>
-    {query.isLoading ? <LoadingState rows={4} /> : query.isError
-      ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void query.refetch()} />
-      : lists.length === 0 ? <StatePanel icon={<Layers3 />} title={t('catalog:noPricesTitle')} body={t('catalog:noPricesBody')} />
-        : <>
-          <div className="catalog-mobile-list price-list-grid">{lists.map((list) => <article className="price-list-card" key={list.id}>
-            <div className="price-list-card__top"><div><small>{list.code}</small><h2>{list.name}</h2></div><div className="catalog-record-card__commands"><span className={`status-badge status-badge--${statusTone(list.status)}`}>{t(`catalog:statuses.${list.status}`)}</span>
-              <PriceListActionMenu priceList={list} canEdit={hasPermission(PERMISSION_CODES.PRICE_LIST_UPDATE_DRAFT)} canDuplicate={hasPermission(PERMISSION_CODES.PRICE_LIST_DUPLICATE)}
-                onEdit={() => setEditorTarget(list)} onDuplicate={() => setDuplicateTarget(list)} t={t} /></div></div>
-            <dl><div><dt>{t('catalog:branch')}</dt><dd>{list.branch.name}</dd></div><div><dt>{t('catalog:effectiveFrom')}</dt><dd>{format.date(list.effectiveFrom)}</dd></div><div><dt>{t('catalog:ruleCount', { count: list.ruleCount })}</dt><dd>{list.ruleCount}</dd></div></dl>
-          </article>)}</div>
-          <div className="catalog-table-wrap"><table className="catalog-table"><thead><tr>
-            <th>{t('catalog:priceListName')}</th><th>{t('catalog:branch')}</th><th>{t('status')}</th>
-            <th>{t('catalog:effectiveFrom')}</th><th>{t('catalog:effectiveTo')}</th>
-            <th>{t('catalog:ruleCount', { count: 0 })}</th><th>{t('catalog:updated')}</th><th>{t('actions')}</th>
-          </tr></thead><tbody>{lists.map((list) => <tr key={list.id}>
-            <td><strong>{list.name}</strong><small>{list.code}</small></td><td>{list.branch.name}</td>
-            <td><span className={`status-badge status-badge--${statusTone(list.status)}`}>{t(`catalog:statuses.${list.status}`)}</span></td>
-            <td>{format.date(list.effectiveFrom)}</td><td>{format.date(list.effectiveTo)}</td>
-            <td>{list.ruleCount}</td><td>{format.date(list.updatedAt)}</td>
-            <td><PriceListActionMenu priceList={list} canEdit={hasPermission(PERMISSION_CODES.PRICE_LIST_UPDATE_DRAFT)} canDuplicate={hasPermission(PERMISSION_CODES.PRICE_LIST_DUPLICATE)}
-              onEdit={() => setEditorTarget(list)} onDuplicate={() => setDuplicateTarget(list)} t={t} /></td>
-          </tr>)}</tbody></table></div>
+    <section className="price-list-dashboard">
+      <div className="catalog-segmented price-list-view-switcher" role="tablist" aria-label={t('catalog:priceLists')}>
+        {canReadPrices && <button type="button" role="tab" id="price-view-tab" aria-selected={workspaceView === 'prices'} aria-controls="price-view-panel"
+          onClick={() => setWorkspaceView('prices')}><Calculator size={17} aria-hidden="true" /><span>{t('catalog:priceView')}<small>{primaryList?.ruleCount ?? 0}</small></span></button>}
+        <button type="button" role="tab" id="list-view-tab" aria-selected={workspaceView === 'lists'} aria-controls="list-view-panel"
+          onClick={() => setWorkspaceView('lists')}><Layers3 size={17} aria-hidden="true" /><span>{t('catalog:listView')}<small>{lists.length}</small></span></button>
+      </div>
+
+      {workspaceView === 'prices' && canReadPrices ? <div id="price-view-panel" role="tabpanel" aria-labelledby="price-view-tab" className="price-list-view-panel">
+        {!primaryList ? <StatePanel icon={<Layers3 />} title={t('catalog:noPricesTitle')} body={t('catalog:noPricesBody')} /> : <>
+          <Surface variant="selected" className="current-price-list price-list-focus">
+            <span className="price-list-focus__icon" aria-hidden="true"><Layers3 size={22} /></span>
+            <div className="price-list-focus__identity"><span>{t('catalog:selectedPriceList')}</span><h2>{primaryList.name}</h2>
+              <p><strong>{primaryList.branch.name}</strong><span>{format.date(primaryList.effectiveFrom)} → {format.date(primaryList.effectiveTo)}</span></p></div>
+            <div className="price-list-focus__actions"><span className={`status-badge status-badge--${statusTone(primaryList.status)}`}>{t(`catalog:statuses.${primaryList.status}`)}</span>
+              {primaryList.status === 'DRAFT' && hasPermission(PERMISSION_CODES.PRICE_RULE_CREATE)
+                && hasPermission(PERMISSION_CODES.SERVICE_READ) && hasPermission(PERMISSION_CODES.ITEM_TYPE_READ)
+                ? <Button variant="create" onClick={() => setMainRuleEditorOpen(true)}><Plus size={17} />{t('catalog:addRule')}</Button>
+                : <ButtonLink to={`/catalog/price-lists/${primaryList.id}`} variant="primary">{t('catalog:view')}<ChevronRight size={17} /></ButtonLink>}</div>
+          </Surface>
+          <div className="catalog-section-heading price-board-heading"><div><h2>{t('catalog:pricesByService')}</h2><p>{t('catalog:pricesByServiceHint')}</p></div>
+            <ButtonLink to={`/catalog/price-lists/${primaryList.id}`} variant="secondary">{t('catalog:openPriceList')}<ChevronRight size={17} /></ButtonLink></div>
+          {primaryDetail.isLoading ? <LoadingState rows={3} /> : primaryDetail.isError
+            ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void primaryDetail.refetch()} />
+            : Object.keys(primaryRuleGroups).length === 0
+              ? <StatePanel compact icon={<Layers3 />} title={t('catalog:noRulesTitle')} body={t('catalog:noRulesBody')} />
+              : <div className="rule-service-groups price-board">{Object.entries(primaryRuleGroups).map(([serviceName, serviceRules]) => <section className="rule-service-group" key={serviceName}>
+                <header><div><h3>{serviceName}</h3><p>{t('catalog:sellingPriceCount', { count: serviceRules.length })}</p></div><span className="service-price-count">{serviceRules.length}</span></header>
+                <div className="rule-list">{serviceRules.map((rule) => <article className="rule-card" key={rule.id}><div className="rule-card__title"><div><strong>{rule.itemType?.nameVi ?? t('catalog:anyItemType')}</strong></div>
+                  <span className="pricing-method-badge"><Calculator size={13} aria-hidden="true" />{t(`catalog:methods.${rule.pricingMethod}`)}</span></div><PriceRuleSummary rule={rule} formatMoney={format.money} t={t} /></article>)}</div>
+              </section>)}</div>}
         </>}
+      </div> : <div id="list-view-panel" role="tabpanel" aria-labelledby="list-view-tab" className="price-list-view-panel">
+        <div className="catalog-section-heading price-list-management-heading"><div><h2>{t('catalog:managePriceLists')}</h2><p>{t('catalog:managePriceListsHint')}</p></div></div>
+        <Surface variant="subtle" className="catalog-toolbar"><label className="catalog-search"><Search size={18} /><span className="sr-only">{t('search')}</span>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('catalog:searchPriceLists')} /></label></Surface>
+        {query.isLoading ? <LoadingState rows={4} /> : query.isError
+          ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void query.refetch()} />
+          : lists.length === 0 ? <StatePanel icon={<Layers3 />} title={t('catalog:noPricesTitle')} body={t('catalog:noPricesBody')} />
+            : <>
+              <div className="catalog-mobile-list price-list-grid">{lists.map((list) => <article className="price-list-card" key={list.id}>
+                <div className="price-list-card__top"><div><small>{list.code}</small><h2>{list.name}</h2></div><div className="catalog-record-card__commands"><span className={`status-badge status-badge--${statusTone(list.status)}`}>{t(`catalog:statuses.${list.status}`)}</span>
+                  <PriceListActionMenu priceList={list} canEdit={hasPermission(PERMISSION_CODES.PRICE_LIST_UPDATE_DRAFT)} canDuplicate={hasPermission(PERMISSION_CODES.PRICE_LIST_DUPLICATE)}
+                    onEdit={() => setEditorTarget(list)} onDuplicate={() => setDuplicateTarget(list)} t={t} /></div></div>
+                {list.description && <p className="price-list-card__description">{list.description}</p>}
+                <dl><div><dt>{t('catalog:branch')}</dt><dd>{list.branch.name}</dd></div><div><dt>{t('catalog:effectivePeriod')}</dt><dd>{format.date(list.effectiveFrom)} → {format.date(list.effectiveTo)}</dd></div><div><dt>{t('catalog:sellingPriceCount', { count: list.ruleCount })}</dt><dd>{list.ruleCount}</dd></div></dl>
+              </article>)}</div>
+              <div className="catalog-table-wrap price-list-table"><table className="catalog-table"><thead><tr>
+                <th>{t('catalog:priceListName')}</th><th>{t('status')}</th><th>{t('catalog:effectivePeriod')}</th>
+                <th>{t('catalog:sellingPrices')}</th><th>{t('catalog:updated')}</th><th>{t('actions')}</th>
+              </tr></thead><tbody>{lists.map((list) => <tr key={list.id}>
+                <td><strong>{list.name}</strong><small>{list.code} · {list.branch.name}</small></td>
+                <td><span className={`status-badge status-badge--${statusTone(list.status)}`}>{t(`catalog:statuses.${list.status}`)}</span></td>
+                <td><span className="price-list-period"><strong>{format.date(list.effectiveFrom)}</strong><small>{t('catalog:until')} {format.date(list.effectiveTo)}</small></span></td>
+                <td><strong className="price-rule-count">{list.ruleCount}</strong></td><td>{format.date(list.updatedAt)}</td>
+                <td><PriceListActionMenu priceList={list} canEdit={hasPermission(PERMISSION_CODES.PRICE_LIST_UPDATE_DRAFT)} canDuplicate={hasPermission(PERMISSION_CODES.PRICE_LIST_DUPLICATE)}
+                  onEdit={() => setEditorTarget(list)} onDuplicate={() => setDuplicateTarget(list)} t={t} /></td>
+              </tr>)}</tbody></table></div>
+            </>}
+      </div>}
+    </section>
     {branchId && <PriceListEditor key={editorTarget === 'new' ? 'new' : editorTarget?.id ?? 'closed'} open={editorTarget !== null} branchId={branchId}
       priceList={editorTarget === 'new' ? undefined : editorTarget ?? undefined} onClose={() => setEditorTarget(null)} onSaved={(id) => {
       setEditorTarget(null); void queryClient.invalidateQueries({ queryKey: ['price-lists'] }); navigate(`/catalog/price-lists/${id}`)
@@ -465,8 +526,8 @@ function ServiceActionMenu({ service, canUpdate, canChangeStatus, pending, onEdi
 }) {
   if ((!canUpdate && !canChangeStatus) || service.status === 'ARCHIVED') return null
   return <FloatingActionMenu label={t('openMenu')}>
-    {canUpdate && <button type="button" role="menuitem" onClick={onEdit}><Edit3 size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>}
-    {canChangeStatus && <button type="button" role="menuitem" disabled={pending} onClick={onStatus}><Activity size={25} aria-hidden="true" /><span className="action-menu__label">{service.status === 'ACTIVE' ? t('catalog:deactivate') : t('catalog:activate')}</span></button>}
+    {canUpdate && <button type="button" role="menuitem" data-tone="edit" onClick={onEdit}><Edit3 size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>}
+    {canChangeStatus && <button type="button" role="menuitem" data-tone={service.status === 'ACTIVE' ? 'danger' : 'success'} disabled={pending} onClick={onStatus}><Activity size={25} aria-hidden="true" /><span className="action-menu__label">{service.status === 'ACTIVE' ? t('catalog:deactivate') : t('catalog:activate')}</span></button>}
   </FloatingActionMenu>
 }
 
@@ -475,9 +536,9 @@ function PriceListActionMenu({ priceList, canEdit, canDuplicate, onEdit, onDupli
   t: ReturnType<typeof useTranslation>['t']
 }) {
   return <FloatingActionMenu label={t('openMenu')}>
-    <Link role="menuitem" to={`/catalog/price-lists/${priceList.id}`}><Eye size={26} aria-hidden="true" /><span className="action-menu__label">{t('catalog:view')}</span></Link>
-    {canEdit && priceList.status === 'DRAFT' && <button type="button" role="menuitem" onClick={onEdit}><Edit3 size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>}
-    {canDuplicate && <button type="button" role="menuitem" onClick={onDuplicate}><Copy size={25} aria-hidden="true" /><span className="action-menu__label">{t('catalog:duplicate')}</span></button>}
+    <Link role="menuitem" data-tone="view" to={`/catalog/price-lists/${priceList.id}`}><Eye size={26} aria-hidden="true" /><span className="action-menu__label">{t('catalog:view')}</span></Link>
+    {canEdit && priceList.status === 'DRAFT' && <button type="button" role="menuitem" data-tone="edit" onClick={onEdit}><Edit3 size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>}
+    {canDuplicate && <button type="button" role="menuitem" data-tone="neutral" onClick={onDuplicate}><Copy size={25} aria-hidden="true" /><span className="action-menu__label">{t('catalog:duplicate')}</span></button>}
   </FloatingActionMenu>
 }
 
@@ -666,8 +727,8 @@ export function PriceListDetailPage() {
           <div className="catalog-record-card__commands"><span className={`status-badge status-badge--${statusTone(rule.status)}`}>{t(`catalog:methods.${rule.pricingMethod}`)}</span>
             {priceList.status === 'DRAFT' && ((canConfigureRules && hasPermission(PERMISSION_CODES.PRICE_RULE_UPDATE_DRAFT)) || hasPermission(PERMISSION_CODES.PRICE_RULE_DELETE_DRAFT)) &&
               <FloatingActionMenu label={t('openMenu')}>
-                {canConfigureRules && hasPermission(PERMISSION_CODES.PRICE_RULE_UPDATE_DRAFT) && <button type="button" role="menuitem" onClick={() => setRuleEditor(rule)}><Edit3 size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>}
-                {hasPermission(PERMISSION_CODES.PRICE_RULE_DELETE_DRAFT) && <button type="button" role="menuitem" onClick={() => setDeleteRuleTarget(rule)}><Trash2 size={25} aria-hidden="true" /><span className="action-menu__label">{t('delete')}</span></button>}
+                {canConfigureRules && hasPermission(PERMISSION_CODES.PRICE_RULE_UPDATE_DRAFT) && <button type="button" role="menuitem" data-tone="edit" onClick={() => setRuleEditor(rule)}><Edit3 size={25} aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></button>}
+                {hasPermission(PERMISSION_CODES.PRICE_RULE_DELETE_DRAFT) && <button type="button" role="menuitem" data-tone="danger" onClick={() => setDeleteRuleTarget(rule)}><Trash2 size={25} aria-hidden="true" /><span className="action-menu__label">{t('delete')}</span></button>}
               </FloatingActionMenu>}</div></div>
         <PriceRuleSummary rule={rule} formatMoney={format.money} t={t} />
       </article>)}</div></section>)}</div>)}

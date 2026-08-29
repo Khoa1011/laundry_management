@@ -94,8 +94,8 @@ public class CatalogMapper {
             rule.getTiers().stream().map(tier -> new CatalogDtos.TierResponse(
                 tier.getId(), tier.getFromQuantity(), tier.getToQuantity(), tier.getUnitPrice(), tier.getSortOrder()
             )).toList(),
-            rule.getPackagePrices().stream().map(item -> new CatalogDtos.PackagePriceResponse(
-                item.getId(), item.getQuantity(), item.getTotalPrice(), item.getSortOrder()
+            rule.getPackagePrices().stream().map(packagePrice -> new CatalogDtos.PackagePriceResponse(
+                packagePrice.getId(), packagePrice.getQuantity(), packagePrice.getTotalPrice(), packagePrice.getSortOrder()
             )).toList()
         );
     }

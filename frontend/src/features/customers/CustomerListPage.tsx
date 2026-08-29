@@ -105,7 +105,7 @@ function CustomerCard({ customer, canUpdate, language, t }: { customer: Customer
 function StatusBadge({ status, t }: { status: CustomerStatus; t: ReturnType<typeof useTranslation>['t'] }) { return <span className={`badge badge--status-${status.toLowerCase()}`}><span className="badge__dot" />{statusLabel(status, t)}</span> }
 
 function ActionMenu({ customer, canUpdate, t }: { customer: CustomerListItem; canUpdate: boolean; t: ReturnType<typeof useTranslation>['t'] }) {
-  return <FloatingActionMenu label={t('openMenu')}><Link role="menuitem" to={`/customers/${customer.id}`}><UserCircleIcon size={27} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('customers:view')}</span></Link>{canUpdate && <Link role="menuitem" to={`/customers/${customer.id}/edit`}><PencilSimpleIcon size={26} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></Link>}</FloatingActionMenu>
+  return <FloatingActionMenu label={t('openMenu')}><Link role="menuitem" data-tone="view" to={`/customers/${customer.id}`}><UserCircleIcon size={27} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('customers:view')}</span></Link>{canUpdate && <Link role="menuitem" data-tone="edit" to={`/customers/${customer.id}/edit`}><PencilSimpleIcon size={26} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('edit')}</span></Link>}</FloatingActionMenu>
 }
 
 function Pagination({ page, totalPages, onPage, t }: { page: number; totalPages: number; onPage: (page: number) => void; t: ReturnType<typeof useTranslation>['t'] }) {

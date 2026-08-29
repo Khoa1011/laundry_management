@@ -99,7 +99,7 @@ function EmployeeCard({ employee, canUpdate, t, language }: { employee: Employee
 }
 
 function ActionMenu({ employee, canUpdate, t }: { employee: EmployeeListItem; canUpdate: boolean; t: ReturnType<typeof useTranslation>['t'] }) {
-  return <FloatingActionMenu label={t('openMenu')}><Link role="menuitem" to={`/employees/${employee.id}`}><UserCircleIcon size={27} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('employee:profile')}</span></Link>{canUpdate && <Link role="menuitem" to={`/employees/${employee.id}/edit`}><PencilSimpleIcon size={26} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('employee:editProfile')}</span></Link>}</FloatingActionMenu>
+  return <FloatingActionMenu label={t('openMenu')}><Link role="menuitem" data-tone="view" to={`/employees/${employee.id}`}><UserCircleIcon size={27} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('employee:profile')}</span></Link>{canUpdate && <Link role="menuitem" data-tone="edit" to={`/employees/${employee.id}/edit`}><PencilSimpleIcon size={26} weight="fill" aria-hidden="true" /><span className="action-menu__label">{t('employee:editProfile')}</span></Link>}</FloatingActionMenu>
 }
 
 function Pagination({ page, totalPages, onPage, t }: { page: number; totalPages: number; onPage: (page: number) => void; t: ReturnType<typeof useTranslation>['t'] }) {

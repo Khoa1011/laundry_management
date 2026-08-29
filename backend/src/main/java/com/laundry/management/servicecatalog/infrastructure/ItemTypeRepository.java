@@ -16,7 +16,16 @@ public interface ItemTypeRepository extends JpaRepository<ItemType, Long> {
     @EntityGraph(attributePaths = "parent")
     List<ItemType> findAllByOrderBySortOrderAscNameViAscIdAsc();
 
+    @Query("""
+        select coalesce(max(item.sortOrder), 0)
+        from ItemType item
+        where (:parentId is null and item.parent is null) or item.parent.id = :parentId
+        """)
+    int findMaxSortOrderByParentId(@Param("parentId") Long parentId);
+
     Optional<ItemType> findByIdAndStatus(Long id, CatalogStatus status);
+
+    Optional<ItemType> findByNameViIgnoreCase(String nameVi);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select item from ItemType item where item.id = :id")

@@ -60,6 +60,21 @@ Shared frontend standards for money inputs, camera capture, and media preview ar
 
 Ports bind to `127.0.0.1` by default. Other devices cannot access them unless the Compose configuration is intentionally changed.
 
+### Demo service catalog seed
+
+Demo data is opt-in and disabled by default. For a disposable local database, enable bootstrap and the seed in `.env`:
+
+```dotenv
+APP_BOOTSTRAP_ENABLED=true
+APP_BOOTSTRAP_USERNAME=demo-owner
+APP_BOOTSTRAP_PASSWORD=replace-with-a-local-password
+APP_DEMO_SEED_ENABLED=true
+APP_DEMO_SEED_ACTOR_USERNAME=demo-owner
+APP_DEMO_SEED_BRANCH_CODE=MAIN
+```
+
+Then rebuild/restart the backend with `docker compose up -d --build backend frontend`. The seed creates six Vietnamese laundry services, 29 item types, explicit leaf eligibility, and a safe DRAFT price list named `Giá bán tiêu chuẩn`. It is idempotent, does not truncate or overwrite existing records, and refuses to run with the `prod` or `production` profile. To reset a disposable demo database, stop the stack and remove its Compose volumes explicitly; never use that reset procedure for a database containing user data.
+
 ## Routine commands
 
 Show service status:

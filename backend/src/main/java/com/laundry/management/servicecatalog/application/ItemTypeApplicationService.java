@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ItemTypeApplicationService {
 
+    private static final int SORT_ORDER_STEP = 10;
+
     private final ItemTypeRepository repository;
     private final CatalogCodeGenerator codeGenerator;
     private final CatalogAuthorizationService authorizationService;
@@ -83,11 +85,12 @@ public class ItemTypeApplicationService {
     public CatalogDtos.ItemTypeResponse create(CatalogDtos.ItemTypeRequest request) {
         ItemType parent = parent(request.parentId());
         UserAccount actor = authorizationService.actor();
+        int sortOrder = nextSortOrder(request.parentId());
         ItemType item = new ItemType(
             codeGenerator.nextItemTypeCode(), parent, text(request.nameVi()), text(request.nameEn()),
             text(request.descriptionVi()), text(request.descriptionEn()), request.defaultUnitType(),
             request.requiresSeparateWash(), text(request.defaultColorRisk()), text(request.defaultHygieneLevel()),
-            request.sortOrder(), actor
+            sortOrder, actor
         );
         repository.saveAndFlush(item);
         auditService.record(
@@ -111,13 +114,15 @@ public class ItemTypeApplicationService {
         Long previousParent = item.getParent() == null ? null : item.getParent().getId();
         Map<String, Object> oldValue = snapshot(item);
         UserAccount actor = authorizationService.actor();
+        Long nextParent = parent == null ? null : parent.getId();
+        int sortOrder = java.util.Objects.equals(previousParent, nextParent)
+            ? item.getSortOrder() : nextSortOrder(nextParent);
         item.update(
             parent, text(request.nameVi()), text(request.nameEn()), text(request.descriptionVi()),
             text(request.descriptionEn()), request.defaultUnitType(), request.requiresSeparateWash(),
-            text(request.defaultColorRisk()), text(request.defaultHygieneLevel()), request.sortOrder(), actor
+            text(request.defaultColorRisk()), text(request.defaultHygieneLevel()), sortOrder, actor
         );
         repository.flush();
-        Long nextParent = parent == null ? null : parent.getId();
         auditService.record(
             "ITEM_TYPE", item.getId(),
             java.util.Objects.equals(previousParent, nextParent)
@@ -214,6 +219,10 @@ public class ItemTypeApplicationService {
         return repository.findById(id).orElseThrow(() ->
             new ApiException(HttpStatus.NOT_FOUND, ErrorCode.ITEM_TYPE_NOT_FOUND,
                 "Item type not found", "The requested item type does not exist."));
+    }
+
+    private int nextSortOrder(Long parentId) {
+        return Math.addExact(repository.findMaxSortOrderByParentId(parentId), SORT_ORDER_STEP);
     }
 
     private void requireVersion(ItemType item, Long requested) {

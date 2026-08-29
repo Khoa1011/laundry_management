@@ -100,12 +100,6 @@
 .role-header-actions { flex-wrap: wrap; }
 .role-header-actions .action-menu { flex: 0 0 auto; }
 .role-more-menu { position: relative; }
-.role-more-menu > summary { list-style: none; }
-.role-more-menu > summary::-webkit-details-marker { display: none; }
-.role-more-menu .action-menu__content { display: grid; }
-.role-more-menu .action-menu__content a,
-.role-more-menu .action-menu__content button { min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 0; border-radius: var(--radius-sm); color: var(--text-primary); background: transparent; text-align: left; cursor: pointer; }
-.role-menu-edit { display: flex; }
 .role-identity-line { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 18px 54px; color: var(--text-secondary); }
 .role-identity-line code { max-width: 100%; overflow-wrap: anywhere; }
 .role-type-badge { color: var(--text-secondary); background: var(--surface-subtle); }

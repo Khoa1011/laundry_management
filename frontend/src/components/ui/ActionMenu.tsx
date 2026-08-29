@@ -17,7 +17,8 @@ import { IconButton } from './IconButton'
 const VIEWPORT_GUTTER = 12
 const ITEM_STEP = 52
 const EXIT_DURATION_MS = 180
-const HOVER_CLOSE_DELAY_MS = 140
+const HOVER_CLOSE_DELAY_MS = 320
+const ACTION_MENU_OPEN_EVENT = 'laundry:action-menu-open'
 
 type MenuPosition = {
   left: number
@@ -42,10 +43,12 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
   const exitTimerRef = useRef<number | null>(null)
   const hoverTimerRef = useRef<number | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const activeRef = useRef(false)
   const focusFirstRef = useRef(false)
   const hoverOpenedRef = useRef(false)
+  const lastPointerRef = useRef({ x: -1, y: -1 })
   const menuId = useId()
-  const itemCount = Math.min(Children.count(children), 3)
+  const itemCount = Children.count(children)
 
   const clearExitTimer = useCallback(() => {
     if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current)
@@ -79,7 +82,12 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
   const close = useCallback((restoreFocus = false) => {
     clearHoverTimer()
     clearExitTimer()
+    activeRef.current = false
     hoverOpenedRef.current = false
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
     setOpen(false)
     if (restoreFocus) triggerRef.current?.focus()
     exitTimerRef.current = window.setTimeout(() => {
@@ -91,7 +99,9 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
   const openMenu = useCallback((focusFirst: boolean) => {
     clearHoverTimer()
     clearExitTimer()
+    activeRef.current = true
     focusFirstRef.current = focusFirst
+    window.dispatchEvent(new CustomEvent(ACTION_MENU_OPEN_EVENT, { detail: menuId }))
     updatePosition()
     setMounted(true)
     if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current)
@@ -101,13 +111,47 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
         animationFrameRef.current = null
       })
     })
-  }, [clearExitTimer, clearHoverTimer, updatePosition])
+  }, [clearExitTimer, clearHoverTimer, menuId, updatePosition])
+
+  useEffect(() => {
+    const handleOtherMenuOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === menuId || !activeRef.current) return
+      close()
+    }
+
+    window.addEventListener(ACTION_MENU_OPEN_EVENT, handleOtherMenuOpen)
+    return () => window.removeEventListener(ACTION_MENU_OPEN_EVENT, handleOtherMenuOpen)
+  }, [close, menuId])
+
+  const pointerIsWithinInteraction = useCallback(() => {
+    const { x, y } = lastPointerRef.current
+    const trigger = triggerRef.current
+    const menu = menuRef.current
+    if (!trigger || x < 0 || y < 0) return false
+
+    const rects = [
+      trigger.getBoundingClientRect(),
+      ...Array.from(menu?.querySelectorAll<HTMLElement>(':scope > a, :scope > button') ?? [])
+        .map((element) => element.getBoundingClientRect()),
+    ].filter((rect) => rect.width > 0 && rect.height > 0)
+    if (rects.length === 0) return false
+
+    const padding = 6
+    const left = Math.min(...rects.map((rect) => rect.left)) - padding
+    const right = Math.max(...rects.map((rect) => rect.right)) + padding
+    const top = Math.min(...rects.map((rect) => rect.top)) - padding
+    const bottom = Math.max(...rects.map((rect) => rect.bottom)) + padding
+    return x >= left && x <= right && y >= top && y <= bottom
+  }, [])
 
   const scheduleHoverClose = useCallback(() => {
     if (!hoverOpenedRef.current) return
     clearHoverTimer()
-    hoverTimerRef.current = window.setTimeout(() => close(), HOVER_CLOSE_DELAY_MS)
-  }, [clearHoverTimer, close])
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null
+      if (!pointerIsWithinInteraction()) close()
+    }, HOVER_CLOSE_DELAY_MS)
+  }, [clearHoverTimer, close, pointerIsWithinInteraction])
 
   useLayoutEffect(() => {
     if (mounted) updatePosition()
@@ -127,6 +171,12 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
       if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
       close()
     }
+    const handlePointerMove = (event: PointerEvent) => {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY }
+      if (!hoverOpenedRef.current) return
+      if (pointerIsWithinInteraction()) clearHoverTimer()
+      else scheduleHoverClose()
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
@@ -134,16 +184,18 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('pointermove', handlePointerMove)
     document.addEventListener('keydown', handleKeyDown)
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('pointermove', handlePointerMove)
       document.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [close, mounted, updatePosition])
+  }, [clearHoverTimer, close, mounted, pointerIsWithinInteraction, scheduleHoverClose, updatePosition])
 
   useEffect(() => () => {
     clearExitTimer()
@@ -156,9 +208,12 @@ export function ActionMenu({ children, className = '', label }: ActionMenuProps)
     if (target instanceof Element && target.closest('[role="menuitem"], a, button')) close()
   }
 
-  const handleHoverOpen = () => {
+  const handleHoverOpen = (event: ReactMouseEvent<HTMLSpanElement>) => {
     if (!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) return
+    lastPointerRef.current = { x: event.clientX, y: event.clientY }
     hoverOpenedRef.current = true
+    clearHoverTimer()
+    if (open) return
     openMenu(false)
   }
 

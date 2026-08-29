@@ -26,6 +26,10 @@ app:
     password: ${APP_BOOTSTRAP_PASSWORD:}
     branch-code: ${APP_BOOTSTRAP_BRANCH_CODE:MAIN}
     branch-name: ${APP_BOOTSTRAP_BRANCH_NAME:Chi nhánh chính}
+  demo-seed:
+    enabled: ${APP_DEMO_SEED_ENABLED:false}
+    actor-username: ${APP_DEMO_SEED_ACTOR_USERNAME:${APP_BOOTSTRAP_USERNAME:}}
+    branch-code: ${APP_DEMO_SEED_BRANCH_CODE:${APP_BOOTSTRAP_BRANCH_CODE:MAIN}}
   employee-sensitive:
     identity-key: ${APP_EMPLOYEE_IDENTITY_KEY:}
     storage-root: ${APP_EMPLOYEE_DOCUMENT_STORAGE_ROOT:./private-data/employee-documents}

@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
-import { ServiceCatalogPage } from './CatalogPages'
+import { ItemTypeCatalogPage, ServiceCatalogPage } from './CatalogPages'
 
 const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn(),
@@ -38,6 +38,19 @@ function renderPage() {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/catalog/services']}>
         <ServiceCatalogPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+function renderItemTypePage() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={['/catalog/item-types']}>
+        <ItemTypeCatalogPage />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -127,5 +140,51 @@ describe('ServiceCatalogPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('Vui lòng nhập tên hiển thị.')
+  })
+})
+
+describe('ItemTypeCatalogPage', () => {
+  beforeEach(() => {
+    mocks.hasPermission.mockReturnValue(true)
+    mocks.itemTypes.mockReset()
+  })
+
+  it('expands and collapses parent item groups without hiding the parent row', async () => {
+    const child = {
+      id: 2, code: 'LD-000002', parentId: 1, nameVi: 'Áo sơ mi', effectiveUnitType: 'KG',
+      inheritedUnit: true, requiresSeparateWash: false, sortOrder: 10, status: 'ACTIVE',
+      createdAt: '2026-07-26T00:00:00Z', updatedAt: '2026-07-26T01:00:00Z',
+      updatedBy: { id: 1, name: 'Manager' }, version: 0, applicableServiceCount: 1,
+      relatedPriceRuleCount: 0, children: [],
+    }
+    mocks.itemTypes.mockResolvedValue([{
+      id: 1, code: 'LD-000001', nameVi: 'Quần áo', defaultUnitType: 'KG', effectiveUnitType: 'KG',
+      inheritedUnit: false, requiresSeparateWash: false, sortOrder: 10, status: 'ACTIVE',
+      createdAt: '2026-07-26T00:00:00Z', updatedAt: '2026-07-26T01:00:00Z',
+      updatedBy: { id: 1, name: 'Manager' }, version: 0, applicableServiceCount: 1,
+      relatedPriceRuleCount: 0, children: [child],
+    }])
+
+    renderItemTypePage()
+
+    const expand = await screen.findByRole('button', { name: 'Mở nhóm Quần áo' })
+    expect(screen.queryByText('Áo sơ mi')).not.toBeInTheDocument()
+    fireEvent.click(expand)
+    expect(await screen.findByText('Áo sơ mi')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn nhóm Quần áo' }))
+    expect(screen.queryByText('Áo sơ mi')).not.toBeInTheDocument()
+    expect(screen.getByText('Quần áo')).toBeInTheDocument()
+  })
+
+  it('does not ask users to enter a technical display order', async () => {
+    mocks.itemTypes.mockResolvedValue([])
+
+    renderItemTypePage()
+
+    const addButtons = await screen.findAllByRole('button', { name: 'Thêm loại đồ' })
+    fireEvent.click(addButtons[0])
+
+    expect(screen.getByRole('dialog', { name: 'Thêm loại đồ' })).toBeInTheDocument()
+    expect(screen.queryByText('Thứ tự')).not.toBeInTheDocument()
   })
 })
