@@ -26,9 +26,17 @@ This is the initial business-rule template for the laundry shop management syste
 
 ## Services and pricing
 
-- **NEEDS CONFIRMATION** - Define service types, pricing units, minimum charges, rounding, discounts, surcharges, and taxes.
-- **NEEDS CONFIRMATION** - Define when prices are captured and whether later catalog changes affect existing orders.
-- **NEEDS CONFIRMATION** - Define who may override a price and what audit information is required.
+- Services and item types are independent catalogs. A service explicitly records the active leaf item types it accepts; selecting a parent category never implicitly covers current or future descendants.
+- A price is resolved from a price list, service, eligible item type, quantity, sharing context, priority context, and effective time. The backend is authoritative for both price selection and calculation.
+- Price lists retain the lifecycle `DRAFT`, `ACTIVE`, `SCHEDULED`, `EXPIRED`, and `ARCHIVED`. Only drafts may be edited. Active lists must be copied before changing; scheduled, expired, and archived lists are read-only. Drafts may be previewed against their own rules before publication.
+- Supported unit pricing maps kilograms, items, pairs, and sets to `BY_WEIGHT`, `BY_ITEM`, `BY_PAIR`, and `BY_SET`. Fixed pricing, per-load pricing, and base-plus-excess (`HYBRID`) remain supported.
+- Exact quantity-package pricing stores a total price for an exact whole-number quantity and supports `ITEM`, `PAIR`, and `SET` only. It does not apply to kilograms. When no exact quantity exists, the system rejects the quote instead of interpolating or guessing.
+- Tiered pricing supports `VOLUME` (one tier rate applied to the entire quantity) and `PROGRESSIVE` (each tier rate applied only to its interval). Tiers must be continuous, non-overlapping, and end with an open upper bound.
+- Minimum charge is represented as a separate pricing adjustment in the calculation breakdown. Base, unit, excess, tier, quantity-package, and minimum-charge components remain visible in preview and pricing snapshots.
+- Price coverage is calculated only across explicit service-item eligibility combinations. A service-wide default rule covers all its eligible item types when the rule is otherwise quotable.
+- Services and item types are never hard deleted through this module. Archiving is final and is blocked while an active or scheduled price list references the record. An eligibility association used by an active or scheduled price rule cannot be removed.
+- Eligibility changes, price-list lifecycle changes, and pricing-rule changes are authorized independently and audited. Permission grants remain separate from branch scope and pricing business policy.
+- **NEEDS CONFIRMATION** - Define taxes, general discounts, order-level surcharges, VND rounding policy, order-time price capture, later catalog-change behavior for existing orders, and order price-override authority/audit requirements.
 
 ## Payments
 

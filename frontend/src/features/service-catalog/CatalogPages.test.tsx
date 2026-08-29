@@ -8,6 +8,7 @@ import { ServiceCatalogPage } from './CatalogPages'
 const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn(),
   services: vi.fn(),
+  itemTypes: vi.fn(),
   notify: vi.fn(),
 }))
 
@@ -25,6 +26,7 @@ vi.mock('../../providers/ToastProvider', () => ({
 vi.mock('./api', () => ({
   catalogApi: {
     services: mocks.services,
+    itemTypes: mocks.itemTypes,
   },
 }))
 
@@ -45,6 +47,8 @@ describe('ServiceCatalogPage', () => {
   beforeEach(() => {
     mocks.hasPermission.mockReset()
     mocks.services.mockReset()
+    mocks.itemTypes.mockReset()
+    mocks.itemTypes.mockResolvedValue([])
     mocks.notify.mockReset()
   })
 
@@ -87,8 +91,28 @@ describe('ServiceCatalogPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('Chưa có dịch vụ nào')).toBeInTheDocument()
+    expect(await screen.findByText('Thiết lập dịch vụ & giá bán')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Thêm dịch vụ' }).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('uses the shared row action menu for permitted service actions', async () => {
+    mocks.hasPermission.mockReturnValue(true)
+    mocks.services.mockResolvedValue({
+      items: [{
+        id: 11, code: 'DV-000001', nameVi: 'Giặt sấy tiêu chuẩn', processingType: 'WASH_DRY',
+        defaultUnitType: 'KG', sharingAllowed: true, status: 'ACTIVE', eligibleItemTypeCount: 2,
+        relatedPriceRuleCount: 1, createdAt: '2026-07-26T00:00:00Z', updatedAt: '2026-07-26T01:00:00Z',
+        updatedBy: { id: 1, name: 'Manager' }, version: 0,
+      }],
+      page: 0, size: 100, totalElements: 1, totalPages: 1,
+    })
+
+    renderPage()
+    const menus = await screen.findAllByRole('button', { name: 'Mở menu' })
+    fireEvent.click(menus[0])
+
+    expect(await screen.findByRole('menuitem', { name: 'Chỉnh sửa' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Ngừng hoạt động' })).toBeInTheDocument()
   })
 
   it('keeps required-name validation next to the field instead of calling the API', async () => {
@@ -98,7 +122,7 @@ describe('ServiceCatalogPage', () => {
     })
 
     renderPage()
-    await screen.findByText('Chưa có dịch vụ nào')
+    await screen.findByText('Thiết lập dịch vụ & giá bán')
     fireEvent.click(screen.getAllByRole('button', { name: 'Thêm dịch vụ' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Lưu' }))
 

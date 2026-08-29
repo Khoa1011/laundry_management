@@ -8,6 +8,9 @@ import com.laundry.management.servicecatalog.domain.CatalogStatus;
 import com.laundry.management.servicecatalog.domain.ItemType;
 import com.laundry.management.servicecatalog.domain.PricingAuditAction;
 import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
+import com.laundry.management.servicecatalog.infrastructure.PriceRuleRepository;
+import com.laundry.management.servicecatalog.infrastructure.ServiceItemEligibilityRepository;
+import com.laundry.management.servicecatalog.domain.PriceListStatus;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,38 +28,54 @@ public class ItemTypeApplicationService {
     private final CatalogAuthorizationService authorizationService;
     private final PricingAuditService auditService;
     private final CatalogMapper mapper;
+    private final PriceRuleRepository priceRuleRepository;
+    private final ServiceItemEligibilityRepository eligibilityRepository;
 
     public ItemTypeApplicationService(
         ItemTypeRepository repository,
         CatalogCodeGenerator codeGenerator,
         CatalogAuthorizationService authorizationService,
         PricingAuditService auditService,
-        CatalogMapper mapper
+        CatalogMapper mapper,
+        PriceRuleRepository priceRuleRepository,
+        ServiceItemEligibilityRepository eligibilityRepository
     ) {
         this.repository = repository;
         this.codeGenerator = codeGenerator;
         this.authorizationService = authorizationService;
         this.auditService = auditService;
         this.mapper = mapper;
+        this.priceRuleRepository = priceRuleRepository;
+        this.eligibilityRepository = eligibilityRepository;
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ITEM_TYPE_READ)")
     @Transactional(readOnly = true)
     public List<CatalogDtos.ItemTypeResponse> tree() {
         List<ItemType> items = repository.findAllByOrderBySortOrderAscNameViAscIdAsc();
+        List<Long> itemIds = items.stream().map(ItemType::getId).toList();
+        Map<Long, Long> serviceCounts = new java.util.HashMap<>();
+        Map<Long, Long> ruleCounts = new java.util.HashMap<>();
+        if (!itemIds.isEmpty()) {
+            eligibilityRepository.countByItemTypeIds(itemIds).forEach(value ->
+                serviceCounts.put(value.getItemTypeId(), value.getServiceCount()));
+            priceRuleRepository.countByItemTypeIds(itemIds).forEach(value ->
+                ruleCounts.put(value.getItemTypeId(), value.getRuleCount()));
+        }
         Map<Long, List<ItemType>> byParent = new LinkedHashMap<>();
         for (ItemType item : items) {
             Long parentId = item.getParent() == null ? null : item.getParent().getId();
             byParent.computeIfAbsent(parentId, ignored -> new ArrayList<>()).add(item);
         }
-        return build(null, byParent);
+        return build(null, byParent, serviceCounts, ruleCounts);
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ITEM_TYPE_READ)")
     @Transactional(readOnly = true)
     public CatalogDtos.ItemTypeResponse get(Long id) {
         ItemType item = require(id);
-        return mapper.itemType(item, List.of());
+        return mapper.itemType(item, List.of(), eligibilityRepository.countByItemTypeId(id),
+            priceRuleRepository.countByItemTypeId(id));
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ITEM_TYPE_CREATE)")
@@ -113,7 +132,9 @@ public class ItemTypeApplicationService {
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ITEM_TYPE_ARCHIVE)")
     @Transactional
     public CatalogDtos.ItemTypeResponse changeStatus(Long id, CatalogDtos.CatalogStatusRequest request) {
-        ItemType item = require(id);
+        ItemType item = repository.lockById(id).orElseThrow(() ->
+            new ApiException(HttpStatus.NOT_FOUND, ErrorCode.ITEM_TYPE_NOT_FOUND,
+                "Item type not found", "The requested item type does not exist."));
         requireVersion(item, request.version());
         CatalogStatus previous = item.getStatus();
         if (previous != request.status()) {
@@ -122,6 +143,11 @@ public class ItemTypeApplicationService {
             }
             if (request.status() == CatalogStatus.ARCHIVED && repository.existsByParentId(id)) {
                 throw policy("Move or archive child item types before archiving this parent.");
+            }
+            if (request.status() == CatalogStatus.ARCHIVED
+                && priceRuleRepository.countPublishedReferencesByItemTypeId(id,
+                    List.of(PriceListStatus.ACTIVE, PriceListStatus.SCHEDULED), java.time.Instant.now()) > 0) {
+                throw policy("This item type is used by an active or scheduled price list and cannot be archived.");
             }
             UserAccount actor = authorizationService.actor();
             item.changeStatus(request.status(), actor);
@@ -137,10 +163,13 @@ public class ItemTypeApplicationService {
 
     private List<CatalogDtos.ItemTypeResponse> build(
         Long parentId,
-        Map<Long, List<ItemType>> byParent
+        Map<Long, List<ItemType>> byParent,
+        Map<Long, Long> serviceCounts,
+        Map<Long, Long> ruleCounts
     ) {
         return byParent.getOrDefault(parentId, List.of()).stream()
-            .map(item -> mapper.itemType(item, build(item.getId(), byParent)))
+            .map(item -> mapper.itemType(item, build(item.getId(), byParent, serviceCounts, ruleCounts),
+                serviceCounts.getOrDefault(item.getId(), 0L), ruleCounts.getOrDefault(item.getId(), 0L)))
             .toList();
     }
 

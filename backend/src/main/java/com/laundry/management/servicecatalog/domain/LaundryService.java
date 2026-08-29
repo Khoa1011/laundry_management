@@ -134,6 +134,10 @@ public class LaundryService {
         this.updatedBy = actor;
     }
 
+    public void touch(UserAccount actor) {
+        this.updatedBy = actor;
+    }
+
     public Long getId() { return id; }
     public String getCode() { return code; }
     public String getNameVi() { return nameVi; }

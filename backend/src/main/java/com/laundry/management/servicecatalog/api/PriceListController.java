@@ -2,6 +2,7 @@ package com.laundry.management.servicecatalog.api;
 
 import com.laundry.management.servicecatalog.application.PriceListApplicationService;
 import com.laundry.management.servicecatalog.application.PricingAuditService;
+import com.laundry.management.servicecatalog.application.PricingEngineService;
 import com.laundry.management.servicecatalog.domain.PriceListStatus;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -23,13 +24,16 @@ public class PriceListController {
 
     private final PriceListApplicationService priceLists;
     private final PricingAuditService auditService;
+    private final PricingEngineService pricingEngine;
 
     public PriceListController(
         PriceListApplicationService priceLists,
-        PricingAuditService auditService
+        PricingAuditService auditService,
+        PricingEngineService pricingEngine
     ) {
         this.priceLists = priceLists;
         this.auditService = auditService;
+        this.pricingEngine = pricingEngine;
     }
 
     @GetMapping("/price-lists")
@@ -91,6 +95,24 @@ public class PriceListController {
     @GetMapping("/price-lists/{priceListId}/rules")
     public List<CatalogDtos.PriceRuleResponse> rules(@PathVariable Long priceListId) {
         return priceLists.detail(priceListId).rules();
+    }
+
+    @GetMapping("/catalog/summary")
+    public CatalogDtos.CatalogSummaryResponse summary(@RequestParam(required = false) Long branchId) {
+        return priceLists.summary(branchId);
+    }
+
+    @PostMapping("/price-lists/{id}/preview")
+    public CatalogDtos.PricingPreviewResponse preview(
+        @PathVariable Long id,
+        @Valid @RequestBody CatalogDtos.PricingPreviewRequest request
+    ) {
+        return pricingEngine.previewPriceList(id, request);
+    }
+
+    @GetMapping("/price-lists/{id}/coverage")
+    public CatalogDtos.PriceCoverageResponse coverage(@PathVariable Long id) {
+        return priceLists.coverage(id);
     }
 
     @PostMapping("/price-lists/{priceListId}/rules")

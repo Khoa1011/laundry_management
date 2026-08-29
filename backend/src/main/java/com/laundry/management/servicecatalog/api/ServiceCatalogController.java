@@ -50,6 +50,19 @@ public class ServiceCatalogController {
         return serviceCatalog.get(id);
     }
 
+    @GetMapping("/api/services/{id}/eligibility")
+    public CatalogDtos.ServiceEligibilityResponse serviceEligibility(@PathVariable Long id) {
+        return serviceCatalog.eligibility(id);
+    }
+
+    @PutMapping("/api/services/{id}/eligibility")
+    public CatalogDtos.ServiceEligibilityResponse updateServiceEligibility(
+        @PathVariable Long id,
+        @Valid @RequestBody CatalogDtos.EligibilityUpdateRequest request
+    ) {
+        return serviceCatalog.updateEligibility(id, request);
+    }
+
     @PostMapping("/api/services")
     public ResponseEntity<CatalogDtos.ServiceResponse> createService(
         @Valid @RequestBody CatalogDtos.ServiceRequest request

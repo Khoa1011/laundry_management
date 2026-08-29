@@ -10,6 +10,11 @@ import com.laundry.management.servicecatalog.domain.PricingAuditAction;
 import com.laundry.management.servicecatalog.domain.ProcessingType;
 import com.laundry.management.servicecatalog.domain.UnitType;
 import com.laundry.management.servicecatalog.infrastructure.LaundryServiceRepository;
+import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
+import com.laundry.management.servicecatalog.infrastructure.PriceRuleRepository;
+import com.laundry.management.servicecatalog.infrastructure.ServiceItemEligibilityRepository;
+import com.laundry.management.servicecatalog.domain.ServiceItemEligibility;
+import com.laundry.management.servicecatalog.domain.PriceListStatus;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,19 +34,28 @@ public class ServiceCatalogApplicationService {
     private final CatalogAuthorizationService authorizationService;
     private final PricingAuditService auditService;
     private final CatalogMapper mapper;
+    private final ItemTypeRepository itemTypeRepository;
+    private final PriceRuleRepository priceRuleRepository;
+    private final ServiceItemEligibilityRepository eligibilityRepository;
 
     public ServiceCatalogApplicationService(
         LaundryServiceRepository repository,
         CatalogCodeGenerator codeGenerator,
         CatalogAuthorizationService authorizationService,
         PricingAuditService auditService,
-        CatalogMapper mapper
+        CatalogMapper mapper,
+        ItemTypeRepository itemTypeRepository,
+        PriceRuleRepository priceRuleRepository,
+        ServiceItemEligibilityRepository eligibilityRepository
     ) {
         this.repository = repository;
         this.codeGenerator = codeGenerator;
         this.authorizationService = authorizationService;
         this.auditService = auditService;
         this.mapper = mapper;
+        this.itemTypeRepository = itemTypeRepository;
+        this.priceRuleRepository = priceRuleRepository;
+        this.eligibilityRepository = eligibilityRepository;
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).SERVICE_READ)")
@@ -63,8 +77,19 @@ public class ServiceCatalogApplicationService {
             unitType,
             PageRequest.of(page, size, Sort.by(Sort.Order.asc("nameVi"), Sort.Order.asc("id")))
         );
+        List<Long> ids = result.stream().map(LaundryService::getId).toList();
+        Map<Long, Long> eligibilityCounts = new java.util.HashMap<>();
+        Map<Long, Long> ruleCounts = new java.util.HashMap<>();
+        if (!ids.isEmpty()) {
+            eligibilityRepository.countByServiceIds(ids).forEach(value ->
+                eligibilityCounts.put(value.getServiceId(), value.getItemCount()));
+            priceRuleRepository.countByServiceIds(ids).forEach(value ->
+                ruleCounts.put(value.getServiceId(), value.getRuleCount()));
+        }
         return new CatalogDtos.ServiceListResponse(
-            result.stream().map(mapper::service).toList(),
+            result.stream().map(item -> mapper.service(item,
+                eligibilityCounts.getOrDefault(item.getId(), 0L),
+                ruleCounts.getOrDefault(item.getId(), 0L))).toList(),
             result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()
         );
     }
@@ -72,7 +97,64 @@ public class ServiceCatalogApplicationService {
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).SERVICE_READ)")
     @Transactional(readOnly = true)
     public CatalogDtos.ServiceResponse get(Long id) {
-        return mapper.service(require(id));
+        LaundryService service = require(id);
+        return mapper.service(service, eligibilityRepository.countByServiceId(id),
+            priceRuleRepository.countByServiceId(id));
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).SERVICE_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ITEM_TYPE_READ)")
+    @Transactional(readOnly = true)
+    public CatalogDtos.ServiceEligibilityResponse eligibility(Long id) {
+        LaundryService service = require(id);
+        return new CatalogDtos.ServiceEligibilityResponse(
+            id, service.getVersion(), eligibilityRepository.findByServiceIdOrderByItemTypeNameViAscItemTypeIdAsc(id)
+                .stream().map(value -> new CatalogDtos.ItemTypeOptionResponse(
+                    value.getItemType().getId(), value.getItemType().getCode(),
+                    value.getItemType().getNameVi(), value.getItemType().getNameEn()
+                )).toList()
+        );
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).SERVICE_UPDATE) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ITEM_TYPE_READ)")
+    @Transactional
+    public CatalogDtos.ServiceEligibilityResponse updateEligibility(
+        Long id,
+        CatalogDtos.EligibilityUpdateRequest request
+    ) {
+        LaundryService service = repository.lockById(id).orElseThrow(() ->
+            new ApiException(HttpStatus.NOT_FOUND, ErrorCode.SERVICE_NOT_FOUND,
+                "Service not found", "The requested service does not exist."));
+        requireVersion(service, request.serviceVersion());
+        if (service.getStatus() == CatalogStatus.ARCHIVED) throw policy("Archived services cannot be edited.");
+        List<Long> requestedIds = request.itemTypeIds().stream().distinct().toList();
+        List<com.laundry.management.servicecatalog.domain.ItemType> items = itemTypeRepository.findAllById(requestedIds);
+        if (items.size() != requestedIds.size() || items.stream().anyMatch(item -> item.getStatus() != CatalogStatus.ACTIVE)) {
+            throw policy("Only active, existing item types can be assigned to a service.");
+        }
+        UserAccount actor = authorizationService.actor();
+        List<Long> oldIds = eligibilityRepository.findByServiceIdOrderByItemTypeNameViAscItemTypeIdAsc(id)
+            .stream().map(value -> value.getItemType().getId()).toList();
+        List<Long> removedIds = oldIds.stream().filter(itemId -> !requestedIds.contains(itemId)).toList();
+        var protectedStatuses = List.of(PriceListStatus.ACTIVE, PriceListStatus.SCHEDULED);
+        java.time.Instant now = java.time.Instant.now();
+        if (requestedIds.isEmpty()
+            && priceRuleRepository.countPublishedReferencesByServiceId(id, protectedStatuses, now) > 0) {
+            throw policy("At least one eligible item type is required while an active or scheduled price list uses this service.");
+        }
+        if (removedIds.stream().anyMatch(itemId ->
+            priceRuleRepository.countPublishedReferencesByServiceIdAndItemTypeId(
+                id, itemId, protectedStatuses, now) > 0)) {
+            throw policy("An eligible item type used by an active or scheduled price list cannot be removed.");
+        }
+        eligibilityRepository.deleteByServiceId(id);
+        eligibilityRepository.flush();
+        eligibilityRepository.saveAll(items.stream().map(item ->
+            new ServiceItemEligibility(service, item, actor)).toList());
+        service.touch(actor);
+        repository.flush();
+        auditService.record("SERVICE", id, PricingAuditAction.SERVICE_ELIGIBILITY_UPDATED,
+            Map.of("itemTypeIds", oldIds), Map.of("itemTypeIds", requestedIds), null, null, actor);
+        return eligibility(id);
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).SERVICE_CREATE)")
@@ -123,12 +205,19 @@ public class ServiceCatalogApplicationService {
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).SERVICE_ARCHIVE)")
     @Transactional
     public CatalogDtos.ServiceResponse changeStatus(Long id, CatalogDtos.CatalogStatusRequest request) {
-        LaundryService service = require(id);
+        LaundryService service = repository.lockById(id).orElseThrow(() ->
+            new ApiException(HttpStatus.NOT_FOUND, ErrorCode.SERVICE_NOT_FOUND,
+                "Service not found", "The requested service does not exist."));
         requireVersion(service, request.version());
         CatalogStatus previous = service.getStatus();
         if (previous != request.status()) {
             if (previous == CatalogStatus.ARCHIVED) {
                 throw policy("Archived services cannot be reactivated.");
+            }
+            if (request.status() == CatalogStatus.ARCHIVED
+                && priceRuleRepository.countPublishedReferencesByServiceId(id,
+                    List.of(PriceListStatus.ACTIVE, PriceListStatus.SCHEDULED), java.time.Instant.now()) > 0) {
+                throw policy("This service is used by an active or scheduled price list and cannot be archived.");
             }
             UserAccount actor = authorizationService.actor();
             service.changeStatus(request.status(), actor);

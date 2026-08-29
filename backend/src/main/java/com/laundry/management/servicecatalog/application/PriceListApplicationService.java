@@ -13,11 +13,13 @@ import com.laundry.management.servicecatalog.domain.PriceListStatus;
 import com.laundry.management.servicecatalog.domain.PriceRule;
 import com.laundry.management.servicecatalog.domain.PriceRuleStatus;
 import com.laundry.management.servicecatalog.domain.PricingAuditAction;
+import com.laundry.management.servicecatalog.domain.ServiceItemEligibility;
 import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
 import com.laundry.management.servicecatalog.infrastructure.LaundryServiceRepository;
 import com.laundry.management.servicecatalog.infrastructure.PriceListRepository;
 import com.laundry.management.servicecatalog.infrastructure.PriceRuleRepository;
 import com.laundry.management.servicecatalog.infrastructure.PricingBranchLockRepository;
+import com.laundry.management.servicecatalog.infrastructure.ServiceItemEligibilityRepository;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
@@ -49,6 +51,7 @@ public class PriceListApplicationService {
     private final PricingAuditService auditService;
     private final CatalogMapper mapper;
     private final PricingDomainEventPublisher eventPublisher;
+    private final ServiceItemEligibilityRepository eligibilityRepository;
 
     public PriceListApplicationService(
         PriceListRepository priceListRepository,
@@ -61,7 +64,8 @@ public class PriceListApplicationService {
         PriceRuleValidator ruleValidator,
         PricingAuditService auditService,
         CatalogMapper mapper,
-        PricingDomainEventPublisher eventPublisher
+        PricingDomainEventPublisher eventPublisher,
+        ServiceItemEligibilityRepository eligibilityRepository
     ) {
         this.priceListRepository = priceListRepository;
         this.priceRuleRepository = priceRuleRepository;
@@ -74,6 +78,7 @@ public class PriceListApplicationService {
         this.auditService = auditService;
         this.mapper = mapper;
         this.eventPublisher = eventPublisher;
+        this.eligibilityRepository = eligibilityRepository;
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_LIST_READ)")
@@ -206,6 +211,7 @@ public class PriceListApplicationService {
         requireDraft(list);
         LaundryService service = activeService(request.serviceId());
         ItemType itemType = activeItemType(request.itemTypeId());
+        requireEligibility(service, itemType);
         List<PriceRule> existing = priceRuleRepository.findByPriceListIdOrderByRulePriorityDescIdAsc(priceListId);
         ruleValidator.validate(list, service, itemType, request, existing, null);
         UserAccount actor = authorizationService.actor();
@@ -230,6 +236,7 @@ public class PriceListApplicationService {
         requireRuleVersion(rule, request.rowVersion());
         LaundryService service = activeService(request.serviceId());
         ItemType itemType = activeItemType(request.itemTypeId());
+        requireEligibility(service, itemType);
         List<PriceRule> existing = priceRuleRepository.findByPriceListIdOrderByRulePriorityDescIdAsc(priceListId);
         ruleValidator.validate(list, service, itemType, request, existing, ruleId);
         UserAccount actor = authorizationService.actor();
@@ -270,7 +277,15 @@ public class PriceListApplicationService {
         if (rules.isEmpty()) {
             throw invalid("A price list must contain at least one valid rule before publication.");
         }
+        rules.stream().map(rule -> rule.getService().getId()).distinct().sorted()
+            .forEach(serviceId -> serviceRepository.lockById(serviceId)
+                .orElseThrow(() -> invalid("A referenced service no longer exists.")));
+        rules.stream().filter(rule -> rule.getItemType() != null)
+            .map(rule -> rule.getItemType().getId()).distinct().sorted()
+            .forEach(itemTypeId -> itemTypeRepository.lockById(itemTypeId)
+                .orElseThrow(() -> invalid("A referenced item type no longer exists.")));
         for (PriceRule rule : rules) {
+            requireEligibility(rule.getService(), rule.getItemType());
             CatalogDtos.PriceRuleRequest validationRequest = requestFrom(rule);
             ruleValidator.validate(list, rule.getService(), rule.getItemType(), validationRequest, rules, rule.getId());
         }
@@ -341,6 +356,66 @@ public class PriceListApplicationService {
         return mapper.priceList(list, priceRuleRepository.countByPriceListId(id));
     }
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_LIST_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_RULE_READ)")
+    @Transactional(readOnly = true)
+    public CatalogDtos.PriceCoverageResponse coverage(Long id) {
+        PriceList list = scopedList(id);
+        List<PriceRule> rules = priceRuleRepository.findByPriceListIdOrderByRulePriorityDescIdAsc(id);
+        Map<Long, List<ServiceItemEligibility>> byService = eligibilityRepository
+            .findAllByOrderByServiceIdAscItemTypeIdAsc().stream()
+            .filter(value -> value.getService().getStatus() == CatalogStatus.ACTIVE
+                && value.getItemType().getStatus() == CatalogStatus.ACTIVE)
+            .collect(java.util.stream.Collectors.groupingBy(
+                value -> value.getService().getId(), LinkedHashMap::new, java.util.stream.Collectors.toList()
+            ));
+        Map<Long, List<PriceRule>> rulesByService = rules.stream().collect(
+            java.util.stream.Collectors.groupingBy(rule -> rule.getService().getId())
+        );
+        List<CatalogDtos.ServiceCoverageResponse> services = new java.util.ArrayList<>();
+        long eligibleTotal = 0;
+        long coveredTotal = 0;
+        for (var entry : byService.entrySet()) {
+            LaundryService service = entry.getValue().get(0).getService();
+            List<PriceRule> serviceRules = rulesByService.getOrDefault(service.getId(), List.of());
+            boolean hasDefault = serviceRules.stream().anyMatch(rule -> rule.getItemType() == null);
+            java.util.Set<Long> specificallyCoveredItemIds = serviceRules.stream()
+                .filter(rule -> rule.getItemType() != null)
+                .map(rule -> rule.getItemType().getId())
+                .collect(java.util.stream.Collectors.toSet());
+            long eligible = entry.getValue().size();
+            long covered = hasDefault ? eligible : entry.getValue().stream()
+                .filter(value -> specificallyCoveredItemIds.contains(value.getItemType().getId()))
+                .count();
+            eligibleTotal += eligible;
+            coveredTotal += covered;
+            services.add(new CatalogDtos.ServiceCoverageResponse(
+                service.getId(), service.getCode(), service.getNameVi(), eligible, covered, eligible - covered
+            ));
+        }
+        return new CatalogDtos.PriceCoverageResponse(
+            list.getId(), eligibleTotal, coveredTotal, eligibleTotal - coveredTotal, services
+        );
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_LIST_READ)")
+    @Transactional(readOnly = true)
+    public CatalogDtos.CatalogSummaryResponse summary(Long branchId) {
+        Branch branch = authorizationService.requireBranch(branchId);
+        List<PriceList> effective = priceListRepository.findEffective(
+            branch.getId(), PUBLISHED_STATUSES, Instant.now()
+        );
+        long eligibleCount = eligibilityRepository.count();
+        CatalogDtos.PriceCoverageResponse coverage = effective.size() == 1
+            ? coverage(effective.get(0).getId())
+            : new CatalogDtos.PriceCoverageResponse(null, eligibleCount, 0, eligibleCount, List.of());
+        return new CatalogDtos.CatalogSummaryResponse(
+            serviceRepository.countByStatus(CatalogStatus.ACTIVE),
+            itemTypeRepository.countByStatus(CatalogStatus.ACTIVE),
+            coverage.eligibleCombinationCount(), coverage.coveredCombinationCount(),
+            coverage.missingCombinationCount(), effective.size() == 1 ? effective.get(0).getId() : null
+        );
+    }
+
     private PriceRule copyRule(
         PriceRule source,
         PriceList target,
@@ -357,7 +432,11 @@ public class PriceListApplicationService {
             source.getRulePriority(), effectiveFrom, effectiveTo, source.getVersionNumber() + 1,
             source.getTiers().stream().map(tier -> new PriceRule.PriceRuleTierValue(
                 tier.getFromQuantity(), tier.getToQuantity(), tier.getUnitPrice(), tier.getSortOrder()
-            )).toList(), actor
+            )).toList(), source.getPackagePrices().stream().map(item ->
+                new PriceRule.PriceRulePackagePriceValue(
+                    item.getQuantity(), item.getTotalPrice(), item.getSortOrder()
+                )
+            ).toList(), actor
         );
         return copy;
     }
@@ -380,6 +459,10 @@ public class PriceListApplicationService {
                 .map(tier -> new PriceRule.PriceRuleTierValue(
                     tier.fromQuantity(), tier.toQuantity(), tier.unitPrice(), tier.sortOrder()
                 )).toList(),
+            request.packagePrices() == null ? List.of() : request.packagePrices().stream()
+                .map(item -> new PriceRule.PriceRulePackagePriceValue(
+                    item.quantity(), item.totalPrice(), item.sortOrder()
+                )).toList(),
             actor
         );
     }
@@ -393,7 +476,11 @@ public class PriceListApplicationService {
             rule.getTierCalculationMode(), rule.getRulePriority(), rule.getEffectiveFrom(), rule.getEffectiveTo(),
             rule.getTiers().stream().map(tier -> new CatalogDtos.TierRequest(
                 tier.getFromQuantity(), tier.getToQuantity(), tier.getUnitPrice(), tier.getSortOrder()
-            )).toList(), rule.getRowVersion()
+            )).toList(), rule.getPackagePrices().stream().map(item ->
+                new CatalogDtos.PackagePriceRequest(
+                    item.getQuantity(), item.getTotalPrice(), item.getSortOrder()
+                )
+            ).toList(), rule.getRowVersion()
         );
     }
 
@@ -428,6 +515,13 @@ public class PriceListApplicationService {
             value.put("toQuantity", tier.getToQuantity());
             value.put("unitPrice", tier.getUnitPrice());
             value.put("sortOrder", tier.getSortOrder());
+            return value;
+        }).toList());
+        scope.put("packagePrices", rule.getPackagePrices().stream().map(item -> {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("quantity", item.getQuantity());
+            value.put("totalPrice", item.getTotalPrice());
+            value.put("sortOrder", item.getSortOrder());
             return value;
         }).toList());
         return scope;
@@ -503,6 +597,17 @@ public class PriceListApplicationService {
                 HttpStatus.UNPROCESSABLE_ENTITY, ErrorCode.ITEM_TYPE_NOT_FOUND,
                 "Item type unavailable", "The selected item type does not exist or is not active."
             ));
+    }
+
+    private void requireEligibility(LaundryService service, ItemType itemType) {
+        boolean eligible = itemType == null
+            ? eligibilityRepository.existsByServiceId(service.getId())
+            : eligibilityRepository.existsByServiceIdAndItemTypeId(service.getId(), itemType.getId());
+        if (!eligible) {
+            throw invalid(itemType == null
+                ? "Assign at least one item type to the service before creating a price."
+                : "The selected item type is not enabled for this service.");
+        }
     }
 
     private void requireDraft(PriceList list) {

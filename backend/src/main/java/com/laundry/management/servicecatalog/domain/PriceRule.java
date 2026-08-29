@@ -19,7 +19,9 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -130,6 +132,10 @@ public class PriceRule {
     @OrderBy("sortOrder ASC, id ASC")
     private final List<PriceRuleTier> tiers = new ArrayList<>();
 
+    @OneToMany(mappedBy = "priceRule", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
+    private final Set<PriceRulePackagePrice> packagePrices = new LinkedHashSet<>();
+
     protected PriceRule() {
     }
 
@@ -163,6 +169,7 @@ public class PriceRule {
         Instant effectiveTo,
         int versionNumber,
         List<PriceRuleTierValue> tierValues,
+        List<PriceRulePackagePriceValue> packagePriceValues,
         UserAccount actor
     ) {
         this.service = service;
@@ -187,6 +194,10 @@ public class PriceRule {
         tiers.clear();
         tierValues.forEach(value -> tiers.add(new PriceRuleTier(
             this, value.fromQuantity(), value.toQuantity(), value.unitPrice(), value.sortOrder()
+        )));
+        packagePrices.clear();
+        packagePriceValues.forEach(value -> packagePrices.add(new PriceRulePackagePrice(
+            this, value.quantity(), value.totalPrice(), value.sortOrder()
         )));
     }
 
@@ -242,11 +253,24 @@ public class PriceRule {
     public Instant getPublishedAt() { return publishedAt; }
     public long getRowVersion() { return rowVersion; }
     public List<PriceRuleTier> getTiers() { return List.copyOf(tiers); }
+    public List<PriceRulePackagePrice> getPackagePrices() {
+        return packagePrices.stream()
+            .sorted(java.util.Comparator.comparingInt(PriceRulePackagePrice::getSortOrder)
+                .thenComparing(item -> item.getId() == null ? Long.MAX_VALUE : item.getId()))
+            .toList();
+    }
 
     public record PriceRuleTierValue(
         BigDecimal fromQuantity,
         BigDecimal toQuantity,
         BigDecimal unitPrice,
+        int sortOrder
+    ) {
+    }
+
+    public record PriceRulePackagePriceValue(
+        BigDecimal quantity,
+        BigDecimal totalPrice,
         int sortOrder
     ) {
     }

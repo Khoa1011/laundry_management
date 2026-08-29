@@ -5,6 +5,7 @@ import com.laundry.management.servicecatalog.domain.PriceListStatus;
 import com.laundry.management.servicecatalog.domain.PriceRuleStatus;
 import com.laundry.management.servicecatalog.domain.PricingExplanationCode;
 import com.laundry.management.servicecatalog.domain.PricingMethod;
+import com.laundry.management.servicecatalog.domain.PricingComponentType;
 import com.laundry.management.servicecatalog.domain.ProcessingType;
 import com.laundry.management.servicecatalog.domain.SharingMode;
 import com.laundry.management.servicecatalog.domain.TierCalculationMode;
@@ -59,7 +60,9 @@ public final class CatalogDtos {
         Instant createdAt,
         Instant updatedAt,
         ActorResponse updatedBy,
-        long version
+        long version,
+        long eligibleItemTypeCount,
+        long relatedPriceRuleCount
     ) {
     }
 
@@ -107,7 +110,22 @@ public final class CatalogDtos {
         Instant updatedAt,
         ActorResponse updatedBy,
         long version,
+        long applicableServiceCount,
+        long relatedPriceRuleCount,
         List<ItemTypeResponse> children
+    ) {
+    }
+
+    public record EligibilityUpdateRequest(
+        @NotNull Long serviceVersion,
+        @NotNull @Size(max = 500) List<@NotNull Long> itemTypeIds
+    ) {
+    }
+
+    public record ServiceEligibilityResponse(
+        Long serviceId,
+        long serviceVersion,
+        List<ItemTypeOptionResponse> eligibleItemTypes
     ) {
     }
 
@@ -173,6 +191,13 @@ public final class CatalogDtos {
     ) {
     }
 
+    public record PackagePriceRequest(
+        @NotNull @DecimalMin("1.000") BigDecimal quantity,
+        @NotNull @DecimalMin("0.00") BigDecimal totalPrice,
+        @Min(0) int sortOrder
+    ) {
+    }
+
     public record PriceRuleRequest(
         @NotNull Long serviceId,
         Long itemTypeId,
@@ -192,6 +217,7 @@ public final class CatalogDtos {
         @NotNull Instant effectiveFrom,
         Instant effectiveTo,
         @Valid List<TierRequest> tiers,
+        @Valid List<PackagePriceRequest> packagePrices,
         Long rowVersion
     ) {
     }
@@ -201,6 +227,14 @@ public final class CatalogDtos {
         BigDecimal fromQuantity,
         BigDecimal toQuantity,
         BigDecimal unitPrice,
+        int sortOrder
+    ) {
+    }
+
+    public record PackagePriceResponse(
+        Long id,
+        BigDecimal quantity,
+        BigDecimal totalPrice,
         int sortOrder
     ) {
     }
@@ -229,7 +263,8 @@ public final class CatalogDtos {
         int versionNumber,
         Instant publishedAt,
         long rowVersion,
-        List<TierResponse> tiers
+        List<TierResponse> tiers,
+        List<PackagePriceResponse> packagePrices
     ) {
     }
 
@@ -277,6 +312,7 @@ public final class CatalogDtos {
         Instant effectiveAt,
         PricingExplanationCode explanationCode,
         String explanation,
+        List<PricingComponentResponse> pricingComponents,
         PricingSnapshot snapshot
     ) {
     }
@@ -309,7 +345,46 @@ public final class CatalogDtos {
         BigDecimal finalAmount,
         PricingExplanationCode pricingExplanationCode,
         String pricingExplanationSnapshot,
+        List<PricingComponentResponse> pricingComponents,
         Instant quotedAt
+    ) {
+    }
+
+    public record PricingComponentResponse(
+        PricingComponentType type,
+        String label,
+        BigDecimal quantity,
+        BigDecimal unitPrice,
+        BigDecimal amount
+    ) {
+    }
+
+    public record ServiceCoverageResponse(
+        Long serviceId,
+        String serviceCode,
+        String serviceName,
+        long eligibleItemTypeCount,
+        long coveredItemTypeCount,
+        long missingItemTypeCount
+    ) {
+    }
+
+    public record PriceCoverageResponse(
+        Long priceListId,
+        long eligibleCombinationCount,
+        long coveredCombinationCount,
+        long missingCombinationCount,
+        List<ServiceCoverageResponse> services
+    ) {
+    }
+
+    public record CatalogSummaryResponse(
+        long activeServiceCount,
+        long activeItemTypeCount,
+        long eligibleCombinationCount,
+        long coveredCombinationCount,
+        long configurationIssueCount,
+        Long effectivePriceListId
     ) {
     }
 

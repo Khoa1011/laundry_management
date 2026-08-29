@@ -2,7 +2,7 @@ import { apiRequest } from '../../api/client'
 import type {
   AuditEntry, CatalogStatus, ItemType, ItemTypePayload, LaundryService, PageResponse,
   PriceList, PriceListDetail, PriceListStatus, PriceRule, PriceRulePayload, PricingPreview,
-  ProcessingType, ServicePayload, UnitType,
+  ProcessingType, ServicePayload, UnitType, ServiceEligibility, PriceCoverage, CatalogSummary,
 } from './types'
 
 function queryString(params: Record<string, string | number | undefined>) {
@@ -21,6 +21,12 @@ export const catalogApi = {
   updateService: (id: number, body: ServicePayload) => apiRequest<LaundryService>(`/api/services/${id}`, { method: 'PUT', body }),
   serviceStatus: (id: number, status: CatalogStatus, version: number) =>
     apiRequest<LaundryService>(`/api/services/${id}/status`, { method: 'PATCH', body: { status, version } }),
+  serviceEligibility: (id: number) =>
+    apiRequest<ServiceEligibility>(`/api/services/${id}/eligibility`),
+  updateServiceEligibility: (id: number, serviceVersion: number, itemTypeIds: number[]) =>
+    apiRequest<ServiceEligibility>(`/api/services/${id}/eligibility`, {
+      method: 'PUT', body: { serviceVersion, itemTypeIds },
+    }),
 
   itemTypes: () => apiRequest<ItemType[]>('/api/item-types/tree'),
   createItemType: (body: ItemTypePayload) => apiRequest<ItemType>('/api/item-types', { method: 'POST', body }),
@@ -51,6 +57,14 @@ export const catalogApi = {
     branchId: number; serviceId: number; itemTypeId?: number; sharingMode: string;
     quantity: number; effectiveAt: string; pricingMethod?: string; unitType?: string
   }) => apiRequest<PricingPreview>('/api/pricing/preview', { method: 'POST', body }),
+  previewPriceList: (priceListId: number, body: {
+    branchId: number; serviceId: number; itemTypeId?: number; sharingMode: string;
+    quantity: number; effectiveAt: string; pricingMethod?: string; unitType?: string
+  }) => apiRequest<PricingPreview>(`/api/price-lists/${priceListId}/preview`, { method: 'POST', body }),
+  coverage: (priceListId: number) =>
+    apiRequest<PriceCoverage>(`/api/price-lists/${priceListId}/coverage`),
+  summary: (branchId?: number) =>
+    apiRequest<CatalogSummary>(`/api/catalog/summary${queryString({ branchId })}`),
   history: (priceListId: number) =>
     apiRequest<PageResponse<AuditEntry>>(`/api/price-lists/${priceListId}/history?size=50`),
 }

@@ -51,6 +51,7 @@ public class PriceRuleValidator {
         validateAmounts(request);
         validatePeriod(priceList, request.effectiveFrom(), request.effectiveTo());
         validateTiers(request);
+        validatePackagePrices(request);
         validateConflicts(request, existingRules, excludedRuleId);
     }
 
@@ -63,6 +64,7 @@ public class PriceRuleValidator {
             case FIXED -> unit == UnitType.FIXED;
             case PER_LOAD -> unit == UnitType.LOAD || unit == UnitType.KG;
             case HYBRID -> unit != UnitType.FIXED;
+            case QUANTITY_PACKAGE -> unit == UnitType.ITEM || unit == UnitType.PAIR || unit == UnitType.SET;
         };
         if (!compatible) {
             throw new ApiException(
@@ -94,6 +96,14 @@ public class PriceRuleValidator {
                 require(request.basePrice(), "Base price is required for hybrid pricing.");
                 requirePositive(request.includedQuantity(), "Included quantity is required for hybrid pricing.");
                 require(request.excessUnitPrice(), "Excess unit price is required for hybrid pricing.");
+            }
+            case QUANTITY_PACKAGE -> {
+                if (request.packagePrices() == null || request.packagePrices().isEmpty()) {
+                    throw invalid("At least one exact quantity price is required for quantity-package pricing.");
+                }
+                if (request.minimumQuantity() != null) {
+                    throw invalid("Minimum quantity is not used with exact quantity-package pricing.");
+                }
             }
             default -> {
                 if ((request.tiers() == null || request.tiers().isEmpty()) && request.unitPrice() == null) {
@@ -132,7 +142,8 @@ public class PriceRuleValidator {
         }
         if (request.pricingMethod() == PricingMethod.FIXED
             || request.pricingMethod() == PricingMethod.PER_LOAD
-            || request.pricingMethod() == PricingMethod.HYBRID) {
+            || request.pricingMethod() == PricingMethod.HYBRID
+            || request.pricingMethod() == PricingMethod.QUANTITY_PACKAGE) {
             throw invalid("The selected pricing method does not support price tiers.");
         }
         if (tiers.get(0).fromQuantity().compareTo(BigDecimal.ZERO) != 0) {
@@ -150,6 +161,29 @@ public class PriceRuleValidator {
                 }
             } else if (tier.toQuantity() != null) {
                 throw invalid("The final tier must have no upper bound.");
+            }
+        }
+    }
+
+    private void validatePackagePrices(CatalogDtos.PriceRuleRequest request) {
+        List<CatalogDtos.PackagePriceRequest> packages = request.packagePrices() == null
+            ? List.of() : request.packagePrices();
+        if (request.pricingMethod() != PricingMethod.QUANTITY_PACKAGE) {
+            if (!packages.isEmpty()) throw invalid("Exact quantity prices require quantity-package pricing.");
+            return;
+        }
+        if (request.unitType() == UnitType.KG || request.unitType() == UnitType.LOAD
+            || request.unitType() == UnitType.FIXED) {
+            throw invalid("Quantity-package pricing supports ITEM, PAIR, or SET only.");
+        }
+        java.util.HashSet<BigDecimal> quantities = new java.util.HashSet<>();
+        for (CatalogDtos.PackagePriceRequest item : packages) {
+            if (item.quantity().stripTrailingZeros().scale() > 0) {
+                throw invalid("Quantity-package quantities must be whole numbers.");
+            }
+            BigDecimal normalized = item.quantity().stripTrailingZeros();
+            if (!quantities.add(normalized)) {
+                throw invalid("Each quantity-package quantity must be unique.");
             }
         }
     }

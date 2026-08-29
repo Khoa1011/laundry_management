@@ -16,6 +16,7 @@ import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
 import com.laundry.management.servicecatalog.infrastructure.LaundryServiceRepository;
 import com.laundry.management.servicecatalog.infrastructure.PriceListRepository;
 import com.laundry.management.servicecatalog.infrastructure.PriceRuleRepository;
+import com.laundry.management.servicecatalog.infrastructure.ServiceItemEligibilityRepository;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.Instant;
@@ -44,6 +45,7 @@ public class PricingEngineService {
     private final ItemTypeRepository itemTypeRepository;
     private final PriceListRepository priceListRepository;
     private final PriceRuleRepository priceRuleRepository;
+    private final ServiceItemEligibilityRepository eligibilityRepository;
     private final PricingCalculator calculator;
 
     public PricingEngineService(
@@ -52,6 +54,7 @@ public class PricingEngineService {
         ItemTypeRepository itemTypeRepository,
         PriceListRepository priceListRepository,
         PriceRuleRepository priceRuleRepository,
+        ServiceItemEligibilityRepository eligibilityRepository,
         PricingCalculator calculator
     ) {
         this.authorizationService = authorizationService;
@@ -59,6 +62,7 @@ public class PricingEngineService {
         this.itemTypeRepository = itemTypeRepository;
         this.priceListRepository = priceListRepository;
         this.priceRuleRepository = priceRuleRepository;
+        this.eligibilityRepository = eligibilityRepository;
         this.calculator = calculator;
     }
 
@@ -66,13 +70,6 @@ public class PricingEngineService {
     @Transactional(readOnly = true)
     public CatalogDtos.PricingPreviewResponse preview(CatalogDtos.PricingPreviewRequest request) {
         authorizationService.requireBranch(request.branchId());
-        LaundryService service = serviceRepository.findByIdAndStatus(request.serviceId(), CatalogStatus.ACTIVE)
-            .orElseThrow(() -> unavailable("Service", ErrorCode.SERVICE_NOT_FOUND));
-        ItemType itemType = request.itemTypeId() == null ? null
-            : itemTypeRepository.findByIdAndStatus(request.itemTypeId(), CatalogStatus.ACTIVE)
-                .orElseThrow(() -> unavailable("Item type", ErrorCode.ITEM_TYPE_NOT_FOUND));
-        validateSharing(service, request.sharingMode());
-
         List<PriceList> lists = priceListRepository.findEffective(
             request.branchId(), QUOTABLE_LIST_STATUSES, request.effectiveAt()
         );
@@ -90,9 +87,40 @@ public class PricingEngineService {
                 "Multiple published price lists are effective for the selected branch and time."
             );
         }
-        PriceList priceList = lists.get(0);
+        return previewFromList(lists.get(0), request, QUOTABLE_RULE_STATUSES);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICING_PREVIEW) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_LIST_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_RULE_READ)")
+    @Transactional(readOnly = true)
+    public CatalogDtos.PricingPreviewResponse previewPriceList(
+        Long priceListId,
+        CatalogDtos.PricingPreviewRequest request
+    ) {
+        PriceList priceList = priceListRepository.findById(priceListId)
+            .orElseThrow(() -> authorizationService.inaccessible("Price list"));
+        authorizationService.requireBranchScope(priceList.getBranch().getId());
+        if (!priceList.getBranch().getId().equals(request.branchId())) {
+            throw authorizationService.inaccessible("Price list");
+        }
+        Collection<PriceRuleStatus> statuses = priceList.getStatus() == PriceListStatus.DRAFT
+            ? List.of(PriceRuleStatus.DRAFT) : QUOTABLE_RULE_STATUSES;
+        return previewFromList(priceList, request, statuses);
+    }
+
+    private CatalogDtos.PricingPreviewResponse previewFromList(
+        PriceList priceList,
+        CatalogDtos.PricingPreviewRequest request,
+        Collection<PriceRuleStatus> ruleStatuses
+    ) {
+        LaundryService service = serviceRepository.findByIdAndStatus(request.serviceId(), CatalogStatus.ACTIVE)
+            .orElseThrow(() -> unavailable("Service", ErrorCode.SERVICE_NOT_FOUND));
+        ItemType itemType = request.itemTypeId() == null ? null
+            : itemTypeRepository.findByIdAndStatus(request.itemTypeId(), CatalogStatus.ACTIVE)
+                .orElseThrow(() -> unavailable("Item type", ErrorCode.ITEM_TYPE_NOT_FOUND));
+        validateEligibility(service, itemType);
+        validateSharing(service, request.sharingMode());
         List<PriceRule> candidates = priceRuleRepository.findResolutionCandidates(
-            priceList.getId(), QUOTABLE_RULE_STATUSES, service.getId(),
+            priceList.getId(), ruleStatuses, service.getId(),
             itemType == null ? null : itemType.getId(), request.sharingMode(), request.priorityLevel(),
             request.quantity(), request.effectiveAt()
         );
@@ -111,12 +139,18 @@ public class PricingEngineService {
                 rule.getIncludedQuantity(), rule.getExcessUnitPrice(), rule.getTierCalculationMode(),
                 rule.getTiers().stream().map(tier -> new PricingCalculator.TierTerm(
                     tier.getFromQuantity(), tier.getToQuantity(), tier.getUnitPrice()
-                )).toList()
+                )).toList(), rule.getPackagePrices().stream().map(item ->
+                    new PricingCalculator.PackagePriceTerm(item.getQuantity(), item.getTotalPrice())
+                ).toList()
             ),
             request.quantity()
         );
         Instant quotedAt = Instant.now();
         String explanation = explanation(rule, calculation);
+        List<CatalogDtos.PricingComponentResponse> components = calculation.components().stream()
+            .map(component -> new CatalogDtos.PricingComponentResponse(
+                component.type(), component.label(), component.quantity(), component.unitPrice(), component.amount()
+            )).toList();
         String itemName = itemType == null ? null : itemType.getNameVi();
         CatalogDtos.PricingSnapshot snapshot = new CatalogDtos.PricingSnapshot(
             priceList.getId(), priceList.getName(), rule.getId(), rule.getVersionNumber(),
@@ -128,7 +162,7 @@ public class PricingEngineService {
             rule.getBasePrice(), calculation.unitPrice(), rule.getMinimumQuantity(),
             rule.getMinimumCharge(), rule.getIncludedQuantity(), rule.getExcessUnitPrice(),
             calculation.baseAmount(), calculation.surchargeAmount(), calculation.discountAmount(),
-            calculation.finalAmount(), calculation.explanationCode(), explanation, quotedAt
+            calculation.finalAmount(), calculation.explanationCode(), explanation, components, quotedAt
         );
         LOGGER.info(
             "Pricing rule selected priceListId={} ruleId={} ruleVersion={} specificity={} priority={} effectiveAt={}",
@@ -143,8 +177,23 @@ public class PricingEngineService {
             calculation.actualQuantity(), calculation.billableQuantity(), calculation.unitPrice(),
             calculation.baseAmount(), calculation.surchargeAmount(), calculation.discountAmount(),
             calculation.finalAmount(), request.effectiveAt(), calculation.explanationCode(),
-            explanation, snapshot
+            explanation, components, snapshot
         );
+    }
+
+    private void validateEligibility(LaundryService service, ItemType itemType) {
+        boolean valid = itemType == null
+            ? eligibilityRepository.existsByServiceId(service.getId())
+            : eligibilityRepository.existsByServiceIdAndItemTypeId(service.getId(), itemType.getId());
+        if (!valid) {
+            throw new ApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY, ErrorCode.PRICING_VALIDATION_ERROR,
+                "Service and item type are not compatible",
+                itemType == null
+                    ? "The selected service has no eligible item types."
+                    : "The selected item type is not enabled for this service."
+            );
+        }
     }
 
     private PriceRule resolve(List<PriceRule> candidates) {
@@ -207,6 +256,7 @@ public class PricingEngineService {
             case HYBRID_EXCESS_QUANTITY -> "Áp dụng giá cơ bản và tính thêm phần vượt số lượng bao gồm.";
             case VOLUME_TIER_APPLIED -> "Áp dụng một đơn giá bậc cho toàn bộ số lượng tính tiền.";
             case PROGRESSIVE_TIERS_APPLIED -> "Tổng tiền được cộng theo từng khoảng bậc giá.";
+            case QUANTITY_PACKAGE_APPLIED -> "Áp dụng tổng giá đã cấu hình cho đúng số lượng đã chọn.";
             default -> "Số lượng tính tiền " + billable + " theo đơn giá của quy tắc.";
         };
     }

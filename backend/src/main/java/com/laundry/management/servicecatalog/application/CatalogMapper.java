@@ -8,24 +8,41 @@ import com.laundry.management.servicecatalog.domain.LaundryService;
 import com.laundry.management.servicecatalog.domain.PriceList;
 import com.laundry.management.servicecatalog.domain.PriceRule;
 import com.laundry.management.servicecatalog.domain.UnitType;
-import java.util.List;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
 public class CatalogMapper {
 
     public CatalogDtos.ServiceResponse service(LaundryService service) {
+        return service(service, 0, 0);
+    }
+
+    public CatalogDtos.ServiceResponse service(
+        LaundryService service,
+        long eligibleItemTypeCount,
+        long relatedPriceRuleCount
+    ) {
         return new CatalogDtos.ServiceResponse(
             service.getId(), service.getCode(), service.getNameVi(), service.getNameEn(),
             service.getDescriptionVi(), service.getDescriptionEn(), service.getProcessingType(),
             service.getDefaultUnitType(), service.isSharingAllowed(), service.getEstimatedMinutes(),
             service.getMinimumQuantity(), service.getStatus(), service.getCreatedAt(), service.getUpdatedAt(),
-            actor(service.getUpdatedBy()), service.getVersion()
+            actor(service.getUpdatedBy()), service.getVersion(), eligibleItemTypeCount, relatedPriceRuleCount
         );
     }
 
     public CatalogDtos.ItemTypeResponse itemType(ItemType item, List<CatalogDtos.ItemTypeResponse> children) {
+        return itemType(item, children, 0, 0);
+    }
+
+    public CatalogDtos.ItemTypeResponse itemType(
+        ItemType item,
+        List<CatalogDtos.ItemTypeResponse> children,
+        long applicableServiceCount,
+        long relatedPriceRuleCount
+    ) {
         UnitType effectiveUnit = effectiveUnit(item);
         return new CatalogDtos.ItemTypeResponse(
             item.getId(), item.getCode(), item.getParent() == null ? null : item.getParent().getId(),
@@ -33,7 +50,7 @@ public class CatalogMapper {
             item.getDefaultUnitType(), effectiveUnit, item.getDefaultUnitType() == null,
             item.isRequiresSeparateWash(), item.getDefaultColorRisk(), item.getDefaultHygieneLevel(),
             item.getSortOrder(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt(),
-            actor(item.getUpdatedBy()), item.getVersion(), children
+            actor(item.getUpdatedBy()), item.getVersion(), applicableServiceCount, relatedPriceRuleCount, children
         );
     }
 
@@ -76,6 +93,9 @@ public class CatalogMapper {
             rule.getStatus(), rule.getVersionNumber(), rule.getPublishedAt(), rule.getRowVersion(),
             rule.getTiers().stream().map(tier -> new CatalogDtos.TierResponse(
                 tier.getId(), tier.getFromQuantity(), tier.getToQuantity(), tier.getUnitPrice(), tier.getSortOrder()
+            )).toList(),
+            rule.getPackagePrices().stream().map(item -> new CatalogDtos.PackagePriceResponse(
+                item.getId(), item.getQuantity(), item.getTotalPrice(), item.getSortOrder()
             )).toList()
         );
     }

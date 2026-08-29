@@ -101,11 +101,16 @@ class ServiceCatalogIntegrationTest {
                 .content(serviceUpdate.toString()))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.errorCode").value("PRICING_VERSION_CONFLICT"));
+        assignItemType(serviceId);
 
         Instant now = Instant.now();
         Instant currentFrom = now.minusSeconds(3600);
         JsonNode currentList = createPriceList("Bảng giá hiện hành", currentFrom);
         addWeightRule(currentList.path("id").asLong(), serviceId, effectiveFrom(currentList), "25000");
+        previewPriceList(managerAToken, currentList.path("id").asLong(), branchA.getId(), serviceId, "2.5", now)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.priceListId").value(currentList.path("id").asLong()))
+            .andExpect(jsonPath("$.finalAmount").value(62500.0));
         publish(currentList);
 
         Instant futureFrom = now.plusSeconds(86400);
@@ -138,6 +143,7 @@ class ServiceCatalogIntegrationTest {
     @Test
     void receptionistCanPreviewButCannotMutateCatalog() throws Exception {
         JsonNode service = createService();
+        assignItemType(service.path("id").asLong());
         Instant from = Instant.now().minusSeconds(60);
         JsonNode list = createPriceList("Bảng giá lễ tân", from);
         addWeightRule(list.path("id").asLong(), service.path("id").asLong(), effectiveFrom(list), "20000");
@@ -162,6 +168,31 @@ class ServiceCatalogIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
         return body(result);
+    }
+
+    private void assignItemType(long serviceId) throws Exception {
+        ObjectNode item = objectMapper.createObjectNode();
+        item.put("nameVi", "Quần áo " + UUID.randomUUID().toString().substring(0, 6));
+        item.put("defaultUnitType", "KG");
+        item.put("requiresSeparateWash", false);
+        item.put("sortOrder", 0);
+        MvcResult createdResult = mockMvc.perform(post("/api/item-types")
+                .header("Authorization", bearer(managerAToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(item.toString()))
+            .andExpect(status().isCreated()).andReturn();
+        long itemTypeId = body(createdResult).path("id").asLong();
+        MvcResult serviceResult = mockMvc.perform(get("/api/services/{id}", serviceId)
+                .header("Authorization", bearer(managerAToken)))
+            .andExpect(status().isOk()).andReturn();
+        ObjectNode eligibility = objectMapper.createObjectNode();
+        eligibility.put("serviceVersion", body(serviceResult).path("version").asLong());
+        eligibility.putArray("itemTypeIds").add(itemTypeId);
+        mockMvc.perform(put("/api/services/{id}/eligibility", serviceId)
+                .header("Authorization", bearer(managerAToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(eligibility.toString()))
+            .andExpect(status().isOk());
     }
 
     private ObjectNode serviceRequest(String name) {
@@ -238,6 +269,26 @@ class ServiceCatalogIntegrationTest {
         request.put("quantity", quantity);
         request.put("effectiveAt", effectiveAt.toString());
         return mockMvc.perform(post("/api/pricing/preview")
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(request.toString()));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions previewPriceList(
+        String token,
+        long priceListId,
+        long branchId,
+        long serviceId,
+        String quantity,
+        Instant effectiveAt
+    ) throws Exception {
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("branchId", branchId);
+        request.put("serviceId", serviceId);
+        request.put("sharingMode", "ANY");
+        request.put("quantity", quantity);
+        request.put("effectiveAt", effectiveAt.toString());
+        return mockMvc.perform(post("/api/price-lists/{id}/preview", priceListId)
             .header("Authorization", bearer(token))
             .contentType(MediaType.APPLICATION_JSON)
             .content(request.toString()));

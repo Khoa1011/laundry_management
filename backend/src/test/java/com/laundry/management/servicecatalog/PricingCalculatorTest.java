@@ -89,6 +89,44 @@ class PricingCalculatorTest {
     }
 
     @Test
+    void explainsHybridAndMinimumChargeComponents() {
+        var hybrid = calculator.calculate(
+            terms(PricingMethod.HYBRID, UnitType.KG, bd("25000"), null, null, null, null,
+                bd("3"), bd("10000"), null, List.of()), bd("4")
+        );
+        assertThat(hybrid.finalAmount()).isEqualByComparingTo("35000.00");
+        assertThat(hybrid.components()).extracting(PricingCalculator.Component::type)
+            .containsExactly(
+                com.laundry.management.servicecatalog.domain.PricingComponentType.BASE,
+                com.laundry.management.servicecatalog.domain.PricingComponentType.EXCESS
+            );
+
+        var minimum = calculator.calculate(
+            terms(PricingMethod.BY_WEIGHT, UnitType.KG, null, bd("10000"), null, null,
+                bd("30000"), null, null, null, List.of()), bd("2")
+        );
+        assertThat(minimum.finalAmount()).isEqualByComparingTo("30000.00");
+        assertThat(minimum.components().get(1).amount()).isEqualByComparingTo("10000.00");
+    }
+
+    @Test
+    void calculatesExactQuantityPackagesAndRejectsMissingQuantity() {
+        var terms = new PricingCalculator.RuleTerms(
+            PricingMethod.QUANTITY_PACKAGE, UnitType.PAIR, null, null, null, null, null,
+            null, null, null, List.of(), List.of(
+                new PricingCalculator.PackagePriceTerm(bd("1"), bd("80000")),
+                new PricingCalculator.PackagePriceTerm(bd("2"), bd("150000")),
+                new PricingCalculator.PackagePriceTerm(bd("3"), bd("210000"))
+            )
+        );
+        assertThat(calculator.calculate(terms, bd("1")).finalAmount()).isEqualByComparingTo("80000.00");
+        assertThat(calculator.calculate(terms, bd("2")).finalAmount()).isEqualByComparingTo("150000.00");
+        assertThat(calculator.calculate(terms, bd("3")).finalAmount()).isEqualByComparingTo("210000.00");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> calculator.calculate(terms, bd("4")))
+            .isInstanceOf(com.laundry.management.common.exception.ApiException.class);
+    }
+
+    @Test
     void calculatesVolumeAndProgressiveTiersAtBoundaries() {
         List<PricingCalculator.TierTerm> tiers = List.of(
             new PricingCalculator.TierTerm(bd("0"), bd("5"), bd("25000")),

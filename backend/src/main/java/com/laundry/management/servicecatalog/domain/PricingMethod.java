@@ -7,5 +7,6 @@ public enum PricingMethod {
     BY_SET,
     FIXED,
     PER_LOAD,
-    HYBRID
+    HYBRID,
+    QUANTITY_PACKAGE
 }
