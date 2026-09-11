@@ -56,15 +56,17 @@ describe('Order pages', () => {
 
   it('renders touch cards and desktop table from one result set with full phone', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
-    renderAt('/orders', <OrderListPage />)
+    const { container } = renderAt('/orders', <OrderListPage />)
     expect(await screen.findAllByText('CN01-DH-000007')).toHaveLength(2)
+    expect(container.querySelector('.orders-page')).toHaveClass('page-container')
     expect(screen.getAllByText('0903 123 456')).toHaveLength(2)
     expect(screen.queryByRole('link', { name: /Tạo đơn hàng/i })).not.toBeInTheDocument()
   })
 
   it('explains guest persistence and exposes Vietnamese processing choices', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
-    renderAt('/orders/new', <OrderCreatePage />)
+    const { container } = renderAt('/orders/new', <OrderCreatePage />)
+    expect(container.querySelector('.order-create')).toHaveClass('page-container')
     await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
     expect(screen.getByText(/không tự tạo hồ sơ khách hàng/i)).toBeInTheDocument()
     expect(await screen.findByRole('option', { name: 'Giặt sấy thường' })).toBeInTheDocument()
@@ -74,8 +76,9 @@ describe('Order pages', () => {
   it('shows only semantic actions granted for the current ready state', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
     mocks.permissions.add(PERMISSION_CODES.ORDER_COMPLETE)
-    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    const { container } = renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
     expect(await screen.findByRole('button', { name: /Hoàn tất đơn/i })).toBeInTheDocument()
+    expect(container.querySelector('.order-detail')).toHaveClass('page-container')
     expect(screen.queryByRole('button', { name: 'Hủy đơn' })).not.toBeInTheDocument()
     expect(screen.queryByText('Lịch sử đơn hàng')).not.toBeInTheDocument()
   })

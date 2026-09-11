@@ -44,7 +44,7 @@ export function OrderListPage() {
     enabled: Boolean(branchId),
   })
 
-  return <div className="orders-page">
+  return <div className="page-container orders-page">
     <header className="orders-heading">
       <div><p className="eyebrow">Vận hành tại quầy</p><h1>Đơn hàng</h1><p>Theo dõi đơn theo trạng thái và cập nhật theo thời gian thực.</p></div>
       {canCreate && <ButtonLink to="/orders/new" variant="create"><Plus size={18} />Tạo đơn hàng</ButtonLink>}
@@ -150,7 +150,7 @@ export function OrderCreatePage() {
   }
   const total = Object.values(quotes).reduce((sum, value) => sum + value.finalAmount, 0)
 
-  return <form className="order-create" onSubmit={submit}>
+  return <form className="page-container order-create" onSubmit={submit}>
     <header className="focused-page-header"><ButtonLink to="/orders" variant="ghost"><ArrowLeft size={18} />Đơn hàng</ButtonLink><div><p className="eyebrow">Tiếp nhận tại quầy</p><h1>Tạo đơn hàng</h1></div></header>
     <div className="order-create-grid"><div className="order-form-stack">
       <Surface className="order-section"><div className="section-title"><span>1</span><div><h2>Khách hàng</h2><p>Chọn hồ sơ có sẵn hoặc ghi nhận khách vãng lai.</p></div></div>
@@ -205,8 +205,8 @@ export function OrderDetailPage() {
     onSuccess: (value) => { setReasonAction(null); setReason(''); queryClient.setQueryData(orderKeys.detail(id), value); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); notify({ message: 'Đã cập nhật trạng thái đơn.', tone: 'success' }) },
     onError: (error) => notify({ message: error instanceof ApiError && error.status === 409 ? 'Đơn vừa được người khác cập nhật. Hãy tải lại rồi thử lại.' : 'Không thể cập nhật trạng thái đơn.', tone: 'error' }),
   })
-  if (order.isLoading) return <LoadingState />
-  if (order.isError || !order.data) return <ErrorState title="Không tải được đơn hàng" body="Đơn không tồn tại hoặc nằm ngoài chi nhánh của bạn." onRetry={() => void order.refetch()} />
+  if (order.isLoading) return <div className="page-container"><LoadingState /></div>
+  if (order.isError || !order.data) return <div className="page-container"><ErrorState title="Không tải được đơn hàng" body="Đơn không tồn tại hoặc nằm ngoài chi nhánh của bạn." onRetry={() => void order.refetch()} /></div>
   const value = order.data
   const action = nextAction(value)
   const execute = (name: string) => {
@@ -215,7 +215,7 @@ export function OrderDetailPage() {
       setReasonAction(name)
     } else mutate.mutate({ action: name })
   }
-  return <div className="order-detail"><header className="order-detail-header"><div><Link to="/orders"><ArrowLeft size={18} />Đơn hàng</Link><div><h1>{value.orderCode}</h1><Status value={value.status} /></div><p>Nhận lúc {when(value.createdAt)} · {value.branchCode}</p></div><div>
+  return <div className="page-container order-detail"><header className="order-detail-header"><div><Link to="/orders"><ArrowLeft size={18} />Đơn hàng</Link><div><h1>{value.orderCode}</h1><Status value={value.status} /></div><p>Nhận lúc {when(value.createdAt)} · {value.branchCode}</p></div><div>
     {action && hasPermission(action[2]) && <Button loading={mutate.isPending} onClick={() => execute(action[0])}><PackageCheck size={18} />{action[1]}</Button>}
     {(['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_CANCEL) && <Button variant="danger" onClick={() => execute('cancel')}>Hủy đơn</Button>}
     {value.status === 'COMPLETED' && hasPermission(PERMISSION_CODES.ORDER_REOPEN) && <Button variant="secondary" onClick={() => execute('reopen')}><RotateCcw size={18} />Mở lại</Button>}
