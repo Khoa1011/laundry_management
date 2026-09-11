@@ -12,6 +12,7 @@ import { useToast } from '../../providers/ToastProvider'
 import { VietnamAddressFields } from '../locations/VietnamAddressFields'
 import { toVietnamAddressPayload } from '../locations/payload'
 import type { VietnamAddressValue } from '../locations/types'
+import type { CustomerDetail } from '../../api/types'
 import { useCreateCustomer } from './api'
 import { customerSchema, type CustomerFormValues } from './schemas'
 
@@ -22,7 +23,7 @@ const defaults: CustomerFormValues = {
   ward: '', wardCode: '', addressLine: '', deliveryNote: '',
 }
 
-export function QuickCustomerDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function QuickCustomerDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: (customer: CustomerDetail) => void }) {
   const { t } = useTranslation()
   const { branchId, hasPermission } = useAuth()
   const { notify } = useToast()
@@ -58,7 +59,7 @@ export function QuickCustomerDialog({ open, onClose }: { open: boolean; onClose:
   const notifyValidationError = () => notify(t('validation:fixErrors'), 'error')
   const submit = handleSubmit(async (values) => {
     try {
-      await mutation.mutateAsync({
+      const created = await mutation.mutateAsync({
         fullName: values.fullName,
         phone: values.phone,
         customerType: values.customerType,
@@ -83,6 +84,7 @@ export function QuickCustomerDialog({ open, onClose }: { open: boolean; onClose:
         } : undefined,
       })
       notify(t('customers:quickSuccess'))
+      onCreated?.(created)
       close()
     } catch (error) {
       if (error instanceof ApiError && error.problem.errorCode === 'CUSTOMER_PHONE_DUPLICATE') {

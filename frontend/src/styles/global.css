@@ -63,7 +63,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .mobile-brand { display: flex; align-items: center; gap: 8px; color: var(--primary); }
 .header-spacer { flex: 1; }
 .header-select { max-width: 160px; position: relative; display: flex; align-items: center; }
-.header-select select { min-height: 42px; padding: 8px 32px 8px 10px; border: 0; background: var(--surface-subtle); font-size: 13px; font-weight: 650; appearance: none; text-overflow: ellipsis; }
+.header-select select { min-height: var(--control-height); padding: 8px 32px 8px 10px; border: 0; background: var(--surface-subtle); font-size: 13px; font-weight: 650; appearance: none; text-overflow: ellipsis; }
 .header-select svg { position: absolute; right: 10px; pointer-events: none; }
 .app-main { min-width: 0; padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
 .page-container { width: 100%; max-width: 1416px; margin: 0 auto; padding: 20px 16px 32px; }

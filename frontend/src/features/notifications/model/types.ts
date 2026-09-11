@@ -4,6 +4,9 @@ export type NotificationType =
   | 'EMPLOYEE_BRANCH_CHANGED'
   | 'EMPLOYEE_ACCOUNT_LINKED'
   | 'EMPLOYEE_ACCOUNT_LOCKED'
+  | 'ORDER_READY'
+  | 'ORDER_CANCELLED'
+  | 'ORDER_REOPENED'
   | 'SYSTEM_ANNOUNCEMENT'
   | 'GENERIC_INTERNAL'
 export type NotificationReferenceType =
@@ -69,9 +72,15 @@ export interface NotificationPreferences {
 
 export interface NotificationSseEnvelope {
   eventId: string
-  eventType: string
-  notification: NotificationItem | null
-  notificationId: number | null
-  unreadCount: number | null
-  serverTime: string
+  eventType?: string
+  type?: string
+  notification?: NotificationItem | null
+  notificationId?: number | null
+  unreadCount?: number | null
+  serverTime?: string
+  branchId?: number | null
+  entityId?: number | null
+  entityCode?: string | null
+  version?: number | null
+  occurredAt?: string
 }

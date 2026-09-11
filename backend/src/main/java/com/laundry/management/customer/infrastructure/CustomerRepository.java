@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.List;
 
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
@@ -85,6 +86,22 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
         @Param("status") CustomerStatus status,
         @Param("customerType") CustomerType customerType,
         @Param("source") CustomerSource source,
+        Pageable pageable
+    );
+
+    @Query("""
+        select c from Customer c
+        where c.branch.id = :branchId and c.status = com.laundry.management.customer.domain.CustomerStatus.ACTIVE
+          and (:namePattern is null or lower(c.fullName) like :namePattern escape '!')
+          and (:exactPhone is null or c.normalizedPhone = :exactPhone)
+          and (:reverseSuffix is null or c.phoneSearchReverse like :reverseSuffix)
+        order by c.fullName asc, c.id asc
+        """)
+    List<Customer> counterSearch(
+        @Param("branchId") Long branchId,
+        @Param("namePattern") String namePattern,
+        @Param("exactPhone") String exactPhone,
+        @Param("reverseSuffix") String reverseSuffix,
         Pageable pageable
     );
 }

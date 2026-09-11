@@ -69,6 +69,12 @@ public class PricingEngineService {
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICING_PREVIEW)")
     @Transactional(readOnly = true)
     public CatalogDtos.PricingPreviewResponse preview(CatalogDtos.PricingPreviewRequest request) {
+        return quoteForOrder(request);
+    }
+
+    /** Trusted application-service entry point. Callers must enforce their own permission first. */
+    @Transactional(readOnly = true)
+    public CatalogDtos.PricingPreviewResponse quoteForOrder(CatalogDtos.PricingPreviewRequest request) {
         authorizationService.requireBranch(request.branchId());
         List<PriceList> lists = priceListRepository.findEffective(
             request.branchId(), QUOTABLE_LIST_STATUSES, request.effectiveAt()

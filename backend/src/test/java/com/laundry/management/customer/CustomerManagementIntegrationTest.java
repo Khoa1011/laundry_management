@@ -1,6 +1,7 @@
 package com.laundry.management.customer;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -190,6 +191,34 @@ class CustomerManagementIntegrationTest {
                 .param("size", "101"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.errorCode").value("PAGE_SIZE_EXCEEDED"));
+    }
+
+    @Test
+    void counterSearchSupportsPhoneSuffixExactPhoneAndBranchScopeWithoutMasking() throws Exception {
+        createCustomer(managerAToken, baseCustomer("Nguyễn Một", "0901 111 234", "INDIVIDUAL", "WALK_IN"));
+        createCustomer(managerAToken, baseCustomer("Nguyễn Hai", "0935 761 234", "INDIVIDUAL", "WALK_IN"));
+        createCustomer(managerBToken, baseCustomer("Khách Chi Nhánh B", "0988 881 234", "INDIVIDUAL", "WALK_IN"));
+
+        mockMvc.perform(get("/api/customers/counter-search")
+                .header("Authorization", bearer(receptionistToken))
+                .param("query", "1234"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(2)))
+            .andExpect(jsonPath("$[*].phone", containsInAnyOrder("0901 111 234", "0935 761 234")));
+
+        mockMvc.perform(get("/api/customers/counter-search")
+                .header("Authorization", bearer(receptionistToken))
+                .param("query", "+84901111234"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].fullName").value("Nguyễn Một"));
+
+        mockMvc.perform(get("/api/customers/counter-search")
+                .header("Authorization", bearer(managerBToken))
+                .param("query", "1234"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].fullName").value("Khách Chi Nhánh B"));
     }
 
     @Test

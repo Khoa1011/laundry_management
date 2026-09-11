@@ -6,6 +6,7 @@ import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.common.exception.ErrorCode;
 import com.laundry.management.customer.api.CustomerDetailResponse;
 import com.laundry.management.customer.api.CustomerListResponse;
+import com.laundry.management.customer.api.CustomerListItemResponse;
 import com.laundry.management.customer.domain.CustomerSource;
 import com.laundry.management.customer.domain.CustomerStatus;
 import com.laundry.management.customer.domain.CustomerType;
@@ -114,6 +115,21 @@ public class CustomerQueryService {
             .orElseThrow(this::customerNotFound);
         var addresses = addressRepository.findAllByCustomerIdOrderByDefaultAddressDescCreatedAtAsc(customerId);
         return customerMapper.toDetail(customer, addresses);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).CUSTOMER_READ)")
+    @Transactional(readOnly = true)
+    public List<CustomerListItemResponse> counterSearch(String query, Long requestedBranchId) {
+        Long branchId = currentUserProvider.resolveAuthorizedBranch(requestedBranchId);
+        String value = query == null ? "" : query.trim();
+        if (value.length() < 2) return List.of();
+        String digits = value.replaceAll("\\D", "");
+        String exact = phoneNormalizer.tryNormalizeForSearch(value).orElse(null);
+        boolean suffix = value.matches("\\d{3,4}");
+        String namePattern = exact == null && !suffix ? "%" + escapeLike(value.toLowerCase(Locale.ROOT)) + "%" : null;
+        String reverseSuffix = suffix ? new StringBuilder(digits).reverse() + "%" : null;
+        return customerRepository.counterSearch(branchId, namePattern, exact, reverseSuffix, PageRequest.of(0, 20))
+            .stream().map(customerMapper::toListItem).toList();
     }
 
     private void validatePage(int page, int size) {

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,9 +52,18 @@ public class NotificationConnectionRegistry {
         long timeoutMillis,
         SseEmitter.SseEventBuilder connectedEvent
     ) {
+        return register(userId, timeoutMillis, connectedEvent, Set.of("notification"));
+    }
+
+    public SseEmitter register(
+        Long userId,
+        long timeoutMillis,
+        SseEmitter.SseEventBuilder connectedEvent,
+        Set<String> topics
+    ) {
         String connectionId = UUID.randomUUID().toString();
         SseEmitter emitter = new SseEmitter(Math.max(1_000L, Math.min(EMITTER_TIMEOUT_MILLIS, timeoutMillis)));
-        Connection connection = new Connection(connectionId, emitter, Instant.now());
+        Connection connection = new Connection(connectionId, emitter, Instant.now(), Set.copyOf(topics));
         CopyOnWriteArrayList<Connection> userConnections =
             connections.computeIfAbsent(userId, ignored -> new CopyOnWriteArrayList<>());
         userConnections.add(connection);
@@ -88,12 +98,19 @@ public class NotificationConnectionRegistry {
     }
 
     public int sendToUser(Long userId, SseEmitter.SseEventBuilder event) {
+        return sendToUser(userId, "notification", event);
+    }
+
+    public int sendToUser(Long userId, String topic, SseEmitter.SseEventBuilder event) {
         List<Connection> userConnections = connections.get(userId);
         if (userConnections == null) {
             return 0;
         }
         int delivered = 0;
         for (Connection connection : userConnections) {
+            if (!connection.topics().contains(topic)) {
+                continue;
+            }
             try {
                 connection.emitter().send(event);
                 delivered++;
@@ -107,7 +124,15 @@ public class NotificationConnectionRegistry {
     }
 
     public void heartbeat(SseEmitter.SseEventBuilder event) {
-        connections.keySet().forEach(userId -> sendToUser(userId, event));
+        connections.forEach((userId, userConnections) -> userConnections.forEach(connection -> {
+            try {
+                connection.emitter().send(event);
+            } catch (IOException | IllegalStateException exception) {
+                failedSends.increment();
+                remove(userId, connection.id());
+                connection.emitter().completeWithError(exception);
+            }
+        }));
     }
 
     public void disconnectUser(Long userId) {
@@ -138,6 +163,6 @@ public class NotificationConnectionRegistry {
         });
     }
 
-    private record Connection(String id, SseEmitter emitter, Instant connectedAt) {
+    private record Connection(String id, SseEmitter emitter, Instant connectedAt, Set<String> topics) {
     }
 }

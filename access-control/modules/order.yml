@@ -1,0 +1,28 @@
+{
+  "module": {
+    "code": "order",
+    "nameVi": "Đơn hàng",
+    "nameEn": "Orders",
+    "descriptionVi": "Tiếp nhận, tính giá, theo dõi và điều phối vòng đời đơn giặt theo chi nhánh.",
+    "descriptionEn": "Create, price, track, and operate branch-scoped laundry orders.",
+    "displayOrder": 20,
+    "dataScopeNotes": "Mọi thao tác và sự kiện realtime của Order phải đồng thời nằm trong phạm vi chi nhánh của người dùng.",
+    "businessPolicyNotes": "Trạng thái chỉ đổi qua lệnh nghiệp vụ hợp lệ; giá do backend tính và được đóng băng trong pricing snapshot."
+  },
+  "permissions": [
+    { "code": "order.read", "resource": "order", "action": "read", "nameVi": "Xem đơn hàng", "nameEn": "View orders", "descriptionVi": "Xem danh sách và chi tiết đơn hàng trong chi nhánh được phép.", "descriptionEn": "View orders within the allowed branch scope.", "riskLevel": "LOW", "displayOrder": 10 },
+    { "code": "order.create", "resource": "order", "action": "create", "nameVi": "Tạo đơn hàng", "nameEn": "Create orders", "descriptionVi": "Tạo đơn mới với giá do hệ thống tính.", "descriptionEn": "Create orders with server-authoritative pricing.", "riskLevel": "MEDIUM", "displayOrder": 20 },
+    { "code": "order.update", "resource": "order", "action": "update", "nameVi": "Cập nhật đơn hàng", "nameEn": "Update orders", "descriptionVi": "Sửa nội dung đơn khi trạng thái nghiệp vụ cho phép.", "descriptionEn": "Update orders while business state permits it.", "riskLevel": "MEDIUM", "displayOrder": 30 },
+    { "code": "order.start-processing", "resource": "order", "action": "start-processing", "nameVi": "Bắt đầu xử lý đơn", "nameEn": "Start order processing", "descriptionVi": "Chuyển đơn hợp lệ sang trạng thái đang xử lý.", "descriptionEn": "Move an eligible order into processing.", "riskLevel": "MEDIUM", "displayOrder": 40 },
+    { "code": "order.mark-ready", "resource": "order", "action": "mark-ready", "nameVi": "Đánh dấu đơn sẵn sàng", "nameEn": "Mark orders ready", "descriptionVi": "Xác nhận đơn đã xử lý xong và sẵn sàng trả khách.", "descriptionEn": "Confirm an order is ready for customer pickup.", "riskLevel": "MEDIUM", "displayOrder": 50 },
+    { "code": "order.complete", "resource": "order", "action": "complete", "nameVi": "Hoàn tất đơn hàng", "nameEn": "Complete orders", "descriptionVi": "Xác nhận hàng đã được bàn giao và hoàn tất đơn.", "descriptionEn": "Confirm handoff and complete an order.", "riskLevel": "HIGH", "displayOrder": 60 },
+    { "code": "order.cancel", "resource": "order", "action": "cancel", "nameVi": "Hủy đơn hàng", "nameEn": "Cancel orders", "descriptionVi": "Hủy đơn hợp lệ với lý do bắt buộc.", "descriptionEn": "Cancel an eligible order with a required reason.", "riskLevel": "HIGH", "displayOrder": 70 },
+    { "code": "order.reopen", "resource": "order", "action": "reopen", "nameVi": "Mở lại đơn hàng", "nameEn": "Reopen orders", "descriptionVi": "Mở lại đơn đã hoàn tất với lý do bắt buộc.", "descriptionEn": "Reopen a completed order with a required reason.", "riskLevel": "HIGH", "displayOrder": 80 },
+    { "code": "order.audit.read", "resource": "order.audit", "action": "read", "nameVi": "Xem lịch sử đơn hàng", "nameEn": "View order history", "descriptionVi": "Xem lịch sử trạng thái và thay đổi quan trọng của đơn.", "descriptionEn": "View order status and change history.", "riskLevel": "HIGH", "displayOrder": 90 }
+  ],
+  "defaultRoleGrants": {
+    "OWNER": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
+    "MANAGER": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
+    "RECEPTIONIST": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete"]
+  }
+}

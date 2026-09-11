@@ -7,7 +7,7 @@ import './i18n'
 import { ThemeProvider } from './providers/ThemeProvider'
 import { ToastProvider } from './providers/ToastProvider'
 import { MotionProvider } from './providers/MotionProvider'
-import { NotificationProvider } from './features/notifications/providers/NotificationProvider'
+import { RealtimeProvider } from './providers/RealtimeProvider'
 import './styles.css'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false }, mutations: { retry: false } } })
@@ -19,9 +19,9 @@ createRoot(document.getElementById('root')!).render(
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <ToastProvider>
-              <NotificationProvider>
+              <RealtimeProvider>
                 <App />
-              </NotificationProvider>
+              </RealtimeProvider>
             </ToastProvider>
           </AuthProvider>
         </QueryClientProvider>

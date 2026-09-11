@@ -13,6 +13,7 @@
 @import "./styles/auth.css";
 @import "./styles/landing.css";
 @import "./styles/shell.css";
+@import "./styles/orders.css";
 
 @theme inline {
   --color-app-background: var(--app-background);

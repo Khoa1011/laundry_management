@@ -27,6 +27,14 @@ public class CustomerMapper {
         );
     }
 
+    public CustomerListItemResponse toListItem(Customer customer) {
+        return new CustomerListItemResponse(
+            customer.getId(), customer.getCustomerCode(), customer.getFullName(), customer.getPhone(),
+            customer.getEmail(), customer.getCustomerType(), customer.getSource(), customer.getStatus(),
+            customer.getCreatedAt(), customer.getUpdatedAt()
+        );
+    }
+
     public CustomerDetailResponse toDetail(Customer customer, List<CustomerAddress> addresses) {
         return new CustomerDetailResponse(
             customer.getId(),

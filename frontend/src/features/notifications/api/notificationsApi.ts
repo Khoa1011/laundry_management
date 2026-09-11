@@ -90,7 +90,7 @@ function streamErrorForStatus(status: number) {
 export async function openNotificationStream(signal: AbortSignal, handlers: StreamHandlers) {
   let session = readSession()
   if (!session) throw new NotificationStreamError('AUTH_REQUIRED', { status: 401, retryable: false })
-  let response = await fetch('/api/notifications/stream', {
+  let response = await fetch('/api/realtime/stream', {
     method: 'GET',
     signal,
     credentials: 'same-origin',
@@ -102,7 +102,7 @@ export async function openNotificationStream(signal: AbortSignal, handlers: Stre
   if (response.status === 401 && !signal.aborted) {
     session = await refreshSession()
     if (!session) throw new NotificationStreamError('AUTH_REQUIRED', { status: 401, retryable: false })
-    response = await fetch('/api/notifications/stream', {
+    response = await fetch('/api/realtime/stream', {
       method: 'GET',
       signal,
       credentials: 'same-origin',

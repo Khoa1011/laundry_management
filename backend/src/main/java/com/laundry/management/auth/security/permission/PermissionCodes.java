@@ -67,6 +67,15 @@ public final class PermissionCodes {
     public static final String NOTIFICATION_SEND_BY_POSITION = "notification.send-by-position";
     public static final String NOTIFICATION_SEND_BY_PERMISSION = "notification.send-by-permission";
     public static final String NOTIFICATION_MANAGE = "notification.manage";
+    public static final String ORDER_READ = "order.read";
+    public static final String ORDER_CREATE = "order.create";
+    public static final String ORDER_UPDATE = "order.update";
+    public static final String ORDER_START_PROCESSING = "order.start-processing";
+    public static final String ORDER_MARK_READY = "order.mark-ready";
+    public static final String ORDER_COMPLETE = "order.complete";
+    public static final String ORDER_CANCEL = "order.cancel";
+    public static final String ORDER_REOPEN = "order.reopen";
+    public static final String ORDER_AUDIT_READ = "order.audit.read";
     public static final String PRICE_LIST_READ = "price-list.read";
     public static final String PRICE_LIST_CREATE = "price-list.create";
     public static final String PRICE_LIST_UPDATE_DRAFT = "price-list.update-draft";

@@ -34,7 +34,7 @@ import { motionDuration, motionEase } from '../providers/motionPresets'
 
 const navItems = [
   { to: '/overview', key: 'overview', icon: Home },
-  { to: '/orders', key: 'orders', icon: ClipboardList },
+  { to: '/orders', key: 'orders', icon: ClipboardList, permission: PERMISSION_CODES.ORDER_READ },
   { to: '/customers', key: 'customers', icon: Users, permission: PERMISSION_CODES.CUSTOMER_READ },
   { to: '/employees', key: 'employees', icon: UsersRound, permission: PERMISSION_CODES.EMPLOYEE_READ },
   { to: '/more', key: 'more', icon: MoreHorizontal },
@@ -54,11 +54,13 @@ export function AppShell() {
   const mobileDrawerRef = useRef<HTMLElement>(null)
 
   const focused = location.pathname === '/customers/new'
+    || location.pathname === '/orders/new'
     || /\/customers\/\d+\/edit$/.test(location.pathname)
     || location.pathname === '/employees/new'
     || /\/employees\/\d+\/edit$/.test(location.pathname)
     || /\/settings\/access\/roles\/(?:new|\d+\/(?:edit|permissions))$/.test(location.pathname)
-  const canCreate = hasPermission(PERMISSION_CODES.CUSTOMER_CREATE)
+  const canCreateCustomer = hasPermission(PERMISSION_CODES.CUSTOMER_CREATE)
+  const canCreateOrder = hasPermission(PERMISSION_CODES.ORDER_CREATE)
   const visibleNavItems = navItems.filter((item) =>
     !('permission' in item) || hasPermission(item.permission as PermissionCode))
   const canOpenAccess = [
@@ -347,9 +349,9 @@ export function AppShell() {
             type="button"
             className="central-create"
             variant="primary"
-            onClick={() => canCreate && setQuickCreateOpen(true)}
-            disabled={!canCreate}
-            label={t('customers:quickAdd')}
+            onClick={() => canCreateOrder ? navigate('/orders/new') : canCreateCustomer && setQuickCreateOpen(true)}
+            disabled={!canCreateOrder && !canCreateCustomer}
+            label={canCreateOrder ? 'Tạo đơn hàng' : t('customers:quickAdd')}
           >
             <Plus size={28} aria-hidden="true" />
           </IconButton>
@@ -363,7 +365,7 @@ export function AppShell() {
           </AppNavLink>
         </nav>
       )}
-      {canCreate && <QuickCustomerDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />}
+      {canCreateCustomer && <QuickCustomerDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />}
     </div>
   )
 }

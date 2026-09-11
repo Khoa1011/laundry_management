@@ -43,6 +43,9 @@ public class Customer {
     @Column(name = "normalized_phone", nullable = false, length = 20)
     private String normalizedPhone;
 
+    @Column(name = "phone_search_reverse", length = 20)
+    private String phoneSearchReverse;
+
     @Column(length = 254)
     private String email;
 
@@ -105,6 +108,7 @@ public class Customer {
         this.fullName = fullName;
         this.phone = phone;
         this.normalizedPhone = normalizedPhone;
+        this.phoneSearchReverse = reverse(normalizedPhone);
         this.email = email;
         this.birthDate = birthDate;
         this.customerType = customerType;
@@ -129,6 +133,7 @@ public class Customer {
         this.fullName = fullName;
         this.phone = phone;
         this.normalizedPhone = normalizedPhone;
+        this.phoneSearchReverse = reverse(normalizedPhone);
         this.email = email;
         this.birthDate = birthDate;
         this.customerType = customerType;
@@ -148,6 +153,7 @@ public class Customer {
     public String getFullName() { return fullName; }
     public String getPhone() { return phone; }
     public String getNormalizedPhone() { return normalizedPhone; }
+    public String getPhoneSearchReverse() { return phoneSearchReverse; }
     public String getEmail() { return email; }
     public LocalDate getBirthDate() { return birthDate; }
     public CustomerType getCustomerType() { return customerType; }
@@ -157,4 +163,5 @@ public class Customer {
     public long getVersion() { return version; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    private static String reverse(String value) { return value == null ? null : new StringBuilder(value).reverse().toString(); }
 }

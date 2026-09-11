@@ -47,7 +47,7 @@ describe('openNotificationStream', () => {
 
     await openNotificationStream(new AbortController().signal, { onOpen, onEvent })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/notifications/stream', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/realtime/stream', expect.objectContaining({
       headers: expect.objectContaining({ Authorization: 'Bearer access-one' }),
     }))
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('access-one')
@@ -75,7 +75,7 @@ describe('openNotificationStream', () => {
     })
 
     expect(sessionMocks.refreshSession).toHaveBeenCalledOnce()
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/notifications/stream', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/realtime/stream', expect.objectContaining({
       headers: expect.objectContaining({ Authorization: 'Bearer access-two' }),
     }))
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'connected' }))

@@ -63,6 +63,14 @@ public class CustomerController {
         return queryService.get(customerId, branchId);
     }
 
+    @GetMapping("/counter-search")
+    public List<CustomerListItemResponse> counterSearch(
+        @RequestParam String query,
+        @RequestParam(required = false) Long branchId
+    ) {
+        return queryService.counterSearch(query, branchId);
+    }
+
     @PostMapping
     public ResponseEntity<CustomerDetailResponse> create(@Valid @RequestBody CustomerCreateRequest request) {
         CustomerDetailResponse created = customerService.create(request);

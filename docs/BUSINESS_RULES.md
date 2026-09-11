@@ -14,15 +14,19 @@ This is the initial business-rule template for the laundry shop management syste
 
 ## Laundry orders
 
-- **NEEDS CONFIRMATION** - Define required order data, order numbering, and ownership by shop or branch.
-- **NEEDS CONFIRMATION** - Define how items, quantities, weights, services, notes, promised dates, and totals are recorded.
-- **NEEDS CONFIRMATION** - Define rules for editing, cancelling, reopening, and retaining orders.
+- An order belongs to exactly one branch. Its code is generated only by the backend from an independent, concurrency-safe branch sequence in the form `<branch-code>-DH-000001`; clients cannot supply or edit it.
+- An order may reference an active customer in the same branch or store a guest name/phone snapshot without creating a customer. Existing-customer name and phone are also snapshotted at intake.
+- Every order contains at least one eligible service item. Quantity, unit, item type, sharing context, notes, authoritative pricing breakdown, price-list/rule references, and quoted time are retained with the item. The client never supplies the final price.
+- The order total is the sum of immutable item pricing snapshots in V1. Promised return time is optional. Payment, debt, discount, promotion, manual price override, tax, printing, delivery, inventory, machine assignment, barcode, and QR behavior are outside Order Core V1.
+- Structural edits to services and quantities are allowed only in `RECEIVED`. Safe note and promised-time updates may continue in `PROCESSING` and `READY`. `COMPLETED` and `CANCELLED` orders are immutable; reopening a completed order is the only exception.
+- Orders, pricing snapshots, and status/audit history are retained and are not hard deleted.
 
 ## Order status transitions
 
-- **NEEDS CONFIRMATION** - Define the allowed statuses and their meanings.
-- **NEEDS CONFIRMATION** - Define valid transitions, who may perform them, and required timestamps or reasons.
-- **NEEDS CONFIRMATION** - Define terminal states and whether transitions may be reversed.
+- Order Core V1 uses `RECEIVED`, `PROCESSING`, `READY`, `COMPLETED`, `CANCELLED`, and `REOPENED`.
+- The standard path is `RECEIVED -> PROCESSING -> READY -> COMPLETED`. `RECEIVED`, `PROCESSING`, and `READY` may be cancelled with a required reason. `COMPLETED` may be reopened with a required reason; `CANCELLED` is final and cannot be reopened.
+- `REOPENED` may move to `PROCESSING` or directly to `READY`. Status changes are semantic commands protected by separate effective permissions and branch scope; no generic status update is allowed.
+- Every create, edit, transition, cancellation, and reopen action records the actor, future-friendly source, time, status change, reason where required, and safe changed-field metadata. The order also retains current cancellation/reopen actor, time, and reason metadata. Optimistic version conflicts require the client to reload instead of overwriting newer work.
 
 ## Services and pricing
 
@@ -36,7 +40,8 @@ This is the initial business-rule template for the laundry shop management syste
 - Price coverage is calculated only across explicit service-item eligibility combinations. A service-wide default rule covers all its eligible item types when the rule is otherwise quotable.
 - Services and item types are never hard deleted through this module. Archiving is final and is blocked while an active or scheduled price list references the record. An eligibility association used by an active or scheduled price rule cannot be removed.
 - Eligibility changes, price-list lifecycle changes, and pricing-rule changes are authorized independently and audited. Permission grants remain separate from branch scope and pricing business policy.
-- **NEEDS CONFIRMATION** - Define taxes, general discounts, order-level surcharges, VND rounding policy, order-time price capture, later catalog-change behavior for existing orders, and order price-override authority/audit requirements.
+- Order intake captures the complete authoritative pricing snapshot at quote time. Later service, item-type, price-list, or price-rule changes do not alter existing order items.
+- **NEEDS CONFIRMATION** - Define taxes, general discounts, order-level surcharges, VND rounding policy beyond the existing pricing-engine output, and order price-override authority/audit requirements.
 
 ## Payments
 
@@ -86,6 +91,8 @@ This is the initial business-rule template for the laundry shop management syste
 - The actor is excluded after recipient resolution by default. Inclusion must be explicit for a legitimate system or personal-confirmation case.
 - Business transactions commit before notification creation. Notification creation runs after commit in a new transaction and cannot roll back the completed business operation.
 - The database is the durable source of notification truth. SSE is a best-effort realtime optimization; reconnecting clients reconcile through REST.
+- Authenticated application realtime uses one shared SSE stream. Order events contain only branch/entity identifiers, order code, version, event type, and time; recipient resolution requires both effective `order.read` permission and branch access.
+- `READY`, `CANCELLED`, and `REOPENED` create durable internal notifications linked to the order after the business transaction commits.
 - Notification metadata contains translation interpolation values only. Salary, full identity numbers, passwords, tokens, private document data, storage keys, checksums, and executable markup are prohibited.
 - Employee branch changes are the first guaranteed realtime integration. Status changes and account links also publish internal events; locked or inactive accounts are not expected to receive realtime delivery.
 - Internal notifications do not add customer-facing push, email, SMS, Zalo, PWA push, or guaranteed cross-device delivery.

@@ -1,0 +1,229 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock3, PackageCheck, Plus, RotateCcw, Search, X } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ApiError } from '../../api/client'
+import { useAuth } from '../../auth/AuthProvider'
+import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
+import { Field } from '../../components/Field'
+import { OverlayDialog } from '../../components/OverlayDialog'
+import { ErrorState, LoadingState, StatePanel } from '../../components/States'
+import { Button, ButtonLink } from '../../components/ui/Button'
+import { Surface } from '../../components/ui/Surface'
+import { useToast } from '../../providers/ToastProvider'
+import { QuickCustomerDialog } from '../customers/QuickCustomerDialog'
+import type { PricingPreview } from '../service-catalog/types'
+import { orderApi, orderKeys } from './api'
+import type { Order, OrderItemPayload, OrderStatus } from './types'
+
+const statusText: Record<OrderStatus, string> = {
+  RECEIVED: 'Đã nhận', PROCESSING: 'Đang xử lý', READY: 'Sẵn sàng',
+  COMPLETED: 'Hoàn tất', CANCELLED: 'Đã hủy', REOPENED: 'Đã mở lại',
+}
+const money = (value: number) => new Intl.NumberFormat('vi-VN', {
+  style: 'currency', currency: 'VND', maximumFractionDigits: 0,
+}).format(value)
+const when = (value: string) => new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'short', timeStyle: 'short',
+}).format(new Date(value))
+
+function Status({ value }: { value: OrderStatus }) {
+  return <span className={`order-status order-status--${value.toLowerCase()}`}>{statusText[value]}</span>
+}
+
+export function OrderListPage() {
+  const { branchId, hasPermission } = useAuth()
+  const navigate = useNavigate()
+  const [status, setStatus] = useState<OrderStatus>()
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const canCreate = hasPermission(PERMISSION_CODES.ORDER_CREATE)
+  const query = useQuery({
+    queryKey: orderKeys.list(branchId, status, search, page),
+    queryFn: () => orderApi.list({ branchId: branchId!, status, search: search || undefined, page, size: 20 }),
+    enabled: Boolean(branchId),
+  })
+
+  return <div className="orders-page">
+    <header className="orders-heading">
+      <div><p className="eyebrow">Vận hành tại quầy</p><h1>Đơn hàng</h1><p>Theo dõi đơn theo trạng thái và cập nhật theo thời gian thực.</p></div>
+      {canCreate && <ButtonLink to="/orders/new" variant="create"><Plus size={18} />Tạo đơn hàng</ButtonLink>}
+    </header>
+    <div className="order-tabs" role="tablist" aria-label="Trạng thái đơn">
+      {([undefined, 'RECEIVED', 'PROCESSING', 'READY', 'COMPLETED', 'CANCELLED', 'REOPENED'] as const).map((value) =>
+        <button key={value ?? 'all'} className={status === value ? 'active' : ''} onClick={() => { setStatus(value); setPage(0) }}>
+          {value ? statusText[value] : 'Tất cả'}
+        </button>)}
+    </div>
+    <Surface className="orders-list-surface">
+      <div className="orders-toolbar">
+        <label className="order-search"><Search size={18} /><span className="sr-only">Tìm đơn</span>
+          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Mã đơn, tên khách, số điện thoại, dịch vụ" />
+        </label><span>{query.data?.totalElements ?? 0} đơn</span>
+      </div>
+      {query.isLoading ? <LoadingState rows={6} /> : query.isError
+        ? <ErrorState title="Không tải được đơn hàng" body="Kiểm tra kết nối rồi thử lại." onRetry={() => void query.refetch()} />
+        : !query.data?.items.length
+          ? <StatePanel title="Chưa có đơn phù hợp" body="Thử đổi trạng thái, từ khóa hoặc tạo đơn hàng đầu tiên." action={canCreate ? <ButtonLink to="/orders/new">Tạo đơn hàng</ButtonLink> : undefined} />
+          : <>
+            <div className="orders-mobile-list">{query.data.items.map((order) =>
+              <button className="order-card" key={order.id} onClick={() => navigate(`/orders/${order.id}`)}>
+                <div><strong>{order.orderCode}</strong><Status value={order.status} /></div>
+                <h2>{order.customerName || 'Khách vãng lai'}</h2>{order.customerPhone && <p>{order.customerPhone}</p>}<p>{order.serviceSummary || 'Dịch vụ giặt là'}</p>
+                <div><span>{when(order.createdAt)}</span><strong>{money(order.totalAmount)}</strong><ChevronRight size={18} /></div>
+              </button>)}</div>
+            <div className="orders-table-wrap"><table className="orders-table"><thead><tr>
+              <th>Mã đơn</th><th>Thời gian nhận</th><th>Khách hàng</th><th>Dịch vụ</th><th>Tổng tiền</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th>
+            </tr></thead><tbody>{query.data.items.map((order) => <tr key={order.id}>
+              <td><Link to={`/orders/${order.id}`}>{order.orderCode}</Link></td><td>{when(order.createdAt)}</td>
+              <td><strong>{order.customerName || 'Khách vãng lai'}</strong><small>{order.customerPhone}</small></td>
+              <td>{order.serviceSummary}</td><td>{money(order.totalAmount)}</td><td><Status value={order.status} /></td>
+              <td><ButtonLink size="sm" variant="ghost" to={`/orders/${order.id}`}>Xem</ButtonLink></td>
+            </tr>)}</tbody></table></div>
+            {query.data.totalPages > 1 && <nav className="orders-pagination" aria-label="Phân trang đơn hàng">
+              <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={17} />Trước</Button>
+              <span>Trang {page + 1} / {query.data.totalPages}</span>
+              <Button variant="secondary" size="sm" disabled={page + 1 >= query.data.totalPages} onClick={() => setPage((value) => value + 1)}>Sau<ChevronRight size={17} /></Button>
+            </nav>}
+          </>}
+    </Surface>
+  </div>
+}
+
+type DraftItem = OrderItemPayload & { key: number }
+
+export function OrderCreatePage() {
+  const { branchId, hasPermission } = useAuth()
+  const navigate = useNavigate()
+  const { notify } = useToast()
+  const [mode, setMode] = useState<'existing' | 'guest'>('existing')
+  const [search, setSearch] = useState('')
+  const [customerId, setCustomerId] = useState<number>()
+  const [guestName, setGuestName] = useState('')
+  const [guestPhone, setGuestPhone] = useState('')
+  const [promisedAt, setPromisedAt] = useState('')
+  const [note, setNote] = useState('')
+  const [items, setItems] = useState<DraftItem[]>([{ key: 1, serviceId: 0, sharingMode: 'ANY', quantity: 1 }])
+  const [quotes, setQuotes] = useState<Record<number, PricingPreview>>({})
+  const [eligible, setEligible] = useState<Record<number, Array<{ id: number; nameVi: string }>>>({})
+  const [formError, setFormError] = useState('')
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false)
+  const customers = useQuery({ queryKey: ['orders', 'customer-search', branchId, search], queryFn: () => orderApi.customers(branchId!, search), enabled: mode === 'existing' && Boolean(branchId) && search.trim().length >= 2 })
+  const services = useQuery({ queryKey: ['orders', 'service-options'], queryFn: orderApi.services })
+  const updateItem = (key: number, patch: Partial<DraftItem>) => setItems((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item))
+
+  useEffect(() => {
+    const valid = items.filter((item) => item.serviceId && item.quantity > 0)
+    if (!branchId || !valid.length) { setQuotes({}); return }
+    const timer = window.setTimeout(() => {
+      void Promise.all(valid.map(async (item) => [item.key, await orderApi.preview(branchId, item)] as const))
+        .then((result) => { setQuotes(Object.fromEntries(result)); setFormError('') })
+        .catch(() => { setQuotes({}); setFormError('Không tìm thấy mức giá hiệu lực cho một dịch vụ.') })
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [branchId, items])
+
+  const create = useMutation({
+    mutationFn: () => orderApi.create({
+      branchId: branchId!, customerId: mode === 'existing' ? customerId : undefined,
+      guestName: mode === 'guest' ? guestName : undefined, guestPhone: mode === 'guest' ? guestPhone : undefined,
+      promisedAt: promisedAt ? new Date(promisedAt).toISOString() : undefined, note: note || undefined,
+      items: items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote })),
+    }),
+    onSuccess: (order) => { notify({ title: 'Đã tạo đơn hàng', message: order.orderCode, tone: 'success' }); navigate(`/orders/${order.id}`, { replace: true }) },
+  })
+  useEffect(() => {
+    const dirty = Boolean(customerId || guestName || guestPhone || note || promisedAt || items.some((item) => item.serviceId))
+    const warn = (event: BeforeUnloadEvent) => { if (dirty && !create.isSuccess) event.preventDefault() }
+    window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn)
+  }, [create.isSuccess, customerId, guestName, guestPhone, items, note, promisedAt])
+  const selectService = (key: number, serviceId: number) => {
+    updateItem(key, { serviceId, itemTypeId: undefined })
+    if (serviceId) void orderApi.eligibility(serviceId).then((value) => setEligible((current) => ({ ...current, [key]: value.eligibleItemTypes })))
+  }
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    if (mode === 'existing' && !customerId) return setFormError('Hãy chọn một khách hàng.')
+    if (mode === 'guest' && !guestName.trim() && !guestPhone.trim()) return setFormError('Nhập tên hoặc số điện thoại khách vãng lai.')
+    if (!items.every((item) => item.serviceId && item.quantity > 0) || formError) return
+    create.mutate()
+  }
+  const total = Object.values(quotes).reduce((sum, value) => sum + value.finalAmount, 0)
+
+  return <form className="order-create" onSubmit={submit}>
+    <header className="focused-page-header"><ButtonLink to="/orders" variant="ghost"><ArrowLeft size={18} />Đơn hàng</ButtonLink><div><p className="eyebrow">Tiếp nhận tại quầy</p><h1>Tạo đơn hàng</h1></div></header>
+    <div className="order-create-grid"><div className="order-form-stack">
+      <Surface className="order-section"><div className="section-title"><span>1</span><div><h2>Khách hàng</h2><p>Chọn hồ sơ có sẵn hoặc ghi nhận khách vãng lai.</p></div></div>
+        <div className="segmented"><button type="button" className={mode === 'existing' ? 'active' : ''} onClick={() => setMode('existing')}>Khách có sẵn</button><button type="button" className={mode === 'guest' ? 'active' : ''} onClick={() => setMode('guest')}>Khách vãng lai</button></div>
+        {mode === 'existing' ? <><Field label="Tìm khách hàng" hint="Tên, số điện thoại đầy đủ hoặc 3–4 số cuối"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nhập ít nhất 2 ký tự" /></Field>
+          {customers.data?.map((customer) => <button type="button" key={customer.id} className={`customer-result${customerId === customer.id ? ' selected' : ''}`} onClick={() => setCustomerId(customer.id)}><span><strong>{customer.fullName}</strong><small>{customer.phone} · {customer.customerCode}</small></span>{customerId === customer.id ? <span className="customer-result__choice"><Check size={18} />Đã chọn</span> : <span className="customer-result__choice">Chọn</span>}</button>)}</>
+          : <><div className="form-grid"><Field label="Tên khách"><input value={guestName} onChange={(event) => setGuestName(event.target.value)} maxLength={150} /></Field><Field label="Số điện thoại"><input type="tel" inputMode="tel" value={guestPhone} onChange={(event) => setGuestPhone(event.target.value)} maxLength={30} /></Field></div><p className="field-hint">Thông tin này chỉ được lưu trên đơn hàng, không tự tạo hồ sơ khách hàng.</p></>}
+        {mode === 'existing' && hasPermission(PERMISSION_CODES.CUSTOMER_CREATE) && <Button type="button" variant="secondary" onClick={() => setQuickCustomerOpen(true)}><Plus size={18} />Tạo nhanh khách hàng</Button>}
+      </Surface>
+      <Surface className="order-section"><div className="section-title"><span>2</span><div><h2>Dịch vụ</h2><p>Giá được tính và xác nhận bởi hệ thống.</p></div></div>
+        {items.map((item, index) => <div className="order-item-editor" key={item.key}><div className="order-item-editor__head"><strong>Dịch vụ {index + 1}</strong>{items.length > 1 && <button type="button" onClick={() => setItems((value) => value.filter((candidate) => candidate.key !== item.key))} aria-label="Xóa dịch vụ"><X size={18} /></button>}</div>
+          <div className="form-grid"><Field label="Dịch vụ" required><select value={item.serviceId || ''} onChange={(event) => selectService(item.key, Number(event.target.value))}><option value="">Chọn dịch vụ</option>{services.data?.items.map((service) => <option key={service.id} value={service.id}>{service.nameVi}</option>)}</select></Field>
+            <Field label="Loại đồ"><select value={item.itemTypeId || ''} onChange={(event) => updateItem(item.key, { itemTypeId: event.target.value ? Number(event.target.value) : undefined })}><option value="">Theo dịch vụ</option>{eligible[item.key]?.map((option) => <option key={option.id} value={option.id}>{option.nameVi}</option>)}</select></Field>
+            <Field label="Hình thức xử lý" required><select value={item.sharingMode} onChange={(event) => updateItem(item.key, { sharingMode: event.target.value as DraftItem['sharingMode'], priorityLevel: event.target.value === 'SHARED_PRIORITY' ? 1 : undefined })}><option value="ANY">Theo dịch vụ</option><option value="SHARED_STANDARD">Giặt chung</option><option value="SHARED_PRIORITY">Giặt chung ưu tiên</option><option value="PRIVATE_LOAD">Giặt riêng mẻ</option></select></Field>
+            <Field label="Số lượng / khối lượng" required><input inputMode="decimal" value={item.quantity} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} /></Field></div>
+          {quotes[item.key] !== undefined && <div className="quoted-price"><span><small>{quotes[item.key].explanation}</small><small>Tính tiền: {quotes[item.key].billableQuantity} {quotes[item.key].unitType}</small></span><strong>{money(quotes[item.key].finalAmount)}</strong></div>}
+        </div>)}
+        <Button type="button" variant="secondary" onClick={() => setItems((value) => [...value, { key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])}><Plus size={18} />Thêm dịch vụ</Button>
+        {formError && <p className="form-error" role="alert">{formError}</p>}
+      </Surface>
+      <Surface className="order-section"><div className="section-title"><span>3</span><div><h2>Hẹn trả và ghi chú</h2></div></div><Field label="Thời gian hẹn trả"><input type="datetime-local" value={promisedAt} onChange={(event) => setPromisedAt(event.target.value)} /></Field><Field label="Ghi chú"><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={4} /></Field></Surface>
+    </div><Surface className="order-summary"><h2>Tóm tắt đơn hàng</h2><dl><div><dt>Số dịch vụ</dt><dd>{items.length}</dd></div><div><dt>Tổng tạm tính</dt><dd>{money(total)}</dd></div></dl><p>Giá cuối cùng được backend tính lại khi lưu đơn.</p><Button type="submit" size="lg" loading={create.isPending} disabled={!branchId || Boolean(formError) || !items.every((item) => item.serviceId)}>Lưu đơn hàng</Button>{create.error && <p className="form-error">{create.error instanceof ApiError ? create.error.message : 'Không thể tạo đơn.'}</p>}</Surface></div>
+    <div className="mobile-order-action"><span><small>Tổng tạm tính</small><strong>{money(total)}</strong></span><Button type="submit" loading={create.isPending} disabled={!branchId || Boolean(formError) || !items.every((item) => item.serviceId)}>Tạo đơn</Button></div>
+    <QuickCustomerDialog open={quickCustomerOpen} onClose={() => setQuickCustomerOpen(false)} onCreated={(customer) => { setCustomerId(customer.id); setSearch(customer.fullName) }} />
+  </form>
+}
+
+function nextAction(order: Order) {
+  if (order.status === 'RECEIVED' || order.status === 'REOPENED') return ['start-processing', 'Bắt đầu xử lý', PERMISSION_CODES.ORDER_START_PROCESSING] as const
+  if (order.status === 'PROCESSING') return ['mark-ready', 'Đánh dấu sẵn sàng', PERMISSION_CODES.ORDER_MARK_READY] as const
+  if (order.status === 'READY') return ['complete', 'Hoàn tất đơn', PERMISSION_CODES.ORDER_COMPLETE] as const
+  return null
+}
+
+export function OrderDetailPage() {
+  const id = Number(useParams().orderId)
+  const { branchId, hasPermission } = useAuth()
+  const queryClient = useQueryClient()
+  const { notify } = useToast()
+  const [reasonAction, setReasonAction] = useState<'cancel' | 'reopen' | null>(null)
+  const [reason, setReason] = useState('')
+  const order = useQuery({ queryKey: orderKeys.detail(id), queryFn: () => orderApi.get(id, branchId!), enabled: Boolean(id && branchId) })
+  const canAudit = hasPermission(PERMISSION_CODES.ORDER_AUDIT_READ)
+  const history = useQuery({ queryKey: orderKeys.history(id), queryFn: () => orderApi.history(id, branchId!), enabled: Boolean(id && branchId && canAudit) })
+  const mutate = useMutation({
+    mutationFn: async ({ action, reason }: { action: string; reason?: string }) => {
+      const value = order.data!
+      return action === 'cancel' || action === 'reopen'
+        ? orderApi.reasoned(value.id, value.branchId, action, value.version, reason!)
+        : orderApi.transition(value.id, value.branchId, action as 'start-processing' | 'mark-ready' | 'complete', value.version)
+    },
+    onSuccess: (value) => { setReasonAction(null); setReason(''); queryClient.setQueryData(orderKeys.detail(id), value); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); notify({ message: 'Đã cập nhật trạng thái đơn.', tone: 'success' }) },
+    onError: (error) => notify({ message: error instanceof ApiError && error.status === 409 ? 'Đơn vừa được người khác cập nhật. Hãy tải lại rồi thử lại.' : 'Không thể cập nhật trạng thái đơn.', tone: 'error' }),
+  })
+  if (order.isLoading) return <LoadingState />
+  if (order.isError || !order.data) return <ErrorState title="Không tải được đơn hàng" body="Đơn không tồn tại hoặc nằm ngoài chi nhánh của bạn." onRetry={() => void order.refetch()} />
+  const value = order.data
+  const action = nextAction(value)
+  const execute = (name: string) => {
+    if (name === 'cancel' || name === 'reopen') {
+      setReason('')
+      setReasonAction(name)
+    } else mutate.mutate({ action: name })
+  }
+  return <div className="order-detail"><header className="order-detail-header"><div><Link to="/orders"><ArrowLeft size={18} />Đơn hàng</Link><div><h1>{value.orderCode}</h1><Status value={value.status} /></div><p>Nhận lúc {when(value.createdAt)} · {value.branchCode}</p></div><div>
+    {action && hasPermission(action[2]) && <Button loading={mutate.isPending} onClick={() => execute(action[0])}><PackageCheck size={18} />{action[1]}</Button>}
+    {(['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_CANCEL) && <Button variant="danger" onClick={() => execute('cancel')}>Hủy đơn</Button>}
+    {value.status === 'COMPLETED' && hasPermission(PERMISSION_CODES.ORDER_REOPEN) && <Button variant="secondary" onClick={() => execute('reopen')}><RotateCcw size={18} />Mở lại</Button>}
+  </div></header><div className="order-detail-grid"><div className="order-detail-main">
+    <Surface className="order-section"><h2>Thông tin chung</h2><dl className="detail-facts"><div><dt>Khách hàng</dt><dd>{value.customerName || 'Khách vãng lai'}<small>{value.customerPhone}</small></dd></div><div><dt>Hẹn trả</dt><dd>{value.promisedAt ? when(value.promisedAt) : 'Chưa hẹn'}</dd></div><div><dt>Nhân viên nhận</dt><dd>{value.createdBy.displayName}</dd></div><div><dt>Cập nhật cuối</dt><dd>{when(value.updatedAt)}</dd></div></dl></Surface>
+    <Surface className="order-section"><h2>Dịch vụ ({value.items.length})</h2>{value.items.map((item) => <article className="detail-order-item" key={item.id}><div><strong>{item.serviceName}</strong><span>{item.itemTypeName || 'Loại đồ theo dịch vụ'}</span></div><div><span>{item.quantity} {item.unitType}</span><strong>{money(item.lineAmount)}</strong></div></article>)}</Surface>
+    {value.note && <Surface className="order-section"><h2>Ghi chú</h2><p>{value.note}</p></Surface>}
+  </div><aside><Surface className="order-total"><span>Tổng tiền</span><strong>{money(value.totalAmount)}</strong><small>{value.currency} · giá đã đóng băng khi nhận đơn</small></Surface>
+    {canAudit && <Surface className="order-history"><h2>Lịch sử đơn hàng</h2>{history.isLoading ? <LoadingState rows={3} /> : history.data?.map((item) => <article key={item.id}><span className="history-dot"><Clock3 size={14} /></span><div><strong>{item.action.replaceAll('_', ' ')}</strong><p>{item.actor.displayName} · {when(item.createdAt)}</p>{item.reason && <small>{item.reason}</small>}</div></article>)}</Surface>}
+  </aside></div><OverlayDialog open={reasonAction !== null} onClose={() => !mutate.isPending && setReasonAction(null)} title={reasonAction === 'cancel' ? 'Hủy đơn hàng' : 'Mở lại đơn hàng'} description="Lý do sẽ được lưu trong lịch sử kiểm toán." footer={<><Button variant="secondary" onClick={() => setReasonAction(null)} disabled={mutate.isPending}>Đóng</Button><Button variant={reasonAction === 'cancel' ? 'danger' : 'primary'} loading={mutate.isPending} disabled={!reason.trim()} onClick={() => reasonAction && mutate.mutate({ action: reasonAction, reason: reason.trim() })}>{reasonAction === 'cancel' ? 'Xác nhận hủy' : 'Xác nhận mở lại'}</Button></>}><Field label="Lý do" required><textarea rows={4} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></Field></OverlayDialog></div>
+}

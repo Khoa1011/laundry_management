@@ -104,6 +104,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { notify } = useToast()
   const queryClient = useQueryClient()
   const canRead = Boolean(user) && hasPermission(PERMISSION_CODES.NOTIFICATION_READ_OWN)
+  const canOrderRead = Boolean(user) && hasPermission(PERMISSION_CODES.ORDER_READ)
+  const canStream = Boolean(user) && (canRead || canOrderRead)
   const canManagePreferences = Boolean(user)
     && hasPermission(PERMISSION_CODES.NOTIFICATION_PREFERENCES_MANAGE_OWN)
   const recentQuery = useNotifications(RECENT_FILTERS, canRead)
@@ -240,6 +242,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const handleEvent = useCallback((event: NotificationSseEnvelope, source: 'stream' | 'broadcast' = 'stream') => {
     if (!event.eventId || !rememberBounded(handledIds.current, handledOrder.current, event.eventId)) return
+    if (event.type?.startsWith('order.')) {
+      window.dispatchEvent(new CustomEvent('laundry:realtime', { detail: event }))
+      void queryClient.invalidateQueries({ queryKey: ['orders'] })
+    }
     if (source === 'stream' && user?.id) {
       broadcastChannel.current?.postMessage({ type: 'sse-event', event, userId: user.id })
     }
@@ -269,7 +275,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               ? { ...current, unreadCount: event.unreadCount }
               : current
           }
-          return mergeCreatedNotification(current, item, event.unreadCount)
+          return mergeCreatedNotification(current, item, event.unreadCount ?? null)
         })
       }
       if (!queryClient.getQueryData<NotificationPage>(notificationKeys.recent)) {
@@ -328,7 +334,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [canRead, handleEvent, queryClient, user?.id])
 
   useEffect(() => {
-    if (!canRead || !user) {
+    if (!canStream || !user) {
       setConnectionState('idle')
       return
     }
@@ -451,6 +457,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             setConnectionState('connected')
             publishLeaderState('connected')
             void refresh()
+            if (canOrderRead) {
+              void queryClient.invalidateQueries({ queryKey: ['orders'] })
+            }
           },
           onEvent: (event) => handleEvent(event, 'stream'),
         })
@@ -494,7 +503,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       pendingBatch.current = []
       void notificationSoundEngine.suspend()
     }
-  }, [canRead, handleEvent, refresh, user])
+  }, [canOrderRead, canStream, handleEvent, queryClient, refresh, user])
 
   const value = useMemo<NotificationContextValue>(() => ({
     canRead,

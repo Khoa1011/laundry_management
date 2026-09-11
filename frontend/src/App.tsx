@@ -17,7 +17,9 @@ const EmployeeSelfPage = lazy(() => import('./features/employees/EmployeeDetailP
 const EmployeePositionsPage = lazy(() => import('./features/employees/EmployeePositionsPage').then((module) => ({ default: module.EmployeePositionsPage })))
 const OverviewPage = lazy(() => import('./pages/OperationalLandingPages').then((module) => ({ default: module.OverviewPage })))
 const MorePage = lazy(() => import('./pages/OperationalLandingPages').then((module) => ({ default: module.MorePage })))
-const OrdersUnavailablePage = lazy(() => import('./pages/OperationalLandingPages').then((module) => ({ default: module.OrdersUnavailablePage })))
+const OrderListPage = lazy(() => import('./features/orders/OrderPages').then((module) => ({ default: module.OrderListPage })))
+const OrderCreatePage = lazy(() => import('./features/orders/OrderPages').then((module) => ({ default: module.OrderCreatePage })))
+const OrderDetailPage = lazy(() => import('./features/orders/OrderPages').then((module) => ({ default: module.OrderDetailPage })))
 const ForbiddenPage = lazy(() => import('./pages/PlaceholderPage').then((module) => ({ default: module.ForbiddenPage })))
 const NotFoundPage = lazy(() => import('./pages/PlaceholderPage').then((module) => ({ default: module.NotFoundPage })))
 const AccessLandingPage = lazy(() => import('./features/access-control/AccessPages').then((module) => ({ default: module.AccessLandingPage })))
@@ -94,7 +96,9 @@ const router = createBrowserRouter([
       { path: '/catalog/price-lists', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><LazyPage><PriceListPage /></LazyPage></PermissionRoute> },
       { path: '/catalog/price-lists/:priceListId', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><PermissionRoute permission={PERMISSION_CODES.PRICE_RULE_READ}><LazyPage><PriceListDetailPage /></LazyPage></PermissionRoute></PermissionRoute> },
       { path: '/overview', element: <LazyPage><OverviewPage /></LazyPage> },
-      { path: '/orders', element: <LazyPage><OrdersUnavailablePage /></LazyPage> },
+      { path: '/orders', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_READ}><LazyPage><OrderListPage /></LazyPage></PermissionRoute> },
+      { path: '/orders/new', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_CREATE}><LazyPage><OrderCreatePage /></LazyPage></PermissionRoute> },
+      { path: '/orders/:orderId', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_READ}><LazyPage><OrderDetailPage /></LazyPage></PermissionRoute> },
       { path: '/more', element: <LazyPage><MorePage /></LazyPage> },
       { path: '/settings/preferences', element: <LazyPage><AppearanceSettingsPage /></LazyPage> },
       { path: '/settings/access', element: <AnyPermissionRoute permissions={[PERMISSION_CODES.ACCESS_ROLE_READ, PERMISSION_CODES.ACCESS_USER_READ, PERMISSION_CODES.ACCESS_PERMISSION_READ, PERMISSION_CODES.ACCESS_AUDIT_READ]}><LazyPage><AccessLandingPage /></LazyPage></AnyPermissionRoute> },
