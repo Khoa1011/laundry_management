@@ -78,7 +78,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": [
+    "ADMIN": [
       "customer.read",
       "customer.create",
       "customer.update",

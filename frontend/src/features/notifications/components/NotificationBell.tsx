@@ -8,6 +8,7 @@ import { useAuth } from '../../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../../auth/permissionCodes.generated'
 import { Button } from '../../../components/ui/Button'
 import { IconButton } from '../../../components/ui/IconButton'
+import { acquireBodyScrollLock } from '../../../components/overlayLock'
 import { motionDuration, motionEase } from '../../../providers/motionPresets'
 import { useToast } from '../../../providers/ToastProvider'
 import { useMarkAllNotificationsRead } from '../hooks/useNotifications'
@@ -55,10 +56,9 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (!open) return
-    const previousOverflow = document.body.style.overflow
     const panel = panelRef.current
     const trigger = triggerRef.current
-    document.body.style.overflow = 'hidden'
+    const releaseBodyScroll = acquireBodyScrollLock()
     panel?.querySelector<HTMLElement>('button, a, input, select')?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -85,7 +85,7 @@ export function NotificationBell() {
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
+      releaseBodyScroll()
       trigger?.focus()
     }
   }, [open])

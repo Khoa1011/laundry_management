@@ -39,6 +39,6 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": ["replace-module.read"]
+    "ADMIN": ["replace-module.read"]
   }
 }

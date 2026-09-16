@@ -66,10 +66,10 @@ Demo data is opt-in and disabled by default. For a disposable local database, en
 
 ```dotenv
 APP_BOOTSTRAP_ENABLED=true
-APP_BOOTSTRAP_USERNAME=demo-owner
+APP_BOOTSTRAP_USERNAME=admin
 APP_BOOTSTRAP_PASSWORD=replace-with-a-local-password
 APP_DEMO_SEED_ENABLED=true
-APP_DEMO_SEED_ACTOR_USERNAME=demo-owner
+APP_DEMO_SEED_ACTOR_USERNAME=admin
 APP_DEMO_SEED_BRANCH_CODE=MAIN
 ```
 

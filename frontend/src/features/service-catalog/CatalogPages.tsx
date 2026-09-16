@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Activity, Archive, ArrowLeft, Boxes, Calculator, CalendarDays, ChevronRight, CircleAlert, Clock3, Copy,
-  Edit3, Eye, Layers3, PackagePlus, Plus, Search, Send, Settings2, Shirt, Sparkles, Trash2,
+  Edit3, Eye, Folder, Layers3, PackagePlus, Plus, Search, Send, Settings2, Shirt, Sparkles, Trash2,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -254,15 +254,28 @@ function flattenItems(items: ItemType[], depth = 0): Array<{ item: ItemType; dep
   return items.flatMap((item) => [{ item, depth }, ...flattenItems(item.children, depth + 1)])
 }
 
-function flattenVisibleItems(
-  items: ItemType[],
-  expandedIds: ReadonlySet<number>,
-  depth = 0,
-): Array<{ item: ItemType; depth: number }> {
-  return items.flatMap((item) => [
-    { item, depth },
-    ...(expandedIds.has(item.id) ? flattenVisibleItems(item.children, expandedIds, depth + 1) : []),
-  ])
+interface ItemTypeGroup {
+  category?: ItemType
+  items: ItemType[]
+}
+
+function groupSelectableItems(items: ItemType[]): ItemTypeGroup[] {
+  const uncategorized: ItemType[] = []
+  const groups: ItemTypeGroup[] = []
+
+  items.forEach((item) => {
+    if (item.children.length === 0) {
+      uncategorized.push(item)
+      return
+    }
+
+    const selectableItems = flattenItems(item.children)
+      .map((entry) => entry.item)
+      .filter((candidate) => candidate.children.length === 0)
+    groups.push({ category: item, items: selectableItems })
+  })
+
+  return [...groups, ...(uncategorized.length > 0 ? [{ items: uncategorized }] : [])]
 }
 
 export function ItemTypeCatalogPage() {
@@ -273,21 +286,24 @@ export function ItemTypeCatalogPage() {
   const [selected, setSelected] = useState<ItemType | undefined>()
   const [editor, setEditor] = useState<{ item?: ItemType; parentId?: number } | null>(null)
   const [statusTarget, setStatusTarget] = useState<{ item: ItemType; next: CatalogStatus } | null>(null)
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<CatalogStatus | ''>('')
   const query = useQuery({ queryKey: ['catalog-item-types'], queryFn: catalogApi.itemTypes })
   const allItems = useMemo(() => flattenItems(query.data ?? []), [query.data])
-  const visibleItems = useMemo(
-    () => flattenVisibleItems(query.data ?? [], expandedIds),
-    [expandedIds, query.data],
-  )
-  const toggleGroup = (itemId: number) => {
-    setExpandedIds((current) => {
-      const next = new Set(current)
-      if (next.has(itemId)) next.delete(itemId)
-      else next.add(itemId)
-      return next
-    })
-  }
+  const itemGroups = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase()
+    return groupSelectableItems(query.data ?? []).map((group) => {
+      const categoryMatches = Boolean(group.category?.nameVi.toLocaleLowerCase().includes(normalizedSearch))
+      const filteredItems = group.items.filter((item) => {
+        const matchesSearch = !normalizedSearch || categoryMatches
+          || item.nameVi.toLocaleLowerCase().includes(normalizedSearch)
+          || item.code.toLocaleLowerCase().includes(normalizedSearch)
+        return matchesSearch && (!status || item.status === status)
+      })
+      return { ...group, items: filteredItems }
+    }).filter((group) => group.items.length > 0)
+  }, [query.data, search, status])
+  const selectedIsCategory = Boolean(selected?.children.length)
   const statusMutation = useMutation({
     mutationFn: ({ item, next }: { item: ItemType; next: CatalogStatus }) =>
       catalogApi.itemTypeStatus(item.id, next, item.version),
@@ -305,36 +321,51 @@ export function ItemTypeCatalogPage() {
         ? <Button variant="create" onClick={() => setEditor({})}><Plus size={18} aria-hidden="true" />{t('catalog:addItemType')}</Button> : undefined
     } />
     <CatalogTabs />
+    <Surface variant="subtle" className="catalog-toolbar">
+      <label className="catalog-search"><Search size={18} aria-hidden="true" /><span className="sr-only">{t('search')}</span>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('catalog:searchItemTypes')} />
+      </label>
+      <select value={status} onChange={(event) => setStatus(event.target.value as CatalogStatus | '')} aria-label={t('status')}>
+        <option value="">{t('catalog:allStatuses')}</option>
+        <option value="ACTIVE">{t('catalog:statuses.ACTIVE')}</option>
+        <option value="INACTIVE">{t('catalog:statuses.INACTIVE')}</option>
+        <option value="ARCHIVED">{t('catalog:statuses.ARCHIVED')}</option>
+      </select>
+    </Surface>
     {query.isLoading ? <LoadingState rows={5} /> : query.isError
       ? <ErrorState title={t('catalog:loadErrorTitle')} body={t('catalog:loadErrorBody')} onRetry={() => void query.refetch()} />
       : allItems.length === 0 ? <StatePanel icon={<Boxes />} title={t('catalog:noItemsTitle')} body={t('catalog:noItemsBody')} />
+        : itemGroups.length === 0 ? <StatePanel icon={<Search />} title={t('catalog:noItemsMatchTitle')} body={t('catalog:noItemsMatchBody')} />
         : <div className="item-type-layout">
-          <section className="item-tree" role="tree" aria-label={t('catalog:itemTypes')}>{visibleItems.map(({ item, depth }) => {
-            const hasChildren = item.children.length > 0
-            const expanded = expandedIds.has(item.id)
-            return <div key={item.id} role="treeitem" aria-level={depth + 1} aria-expanded={hasChildren ? expanded : undefined}
-              aria-selected={selected?.id === item.id} className={selected?.id === item.id ? 'item-tree__row is-selected' : 'item-tree__row'}
-              style={{ '--tree-depth': depth } as React.CSSProperties}>
-              {hasChildren ? <button type="button" className="item-tree__toggle" aria-label={t(expanded ? 'catalog:collapseItemGroup' : 'catalog:expandItemGroup', { name: item.nameVi })}
-                aria-expanded={expanded} onClick={() => toggleGroup(item.id)}><ChevronRight size={17} aria-hidden="true" /></button>
-                : <span className="item-tree__spacer" aria-hidden="true" />}
-              <button type="button" className="item-tree__select" onClick={() => setSelected(item)}>
-                <span className="item-tree__identity"><Boxes size={17} aria-hidden="true" /><strong>{item.nameVi}</strong></span>
-                <span className="item-tree__meta">{item.effectiveUnitType ? t(`catalog:units.${item.effectiveUnitType}`) : '—'}</span>
+          <section className="item-catalog-list" aria-label={t('catalog:itemTypes')}>{itemGroups.map((group, groupIndex) =>
+            <section className="item-category" key={group.category?.id ?? 'uncategorized'} aria-labelledby={`item-category-${groupIndex}`}>
+              <button type="button" className={selected?.id === group.category?.id ? 'item-category__heading is-selected' : 'item-category__heading'}
+                id={`item-category-${groupIndex}`} disabled={!group.category} onClick={() => group.category && setSelected(group.category)}>
+                <span className="item-category__identity"><Folder size={18} aria-hidden="true" /><span><strong>{group.category?.nameVi ?? t('catalog:uncategorized')}</strong>
+                  <small>{group.category ? t('catalog:category') : t('catalog:uncategorizedHint')}</small></span></span>
+                <span className="item-category__count">{t('catalog:itemCount', { count: group.items.length })}</span>
               </button>
-            </div>
-          })}</section>
+              <div className="item-category__items">
+                {group.items.map((item) => <button type="button" key={item.id} onClick={() => setSelected(item)}
+                  aria-pressed={selected?.id === item.id} className={selected?.id === item.id ? 'item-type-row is-selected' : 'item-type-row'}>
+                  <span className="item-type-row__identity"><Boxes size={17} aria-hidden="true" /><span><strong>{item.nameVi}</strong><small>{item.code}</small></span></span>
+                  <span className="item-type-row__meta"><span>{item.effectiveUnitType ? t(`catalog:units.${item.effectiveUnitType}`) : '—'}</span>
+                    {item.requiresSeparateWash && <small>{t('catalog:separateWash')}</small>}</span>
+                </button>)}
+              </div>
+            </section>)}</section>
           <section className="item-detail">
             {selected ? <>
               <div className="item-detail__title"><div><h2>{selected.nameVi}</h2><p>{selected.code}</p></div>
                 <span className={`status-badge status-badge--${statusTone(selected.status)}`}>{t(`catalog:statuses.${selected.status}`)}</span></div>
-              <dl className="catalog-detail-list"><div><dt>{t('catalog:defaultUnit')}</dt><dd>{selected.effectiveUnitType ? t(`catalog:units.${selected.effectiveUnitType}`) : '—'} {selected.inheritedUnit && <small>{t('catalog:inherited')}</small>}</dd></div>
+              <p className="item-detail__kind">{t(selectedIsCategory ? 'catalog:category' : 'catalog:itemType')}</p>
+              <dl className="catalog-detail-list"><div><dt>{t('catalog:itemUnit')}</dt><dd>{selected.effectiveUnitType ? t(`catalog:units.${selected.effectiveUnitType}`) : '—'} {selected.inheritedUnit && <small>{t('catalog:fromCategory')}</small>}</dd></div>
                 <div><dt>{t('catalog:separateWash')}</dt><dd>{selected.requiresSeparateWash ? t('yes') : t('no')}</dd></div>
                 <div><dt>{t('catalog:services')}</dt><dd>{selected.applicableServiceCount}</dd></div>
                 <div><dt>{t('catalog:ruleCount', { count: selected.relatedPriceRuleCount })}</dt><dd>{selected.relatedPriceRuleCount}</dd></div></dl>
               <div className="item-detail__actions">
                 {hasPermission(PERMISSION_CODES.ITEM_TYPE_UPDATE) && selected.status !== 'ARCHIVED' && <Button variant="primary" onClick={() => setEditor({ item: selected })}><Edit3 size={17} />{t('edit')}</Button>}
-                {hasPermission(PERMISSION_CODES.ITEM_TYPE_CREATE) && selected.status !== 'ARCHIVED' && <Button variant="create" onClick={() => setEditor({ parentId: selected.id })}><PackagePlus size={17} aria-hidden="true" />{t('catalog:addChild')}</Button>}
+                {selectedIsCategory && hasPermission(PERMISSION_CODES.ITEM_TYPE_CREATE) && selected.status !== 'ARCHIVED' && <Button variant="create" onClick={() => setEditor({ parentId: selected.id })}><PackagePlus size={17} aria-hidden="true" />{t('catalog:addItemToCategory')}</Button>}
                 {hasPermission(PERMISSION_CODES.ITEM_TYPE_ARCHIVE) && selected.status !== 'ARCHIVED' && <>
                   <Button variant={selected.status === 'ACTIVE' ? 'danger' : 'success'} onClick={() => setStatusTarget({
                     item: selected, next: selected.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
@@ -344,7 +375,7 @@ export function ItemTypeCatalogPage() {
                   </Button>
                 </>}
               </div>
-            </> : <StatePanel compact title={t('catalog:itemTypes')} body={t('catalog:itemTypesSubtitle')} />}
+            </> : <StatePanel compact title={t('catalog:itemTypes')} body={t('catalog:selectItemBody')} />}
           </section>
         </div>}
     <ItemTypeEditor key={editor?.item?.id ?? editor?.parentId ?? 'closed'} open={editor !== null}
@@ -365,6 +396,19 @@ function ItemTypeEditor({ open, item, parentId, items, onClose, onSaved }: {
   const { t } = useTranslation()
   const toast = useToast()
   const [submitted, setSubmitted] = useState(false)
+  const blockedCategoryIds = useMemo(() => new Set([
+    ...(item ? [item.id] : []),
+    ...flattenItems(item?.children ?? []).map((entry) => entry.item.id),
+  ]), [item])
+  const categoryOptions = useMemo(() => items.filter((candidate) => {
+    const isExistingCategory = candidate.children.length > 0
+    const canBecomeCategory = (candidate.parentId === undefined || candidate.parentId === null)
+      && (candidate.applicableServiceCount ?? 0) === 0
+      && (candidate.relatedPriceRuleCount ?? 0) === 0
+    return (isExistingCategory || canBecomeCategory)
+      && candidate.status !== 'ARCHIVED'
+      && !blockedCategoryIds.has(candidate.id)
+  }), [blockedCategoryIds, items])
   const [form, setForm] = useState<ItemTypePayload>(() => item ? {
     parentId: item.parentId, nameVi: item.nameVi, nameEn: item.nameEn, descriptionVi: item.descriptionVi,
     descriptionEn: item.descriptionEn, defaultUnitType: item.defaultUnitType,
@@ -389,13 +433,13 @@ function ItemTypeEditor({ open, item, parentId, items, onClose, onSaved }: {
         <div className="catalog-form-grid"><Field label={t('catalog:nameVi')} required error={submitted && !form.nameVi.trim() ? t('catalog:requiredName') : undefined}>
           <input required autoFocus value={form.nameVi} onChange={(e) => set('nameVi', e.target.value)} />
         </Field>
-        <Field label={t('catalog:parent')}><select value={form.parentId ?? ''} onChange={(e) => set('parentId', e.target.value ? Number(e.target.value) : undefined)}>
-          <option value="">{t('catalog:rootItem')}</option>{items.filter((candidate) => candidate.id !== item?.id && candidate.status !== 'ARCHIVED').map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.nameVi}</option>)}</select></Field>
+        <Field label={t('catalog:categoryOptional')} hint={t('catalog:categoryHint')}><select value={form.parentId ?? ''} onChange={(e) => set('parentId', e.target.value ? Number(e.target.value) : undefined)}>
+          <option value="">{t('catalog:noCategory')}</option>{categoryOptions.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.nameVi}</option>)}</select></Field>
         <Field label={t('catalog:description')}><textarea rows={3} value={form.descriptionVi ?? ''} onChange={(e) => set('descriptionVi', e.target.value)} /></Field></div>
       </section>
       <section className="catalog-drawer-section"><DrawerSectionHeading icon={<Settings2 size={19} />} title={t('catalog:itemDefaults')} body={t('catalog:itemDefaultsHint')} />
-        <Field label={t('catalog:defaultUnit')} hint={t('catalog:inherited')}><select value={form.defaultUnitType ?? ''} onChange={(e) => set('defaultUnitType', e.target.value ? e.target.value as UnitType : undefined)}>
-          <option value="">{t('catalog:inherited')}</option>{UNITS.map((unit) => <option key={unit} value={unit}>{t(`catalog:units.${unit}`)}</option>)}</select></Field>
+        <Field label={t('catalog:itemUnit')}><select value={form.defaultUnitType ?? ''} onChange={(e) => set('defaultUnitType', e.target.value ? e.target.value as UnitType : undefined)}>
+          <option value="">{t(form.parentId ? 'catalog:fromCategory' : 'catalog:fromService')}</option>{UNITS.map((unit) => <option key={unit} value={unit}>{t(`catalog:units.${unit}`)}</option>)}</select></Field>
         <label className="catalog-check"><input type="checkbox" checked={form.requiresSeparateWash} onChange={(e) => set('requiresSeparateWash', e.target.checked)} /><span><strong>{t('catalog:separateWash')}</strong></span></label>
       </section>
     </div>

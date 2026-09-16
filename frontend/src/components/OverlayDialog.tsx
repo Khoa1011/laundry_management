@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motionDuration, motionEase } from '../providers/motionPresets'
+import { acquireApplicationModalLock } from './overlayLock'
 
 interface OverlayDialogProps {
   open: boolean
@@ -25,13 +26,7 @@ export function OverlayDialog({ open, onClose, title, description, children, foo
   useEffect(() => {
     if (!open) return
     const previous = document.activeElement as HTMLElement | null
-    const originalOverflow = document.body.style.overflow
-    const appRoot = document.getElementById('root')
-    const originalAriaHidden = appRoot?.getAttribute('aria-hidden')
-    const wasInert = appRoot?.hasAttribute('inert') ?? false
-    document.body.style.overflow = 'hidden'
-    appRoot?.setAttribute('aria-hidden', 'true')
-    appRoot?.setAttribute('inert', '')
+    const releaseModalLock = acquireApplicationModalLock()
     const panel = panelRef.current
     const focusable = () => Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])
     window.setTimeout(() => focusable()[0]?.focus(), 0)
@@ -47,10 +42,7 @@ export function OverlayDialog({ open, onClose, title, description, children, foo
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.body.style.overflow = originalOverflow
-      if (originalAriaHidden === null) appRoot?.removeAttribute('aria-hidden')
-      else if (originalAriaHidden !== undefined) appRoot?.setAttribute('aria-hidden', originalAriaHidden)
-      if (!wasInert) appRoot?.removeAttribute('inert')
+      releaseModalLock()
       document.removeEventListener('keydown', handleKeyDown)
       previous?.focus()
     }

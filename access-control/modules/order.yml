@@ -21,7 +21,7 @@
     { "code": "order.audit.read", "resource": "order.audit", "action": "read", "nameVi": "Xem lịch sử đơn hàng", "nameEn": "View order history", "descriptionVi": "Xem lịch sử trạng thái và thay đổi quan trọng của đơn.", "descriptionEn": "View order status and change history.", "riskLevel": "HIGH", "displayOrder": 90 }
   ],
   "defaultRoleGrants": {
-    "OWNER": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
+    "ADMIN": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
     "MANAGER": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
     "RECEPTIONIST": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete"]
   }

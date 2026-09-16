@@ -59,7 +59,7 @@ class AccessControlIntegrationTest {
         roleRepository.deleteAll(customRoles);
 
         Branch branch = branchRepository.save(new Branch("ACCESS", "Access branch"));
-        createUser("owner.access", "Access Owner", roleRepository.findByCode("OWNER").orElseThrow(), branch);
+        createUser("admin.access", "Access Admin", roleRepository.findByCode("ADMIN").orElseThrow(), branch);
         createUser("manager.access", "Access Manager", roleRepository.findByCode("MANAGER").orElseThrow(), branch);
 
         Branch isolated = branchRepository.save(new Branch("ISOLATED", "Isolated branch"));
@@ -67,8 +67,8 @@ class AccessControlIntegrationTest {
     }
 
     @Test
-    void ownerCanCreateRoleAndSaveCompletePermissionMatrix() throws Exception {
-        String token = login("owner.access");
+    void adminCanCreateRoleAndSaveCompletePermissionMatrix() throws Exception {
+        String token = login("admin.access");
         JsonNode created = objectMapper.readTree(mockMvc.perform(post("/api/access/roles")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -105,7 +105,7 @@ class AccessControlIntegrationTest {
         mockMvc.perform(get("/api/access/audit")
                 .header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items[0].actorDisplayName").value("Access Owner"));
+            .andExpect(jsonPath("$.items[0].actorDisplayName").value("Access Admin"));
     }
 
     @Test
@@ -125,23 +125,23 @@ class AccessControlIntegrationTest {
         mockMvc.perform(get("/api/access/users")
                 .header("Authorization", "Bearer " + login("manager.access")))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items[*].username", hasItem("owner.access")))
+            .andExpect(jsonPath("$.items[*].username", hasItem("admin.access")))
             .andExpect(jsonPath("$.items[*].username", not(hasItem("isolated.user"))));
     }
 
     @Test
     void currentUserReturnsLiveEffectivePermissionsAndAuthorizationVersion() throws Exception {
         mockMvc.perform(get("/api/auth/me")
-                .header("Authorization", "Bearer " + login("owner.access")))
+                .header("Authorization", "Bearer " + login("admin.access")))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.primaryRole.code").value("OWNER"))
+            .andExpect(jsonPath("$.primaryRole.code").value("ADMIN"))
             .andExpect(jsonPath("$.effectivePermissions", hasItem("access.role.permission.assign")))
             .andExpect(jsonPath("$.authorizationVersion").isNumber());
     }
 
     @Test
     void replacingExistingOverrideUpdatesInPlaceAndDenyWins() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         UserAccount manager = userRepository.findByUsernameIgnoreCase("manager.access").orElseThrow();
         JsonNode first = objectMapper.readTree(mockMvc.perform(put("/api/access/users/{userId}/overrides", manager.getId())
                 .header("Authorization", "Bearer " + token)
@@ -179,7 +179,7 @@ class AccessControlIntegrationTest {
 
     @Test
     void createCanCopyOnlyPermissionsAndRoleDetailUsesRealCounts() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         Role receptionistReference = roleRepository.findByCode("RECEPTIONIST").orElseThrow();
         Role receptionist = roleRepository.findDetailById(receptionistReference.getId()).orElseThrow();
         JsonNode created = createRole(token, """
@@ -215,7 +215,7 @@ class AccessControlIntegrationTest {
 
     @Test
     void updateCustomRoleKeepsCodeAndProtectsSystemRoles() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         JsonNode created = createRole(token, """
             {"displayName":"Nhân viên kho","description":"Quản lý kho"}
             """);
@@ -237,27 +237,27 @@ class AccessControlIntegrationTest {
             .andExpect(jsonPath("$.code").value(code))
             .andExpect(jsonPath("$.displayName").value("Nhân viên kho ca sáng"))
             .andExpect(jsonPath("$.status").value("INACTIVE"))
-            .andExpect(jsonPath("$.updatedBy.displayName").value("Access Owner"));
+            .andExpect(jsonPath("$.updatedBy.displayName").value("Access Admin"));
 
-        Role owner = roleRepository.findByCode("OWNER").orElseThrow();
-        mockMvc.perform(put("/api/access/roles/{roleId}", owner.getId())
+        Role admin = roleRepository.findByCode("ADMIN").orElseThrow();
+        mockMvc.perform(put("/api/access/roles/{roleId}", admin.getId())
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "displayName":"Unsafe owner rename",
+                      "displayName":"Unsafe admin rename",
                       "description":"Unsafe",
                       "status":"ACTIVE",
                       "version":%d
                     }
-                    """.formatted(owner.getVersion())))
+                    """.formatted(admin.getVersion())))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.errorCode").value("SYSTEM_ROLE_PROTECTED"));
     }
 
     @Test
     void cloneUsesGeneratedCodeAndCopiesPermissionsOnlyWhenRequested() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         Role sourceReference = roleRepository.findByCode("RECEPTIONIST").orElseThrow();
         Role source = roleRepository.findDetailById(sourceReference.getId()).orElseThrow();
 
@@ -296,7 +296,7 @@ class AccessControlIntegrationTest {
 
     @Test
     void inactiveRoleCannotBePermissionCopySourceAndSystemStatusCannotChange() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         JsonNode source = createRole(token, """
             {"displayName":"Nguồn tạm thời"}
             """);
@@ -317,20 +317,20 @@ class AccessControlIntegrationTest {
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.errorCode").value("ROLE_INACTIVE"));
 
-        Role owner = roleRepository.findByCode("OWNER").orElseThrow();
-        mockMvc.perform(patch("/api/access/roles/{roleId}/status", owner.getId())
+        Role admin = roleRepository.findByCode("ADMIN").orElseThrow();
+        mockMvc.perform(patch("/api/access/roles/{roleId}/status", admin.getId())
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"status":"INACTIVE","version":%d,"reason":"Unsafe"}
-                    """.formatted(owner.getVersion())))
+                    """.formatted(admin.getVersion())))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.errorCode").value("SYSTEM_ROLE_PROTECTED"));
     }
 
     @Test
     void roleAuditCanBeFilteredByTargetId() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         JsonNode first = createRole(token, "{\"displayName\":\"Vai trò thứ nhất\"}");
         createRole(token, "{\"displayName\":\"Vai trò thứ hai\"}");
 
@@ -345,12 +345,12 @@ class AccessControlIntegrationTest {
 
     @Test
     void roleUpdatePermissionDoesNotImplicitlyGrantStatusChanges() throws Exception {
-        String ownerToken = login("owner.access");
-        JsonNode target = createRole(ownerToken, "{\"displayName\":\"Target role\"}");
-        JsonNode editorRole = createRole(ownerToken, "{\"displayName\":\"Metadata editor\"}");
+        String adminToken = login("admin.access");
+        JsonNode target = createRole(adminToken, "{\"displayName\":\"Target role\"}");
+        JsonNode editorRole = createRole(adminToken, "{\"displayName\":\"Metadata editor\"}");
         JsonNode editorMatrix = objectMapper.readTree(mockMvc.perform(put(
                 "/api/access/roles/{roleId}/permissions", editorRole.path("id").asLong())
-                .header("Authorization", "Bearer " + ownerToken)
+                .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -399,7 +399,7 @@ class AccessControlIntegrationTest {
 
     @Test
     void concurrentRoleCreationGeneratesUniqueCodes() throws Exception {
-        String token = login("owner.access");
+        String token = login("admin.access");
         int count = 6;
         CountDownLatch start = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(count);

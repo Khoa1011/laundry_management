@@ -62,7 +62,7 @@ describe('employee confidential records', () => {
     fixtures.granted = [PERMISSION_CODES.EMPLOYEE_FILE_READ, PERMISSION_CODES.EMPLOYEE_FILE_DOWNLOAD]
     fixtures.documentsQuery.mockReturnValue({ isPending: false, isError: false, data: { items: [{
       id: 41, documentType: 'IDENTITY_COPY', originalFilename: 'cccd.png', contentType: 'image/png', sizeBytes: 128,
-      documentVersion: 1, status: 'ACTIVE', recordVersion: 0, actor: { id: 1, displayName: 'Owner' }, createdAt: '2026-07-20T00:00:00Z',
+      documentVersion: 1, status: 'ACTIVE', recordVersion: 0, actor: { id: 1, displayName: 'Admin' }, createdAt: '2026-07-20T00:00:00Z',
     }] } })
     fixtures.loadDocument.mockResolvedValue(new Blob(['image'], { type: 'image/png' }))
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:employee-document')

@@ -144,7 +144,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": [
+    "ADMIN": [
       "access.permission.read",
       "access.role.read",
       "access.role.create",

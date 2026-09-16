@@ -79,7 +79,7 @@ class NotificationIntegrationTest {
     @Autowired NotificationApplicationService notificationService;
 
     private Branch branch;
-    private UserAccount owner;
+    private UserAccount admin;
     private UserAccount recipient;
     private UserAccount unrelated;
 
@@ -90,15 +90,15 @@ class NotificationIntegrationTest {
         notificationRepository.deleteAll();
         int suffix = SEQUENCE.incrementAndGet();
         branch = branchRepository.saveAndFlush(new Branch("NOTIFY" + suffix, "Notification branch " + suffix));
-        owner = createUser("notify.owner." + suffix, "Notification Owner", "OWNER", branch);
+        admin = createUser("notify.admin." + suffix, "Notification Admin", "ADMIN", branch);
         recipient = createUser("notify.recipient." + suffix, "Notification Recipient", "RECEPTIONIST", branch);
         unrelated = createUser("notify.unrelated." + suffix, "Notification Unrelated", "RECEPTIONIST", branch);
     }
 
     @Test
     void specificUserNotificationExcludesActorAndEnforcesRecipientOwnership() throws Exception {
-        String ownerToken = login(owner.getUsername());
-        JsonNode sent = send(ownerToken, """
+        String adminToken = login(admin.getUsername());
+        JsonNode sent = send(adminToken, """
             {
               "type":"GENERIC_INTERNAL",
               "severity":"INFO",
@@ -113,7 +113,7 @@ class NotificationIntegrationTest {
               "excludeActor":true,
               "deduplicationKey":"TEST:SPECIFIC:%d"
             }
-            """.formatted(owner.getId(), recipient.getId(), recipient.getId(), branch.getId(), recipient.getId()));
+            """.formatted(admin.getId(), recipient.getId(), recipient.getId(), branch.getId(), recipient.getId()));
 
         long notificationId = sent.path("notificationId").asLong();
         org.assertj.core.api.Assertions.assertThat(sent.path("recipientCount").asInt()).isEqualTo(1);
@@ -123,12 +123,12 @@ class NotificationIntegrationTest {
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].id").value(notificationId))
             .andExpect(jsonPath("$.unreadCount").value(1));
-        mockMvc.perform(get("/api/notifications").header("Authorization", bearer(ownerToken)))
+        mockMvc.perform(get("/api/notifications").header("Authorization", bearer(adminToken)))
             .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(0));
         mockMvc.perform(get("/api/notifications").header("Authorization", bearer(login(unrelated.getUsername()))))
             .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(0));
         mockMvc.perform(patch("/api/notifications/{id}/read", notificationId)
-                .header("Authorization", bearer(ownerToken)))
+                .header("Authorization", bearer(adminToken)))
             .andExpect(status().isNotFound());
         mockMvc.perform(patch("/api/notifications/{id}/read", notificationId)
                 .header("Authorization", bearer(login(recipient.getUsername()))))
@@ -142,12 +142,12 @@ class NotificationIntegrationTest {
         Employee linked = createEmployee("NV-NOTIFY-" + SEQUENCE.incrementAndGet(), recipient, position);
         Employee noAccount = createEmployee("NV-NOTIFY-" + SEQUENCE.incrementAndGet(), null, position);
 
-        JsonNode first = send(login(owner.getUsername()), employeeAudienceBody(linked, noAccount, "EMPLOYEE:A"));
+        JsonNode first = send(login(admin.getUsername()), employeeAudienceBody(linked, noAccount, "EMPLOYEE:A"));
         org.assertj.core.api.Assertions.assertThat(first.path("recipientCount").asInt()).isEqualTo(1);
 
-        recipient.lock("Notification test lock", owner);
+        recipient.lock("Notification test lock", admin);
         userRepository.saveAndFlush(recipient);
-        JsonNode second = send(login(owner.getUsername()), employeeAudienceBody(linked, noAccount, "EMPLOYEE:B"));
+        JsonNode second = send(login(admin.getUsername()), employeeAudienceBody(linked, noAccount, "EMPLOYEE:B"));
         org.assertj.core.api.Assertions.assertThat(second.path("recipientCount").asInt()).isZero();
     }
 
@@ -180,7 +180,7 @@ class NotificationIntegrationTest {
               "deduplicationKey":"PERMISSION:%d"
             }
             """.formatted(branch.getId(), branch.getId());
-        String token = login(owner.getUsername());
+        String token = login(admin.getUsername());
         JsonNode created = send(token, body);
         JsonNode duplicate = send(token, body);
 
@@ -308,9 +308,9 @@ class NotificationIntegrationTest {
             "NOTIFY-E2E-" + SEQUENCE.incrementAndGet(),
             "Notification E2E branch"
         ));
-        owner.assignBranch(newBranch, false);
+        admin.assignBranch(newBranch, false);
         recipient.assignBranch(newBranch, false);
-        userRepository.saveAndFlush(owner);
+        userRepository.saveAndFlush(admin);
         userRepository.saveAndFlush(recipient);
         EmployeePosition position = positionRepository.findAll().stream().findFirst().orElseThrow();
         Employee employee = createEmployee("NV-NOTIFY-" + SEQUENCE.incrementAndGet(), recipient, position);
@@ -322,7 +322,7 @@ class NotificationIntegrationTest {
             .andReturn();
 
         mockMvc.perform(post("/api/employees/{employeeId}/branches", employee.getId())
-                .header("Authorization", bearer(login(owner.getUsername())))
+                .header("Authorization", bearer(login(admin.getUsername())))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -344,7 +344,7 @@ class NotificationIntegrationTest {
             .andExpect(jsonPath("$.content[0].referenceId").value(employee.getId().toString()))
             .andExpect(jsonPath("$.unreadCount").value(1));
         mockMvc.perform(get("/api/notifications")
-                .header("Authorization", bearer(login(owner.getUsername()))))
+                .header("Authorization", bearer(login(admin.getUsername()))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(0));
         mockMvc.perform(get("/api/notifications")
@@ -361,11 +361,11 @@ class NotificationIntegrationTest {
         Employee suspended = createEmployee(
             "NV-NOTIFY-" + SEQUENCE.incrementAndGet(), unrelated, position
         );
-        suspended.changeStatus(EmployeeStatus.SUSPENDED, owner);
+        suspended.changeStatus(EmployeeStatus.SUSPENDED, admin);
         employeeRepository.saveAndFlush(suspended);
         createEmployee("NV-NOTIFY-" + SEQUENCE.incrementAndGet(), null, position);
 
-        JsonNode sent = send(login(owner.getUsername()), """
+        JsonNode sent = send(login(admin.getUsername()), """
             {
               "type":"SYSTEM_ANNOUNCEMENT",
               "severity":"INFO",
@@ -391,7 +391,7 @@ class NotificationIntegrationTest {
 
     @Test
     void readAndDismissStateRemainIndependentPerRecipient() throws Exception {
-        JsonNode sent = send(login(owner.getUsername()), """
+        JsonNode sent = send(login(admin.getUsername()), """
             {
               "type":"GENERIC_INTERNAL",
               "severity":"INFO",
@@ -429,7 +429,7 @@ class NotificationIntegrationTest {
 
     @Test
     void sendRequiresExplicitActorExclusionExactPermissionAndBranchScope() throws Exception {
-        String ownerToken = login(owner.getUsername());
+        String adminToken = login(admin.getUsername());
         String recipientToken = login(recipient.getUsername());
         String withoutExclusion = """
             {
@@ -445,7 +445,7 @@ class NotificationIntegrationTest {
             }
             """.formatted(recipient.getId(), branch.getId());
         mockMvc.perform(post("/api/notifications")
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(withoutExclusion))
             .andExpect(status().isBadRequest());
@@ -465,7 +465,7 @@ class NotificationIntegrationTest {
             "notify.external." + SEQUENCE.incrementAndGet(), "External Recipient", "RECEPTIONIST", externalBranch
         );
         mockMvc.perform(post("/api/notifications")
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -487,7 +487,7 @@ class NotificationIntegrationTest {
 
     @Test
     void sendRejectsSensitiveMetadataAndUnknownAudienceTargets() throws Exception {
-        String token = login(owner.getUsername());
+        String token = login(admin.getUsername());
         mockMvc.perform(post("/api/notifications")
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -573,12 +573,12 @@ class NotificationIntegrationTest {
             LocalDate.of(2025, 1, 1),
             position,
             EmployeeStatus.ACTIVE,
-            owner
+            admin
         );
-        if (linkedUser != null) employee.linkUser(linkedUser, owner);
+        if (linkedUser != null) employee.linkUser(linkedUser, admin);
         employee = employeeRepository.saveAndFlush(employee);
         employeeBranchRepository.saveAndFlush(new EmployeeBranch(
-            employee, branch, true, owner, Instant.now()
+            employee, branch, true, admin, Instant.now()
         ));
         return employee;
     }

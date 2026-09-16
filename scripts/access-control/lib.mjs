@@ -3,7 +3,7 @@ import path from 'node:path'
 
 export const RISK_LEVELS = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 export const PERMISSION_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$/
-export const SUPPORTED_ROLES = new Set(['OWNER', 'MANAGER', 'RECEPTIONIST'])
+export const SUPPORTED_ROLES = new Set(['ADMIN', 'MANAGER', 'RECEPTIONIST'])
 
 export function constantName(code) {
   return code.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()

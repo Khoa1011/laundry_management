@@ -10,7 +10,7 @@ effectivePermissions =
   MINUS userDenies
 ```
 
-`DENY > ALLOW > ROLE`. A user-level DENY overrides both a role grant and a user ALLOW. OWNER, ADMIN, or any other role name must remain subject to DENY.
+`DENY > ALLOW > ROLE`. A user-level DENY overrides both a role grant and a user ALLOW. `ADMIN` and every other role remain subject to DENY.
 
 Roles provide explicit default grants. User overrides refine those defaults. Branch/tenant scope, record ownership, and business policies remain independent and are evaluated after permission authorization.
 
@@ -50,13 +50,13 @@ The employee module is declared in `access-control/modules/employee.yml`. Its pe
 
 Default grants are explicit:
 
-- `OWNER` receives every employee permission.
+- `ADMIN` receives every employee permission.
 - `MANAGER` receives operational employee permissions plus masked identity and private-file metadata reads, but not compensation, full identity, file content, `employee.position.manage`, or `employee.manage-all-branches`.
 - `RECEPTIONIST` receives only `employee.read-self`.
 
-Sensitive employee capabilities use dedicated permissions for compensation current/history/update, identity masked/full/update, and document metadata/upload/replace/delete/download. These permissions do not bypass employee branch scope. `OWNER` receives them explicitly through role grants; no role-name shortcut exists.
+Sensitive employee capabilities use dedicated permissions for compensation current/history/update, identity masked/full/update, and document metadata/upload/replace/delete/download. These permissions do not bypass employee branch scope. `ADMIN` receives them explicitly through role grants; no role-name shortcut exists.
 
-User overrides continue to apply with `DENY > ALLOW > ROLE`, including for OWNER and all employee permissions. The frontend protects `/employees`, `/employees/new`, `/employees/:id`, `/employees/:id/edit`, and `/employees/me` from the effective permission list returned by the backend. Backend method authorization remains authoritative.
+User overrides continue to apply with `DENY > ALLOW > ROLE`, including for `ADMIN` and all employee permissions. The frontend protects `/employees`, `/employees/new`, `/employees/:id`, `/employees/:id/edit`, and `/employees/me` from the effective permission list returned by the backend. Backend method authorization remains authoritative.
 
 ## Notification module
 
@@ -79,7 +79,7 @@ Personal permissions never accept a target `userId`; the backend derives it from
 
 Default grants are explicit:
 
-- `OWNER` receives every notification permission.
+- `ADMIN` receives every notification permission.
 - `MANAGER` receives personal permissions plus specific user/employee, branch employee, position, and effective-permission sending.
 - `RECEPTIONIST` receives only personal notification and preference permissions.
 

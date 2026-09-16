@@ -112,6 +112,11 @@ public class UserAccount {
         authorizationVersion++;
     }
 
+    public void replacePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+        authorizationVersion++;
+    }
+
     public void assignBranch(Branch branch, boolean asDefault) {
         branchAssignments.add(new UserBranch(this, branch, asDefault));
         if (asDefault) {

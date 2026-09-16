@@ -48,7 +48,7 @@ class DemoCatalogSeedIntegrationTest {
     @Test
     void seedsRealisticCatalogPricingAndRemainsIdempotent() {
         Branch branch = branchRepository.saveAndFlush(new Branch("DEMO-SEED", "Chi nhánh demo seed"));
-        UserAccount actor = new UserAccount("demo-seed-owner", "not-used", "Demo Seed Owner", branch);
+        UserAccount actor = new UserAccount("demo-seed-admin", "not-used", "Demo Seed Admin", branch);
         actor.assignBranch(branch, true);
         userRepository.saveAndFlush(actor);
         DemoCatalogSeedProperties properties = new DemoCatalogSeedProperties(

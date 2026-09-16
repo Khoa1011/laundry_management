@@ -41,7 +41,7 @@ function manifest(overrides = {}) {
       displayOrder: 10,
     },
     permissions,
-    defaultRoleGrants: { OWNER: permissions.map((item) => item.code) },
+    defaultRoleGrants: { ADMIN: permissions.map((item) => item.code) },
     ...overrides,
     permissions,
   }
@@ -70,7 +70,7 @@ for (const [name, mutate, expected] of [
   ['missing Vietnamese name', (value) => { value.permissions[0].nameVi = '' }, 'nameVi is required'],
   ['missing English name', (value) => { value.permissions[0].nameEn = '' }, 'nameEn is required'],
   ['invalid risk level', (value) => { value.permissions[0].riskLevel = 'SEVERE' }, 'invalid risk level'],
-  ['unknown default role grant', (value) => { value.defaultRoleGrants.OWNER.push('customer.unknown') }, 'references unknown permission'],
+  ['unknown default role grant', (value) => { value.defaultRoleGrants.ADMIN.push('customer.unknown') }, 'references unknown permission'],
 ]) {
   test(`rejects ${name}`, () => {
     const value = structuredClone(manifest())

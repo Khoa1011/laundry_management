@@ -56,7 +56,7 @@ class EmployeeManagementIntegrationTest {
     private Branch branchA;
     private Branch branchB;
     private Long positionId;
-    private String ownerToken;
+    private String adminToken;
     private String managerAToken;
     private UserAccount managerA;
     private UserAccount receptionistA;
@@ -83,14 +83,14 @@ class EmployeeManagementIntegrationTest {
 
         branchA = branchRepository.save(new Branch("EA", "Employee branch A"));
         branchB = branchRepository.save(new Branch("EB", "Employee branch B"));
-        Role owner = roleRepository.findByCode("OWNER").orElseThrow();
+        Role admin = roleRepository.findByCode("ADMIN").orElseThrow();
         Role manager = roleRepository.findByCode("MANAGER").orElseThrow();
         Role receptionist = roleRepository.findByCode("RECEPTIONIST").orElseThrow();
-        createUser("employee.owner", "Employee Owner", owner, branchA, branchB);
+        createUser("employee.admin", "Employee Admin", admin, branchA, branchB);
         managerA = createUser("employee.manager.a", "Employee Manager A", manager, branchA);
         receptionistA = createUser("employee.reception.a", "Employee Reception A", receptionist, branchA);
         positionId = positionRepository.findByActiveTrueOrderBySortOrderAscNameViAscIdAsc().get(0).getId();
-        ownerToken = login("employee.owner");
+        adminToken = login("employee.admin");
         managerAToken = login("employee.manager.a");
     }
 
@@ -131,7 +131,7 @@ class EmployeeManagementIntegrationTest {
     @Test
     void managerCreatesAndReadsOnlyEmployeesWithinAssignedBranch() throws Exception {
         JsonNode employeeA = createEmployee(managerAToken, "Scoped employee A", branchA.getId(), null);
-        JsonNode employeeB = createEmployee(ownerToken, "Scoped employee B", branchB.getId(), null);
+        JsonNode employeeB = createEmployee(adminToken, "Scoped employee B", branchB.getId(), null);
 
         mockMvc.perform(get("/api/employees").header("Authorization", bearer(managerAToken)))
             .andExpect(status().isOk())
@@ -220,12 +220,12 @@ class EmployeeManagementIntegrationTest {
 
     @Test
     void branchLifecycleRequiresReplacementPrimaryAndRejectsStaleVersion() throws Exception {
-        JsonNode employee = createEmployee(ownerToken, "Multi branch employee", branchA.getId(), null);
+        JsonNode employee = createEmployee(adminToken, "Multi branch employee", branchA.getId(), null);
         long employeeId = employee.path("id").asLong();
         long originalVersion = employee.path("version").asLong();
 
         MvcResult assignedResult = mockMvc.perform(post("/api/employees/{id}/branches", employeeId)
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"branchId\":" + branchB.getId() + ",\"primary\":false,\"version\":" + originalVersion + "}"))
             .andExpect(status().isOk())
@@ -234,7 +234,7 @@ class EmployeeManagementIntegrationTest {
         long assignedVersion = body(assignedResult).path("version").asLong();
 
         mockMvc.perform(delete("/api/employees/{id}/branches/{branchId}", employeeId, branchA.getId())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":" + assignedVersion + "}"))
             .andExpect(status().isConflict())
@@ -242,7 +242,7 @@ class EmployeeManagementIntegrationTest {
 
         MvcResult primaryResult = mockMvc.perform(patch(
                 "/api/employees/{id}/branches/{branchId}/primary", employeeId, branchB.getId())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":" + assignedVersion + "}"))
             .andExpect(status().isOk())
@@ -252,14 +252,14 @@ class EmployeeManagementIntegrationTest {
         long primaryVersion = body(primaryResult).path("version").asLong();
 
         mockMvc.perform(delete("/api/employees/{id}/branches/{branchId}", employeeId, branchA.getId())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":" + originalVersion + "}"))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.errorCode").value("EMPLOYEE_VERSION_CONFLICT"));
 
         mockMvc.perform(delete("/api/employees/{id}/branches/{branchId}", employeeId, branchA.getId())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":" + primaryVersion + "}"))
             .andExpect(status().isOk())
@@ -269,7 +269,7 @@ class EmployeeManagementIntegrationTest {
 
     @Test
     void selfProfileDoesNotGrantEmployeeDirectoryAccessAndAccountCannotBeLinkedTwice() throws Exception {
-        JsonNode selfEmployee = createEmployee(ownerToken, "Reception profile", branchA.getId(), receptionistA.getId());
+        JsonNode selfEmployee = createEmployee(adminToken, "Reception profile", branchA.getId(), receptionistA.getId());
         String receptionistToken = login("employee.reception.a");
 
         mockMvc.perform(get("/api/employees/me").header("Authorization", bearer(receptionistToken)))
@@ -281,7 +281,7 @@ class EmployeeManagementIntegrationTest {
             .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/employees")
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createRequest("Duplicate account profile", branchA.getId(), receptionistA.getId()).toString()))
             .andExpect(status().isConflict())
@@ -327,7 +327,7 @@ class EmployeeManagementIntegrationTest {
             .andExpect(jsonPath("$.employeeCode").value(first.path("employeeCode").asText()));
 
         mockMvc.perform(delete("/api/employees/{id}", employeeId)
-                .header("Authorization", bearer(ownerToken)))
+                .header("Authorization", bearer(adminToken)))
             .andExpect(status().isMethodNotAllowed());
 
         ObjectNode invalid = createRequest("A", branchA.getId(), null);
@@ -377,7 +377,7 @@ class EmployeeManagementIntegrationTest {
     @Test
     void inactivePositionCannotBeAssignedAndAccountActionsNeedDedicatedPermission() throws Exception {
         JsonNode position = objectMapper.readTree(mockMvc.perform(post("/api/employee-positions")
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"code":"TEMP_INACTIVE","nameVi":"Tam ngung","nameEn":"Inactive temporary","sortOrder":99}
@@ -385,7 +385,7 @@ class EmployeeManagementIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsByteArray());
         mockMvc.perform(patch("/api/employee-positions/{id}", position.path("id").asLong())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -408,7 +408,7 @@ class EmployeeManagementIntegrationTest {
             .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.errorCode").value("EMPLOYEE_POSITION_INACTIVE"));
 
-        JsonNode employee = createEmployee(ownerToken, "Permission target", branchA.getId(), null);
+        JsonNode employee = createEmployee(adminToken, "Permission target", branchA.getId(), null);
         String receptionistToken = login("employee.reception.a");
         mockMvc.perform(put("/api/employees/{id}/account", employee.path("id").asLong())
                 .header("Authorization", bearer(receptionistToken))
@@ -425,14 +425,14 @@ class EmployeeManagementIntegrationTest {
     @Test
     void manageAllScopeAloneGrantsNoActionAndUserDenyOverridesManagerRoleGrant() throws Exception {
         JsonNode scopeOnlyRole = objectMapper.readTree(mockMvc.perform(post("/api/access/roles")
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\":\"Employee scope only\"}"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsByteArray());
         MvcResult matrixResult = mockMvc.perform(put(
                 "/api/access/roles/{roleId}/permissions", scopeOnlyRole.path("id").asLong())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"permissionCodes\":[\"employee.manage-all-branches\"],\"version\":"
                     + scopeOnlyRole.path("version").asLong() + ",\"reason\":\"Scope-only security test\"}"))
@@ -444,7 +444,7 @@ class EmployeeManagementIntegrationTest {
             .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/access/users/{userId}/overrides", managerA.getId())
-                .header("Authorization", bearer(ownerToken))
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {

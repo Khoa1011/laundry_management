@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { apiRequest, logoutSession, readSession, refreshSession, writeSession } from '../api/client'
 import type { CurrentUser, LoginResponse } from '../api/types'
 import type { PermissionCode } from './permissionCodes.generated'
@@ -17,6 +17,11 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+const FOCUS_REFRESH_COOLDOWN_MS = 1_500
+
+function hasSameUserSnapshot(current: CurrentUser | null, next: CurrentUser) {
+  return current !== null && JSON.stringify(current) === JSON.stringify(next)
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [initialSession] = useState(() => readSession())
@@ -24,6 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [branchId, setBranchIdState] = useState<number | null>(initialSession?.user.defaultBranchId ?? null)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [isRestoring, setIsRestoring] = useState(!initialSession)
+  const refreshCurrentUserInFlight = useRef<Promise<void> | null>(null)
+  const lastFocusRefreshAt = useRef(0)
 
   const logout = useCallback(async () => {
     await logoutSession()
@@ -38,22 +45,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionExpired(false)
   }, [])
 
-  const refreshCurrentUser = useCallback(async () => {
-    const session = readSession() ?? await refreshSession()
-    if (!session) return
-    const current = await apiRequest<Omit<CurrentUser, 'roles' | 'permissions'> & {
-      effectivePermissions: CurrentUser['permissions']
-    }>('/api/auth/me')
-    const nextUser: CurrentUser = {
-      ...session.user,
-      ...current,
-      roles: current.primaryRole ? [current.primaryRole.code] : [],
-      permissions: [...current.effectivePermissions],
-    }
-    writeSession({ ...session, user: nextUser })
-    setUser(nextUser)
-    setBranchIdState((selected) =>
-      nextUser.branches.some((branch) => branch.id === selected) ? selected : nextUser.defaultBranchId)
+  const refreshCurrentUser = useCallback(() => {
+    if (refreshCurrentUserInFlight.current) return refreshCurrentUserInFlight.current
+
+    const request = (async () => {
+      const session = readSession() ?? await refreshSession()
+      if (!session) return
+      const current = await apiRequest<Omit<CurrentUser, 'roles' | 'permissions'> & {
+        effectivePermissions: CurrentUser['permissions']
+      }>('/api/auth/me')
+      const nextUser: CurrentUser = {
+        ...session.user,
+        ...current,
+        roles: current.primaryRole ? [current.primaryRole.code] : [],
+        permissions: [...current.effectivePermissions],
+      }
+      writeSession({ ...session, user: nextUser })
+      setUser((existing) => hasSameUserSnapshot(existing, nextUser) ? existing : nextUser)
+      setBranchIdState((selected) =>
+        nextUser.branches.some((branch) => branch.id === selected) ? selected : nextUser.defaultBranchId)
+    })().finally(() => {
+      refreshCurrentUserInFlight.current = null
+    })
+
+    refreshCurrentUserInFlight.current = request
+    return request
   }, [])
 
   useEffect(() => {
@@ -94,13 +110,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applySession])
 
   useEffect(() => {
-    const refresh = () => { void refreshCurrentUser().catch(() => undefined) }
-    if (readSession()) refresh()
-    window.addEventListener('focus', refresh)
-    window.addEventListener('laundry:authorization-stale', refresh)
+    const refreshOnFocus = () => {
+      const now = Date.now()
+      if (now - lastFocusRefreshAt.current < FOCUS_REFRESH_COOLDOWN_MS) return
+      lastFocusRefreshAt.current = now
+      void refreshCurrentUser().catch(() => undefined)
+    }
+    const refreshAuthorization = () => { void refreshCurrentUser().catch(() => undefined) }
+    if (readSession()) refreshOnFocus()
+    window.addEventListener('focus', refreshOnFocus)
+    window.addEventListener('laundry:authorization-stale', refreshAuthorization)
     return () => {
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('laundry:authorization-stale', refresh)
+      window.removeEventListener('focus', refreshOnFocus)
+      window.removeEventListener('laundry:authorization-stale', refreshAuthorization)
     }
   }, [refreshCurrentUser])
 

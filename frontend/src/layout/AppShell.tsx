@@ -28,6 +28,7 @@ import { PERMISSION_CODES, type PermissionCode } from '../auth/permissionCodes.g
 import { AppNavLink } from '../components/navigation/AppNavLink'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { IconButton, IconButtonLink } from '../components/ui/IconButton'
+import { acquireBodyScrollLock } from '../components/overlayLock'
 import { QuickCustomerDialog } from '../features/customers/QuickCustomerDialog'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
 import { motionDuration, motionEase } from '../providers/motionPresets'
@@ -88,8 +89,7 @@ export function AppShell() {
     if (!mobileMenuOpen) return
     const drawer = mobileDrawerRef.current
     const trigger = mobileMenuButtonRef.current
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const releaseBodyScroll = acquireBodyScrollLock()
     drawer?.querySelector<HTMLElement>('button, a, select')?.focus()
 
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -117,7 +117,7 @@ export function AppShell() {
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
+      releaseBodyScroll()
       trigger?.focus()
     }
   }, [mobileMenuOpen])

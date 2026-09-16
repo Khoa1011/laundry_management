@@ -144,7 +144,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": [
+    "ADMIN": [
       "notification.read-own",
       "notification.mark-read-own",
       "notification.mark-all-read-own",

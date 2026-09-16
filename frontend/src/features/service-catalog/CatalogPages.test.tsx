@@ -149,7 +149,7 @@ describe('ItemTypeCatalogPage', () => {
     mocks.itemTypes.mockReset()
   })
 
-  it('expands and collapses parent item groups without hiding the parent row', async () => {
+  it('presents hierarchy as familiar categories with directly selectable item types', async () => {
     const child = {
       id: 2, code: 'LD-000002', parentId: 1, nameVi: 'Áo sơ mi', effectiveUnitType: 'KG',
       inheritedUnit: true, requiresSeparateWash: false, sortOrder: 10, status: 'ACTIVE',
@@ -167,17 +167,23 @@ describe('ItemTypeCatalogPage', () => {
 
     renderItemTypePage()
 
-    const expand = await screen.findByRole('button', { name: 'Mở nhóm Quần áo' })
-    expect(screen.queryByText('Áo sơ mi')).not.toBeInTheDocument()
-    fireEvent.click(expand)
+    expect(await screen.findByText('Quần áo')).toBeInTheDocument()
     expect(await screen.findByText('Áo sơ mi')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn nhóm Quần áo' }))
-    expect(screen.queryByText('Áo sơ mi')).not.toBeInTheDocument()
-    expect(screen.getByText('Quần áo')).toBeInTheDocument()
+    expect(screen.getByText('Danh mục')).toBeInTheDocument()
+    expect(screen.queryByText('Loại cha')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Áo sơ mi/ }))
+    expect(screen.getAllByText('Áo sơ mi').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('does not ask users to enter a technical display order', async () => {
-    mocks.itemTypes.mockResolvedValue([])
+  it('uses an optional category instead of parent-child terminology in the editor', async () => {
+    mocks.itemTypes.mockResolvedValue([{
+      id: 1, code: 'LD-000001', nameVi: 'Quần áo', defaultUnitType: 'KG', effectiveUnitType: 'KG',
+      inheritedUnit: false, requiresSeparateWash: false, sortOrder: 10, status: 'ACTIVE',
+      createdAt: '2026-07-26T00:00:00Z', updatedAt: '2026-07-26T01:00:00Z',
+      updatedBy: { id: 1, name: 'Manager' }, version: 0, applicableServiceCount: 0,
+      relatedPriceRuleCount: 0, children: [],
+    }])
 
     renderItemTypePage()
 
@@ -185,6 +191,11 @@ describe('ItemTypeCatalogPage', () => {
     fireEvent.click(addButtons[0])
 
     expect(screen.getByRole('dialog', { name: 'Thêm loại đồ' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Danh mục \(không bắt buộc\)/)).toHaveDisplayValue('Không phân loại')
+    expect(screen.getByLabelText('Đơn vị tính')).toHaveDisplayValue('Theo dịch vụ')
+    expect(screen.getByRole('option', { name: 'Quần áo' })).toBeInTheDocument()
+    expect(screen.queryByText('Loại cha')).not.toBeInTheDocument()
+    expect(screen.queryByText('Loại gốc')).not.toBeInTheDocument()
     expect(screen.queryByText('Thứ tự')).not.toBeInTheDocument()
   })
 })

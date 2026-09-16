@@ -33,25 +33,32 @@ public class BootstrapService {
     @Transactional
     public void initialize(BootstrapProperties properties) {
         validate(properties);
-        if (userAccountRepository.findByUsernameIgnoreCase(properties.username().trim()).isPresent()) {
-            return;
-        }
-
+        String username = properties.username().trim().toLowerCase();
         String branchCode = properties.branchCode().trim().toUpperCase();
         Branch branch = branchRepository.findByCodeIgnoreCase(branchCode)
             .orElseGet(() -> branchRepository.save(new Branch(branchCode, properties.branchName().trim())));
-        Role owner = roleRepository.findByCode("OWNER")
-            .orElseThrow(() -> new IllegalStateException("OWNER role is missing after migration"));
+        Role admin = roleRepository.findByCode("ADMIN")
+            .orElseThrow(() -> new IllegalStateException("ADMIN role is missing after migration"));
 
-        UserAccount account = new UserAccount(
-            properties.username().trim().toLowerCase(),
-            passwordEncoder.encode(properties.password()),
-            properties.username().trim(),
-            branch
-        );
-        account.addRole(owner);
+        UserAccount account = userAccountRepository.findByUsernameIgnoreCase(username)
+            .orElseGet(() -> new UserAccount(
+                username,
+                passwordEncoder.encode(properties.password()),
+                properties.username().trim(),
+                branch
+            ));
+        if (!passwordEncoder.matches(properties.password(), account.getPasswordHash())) {
+            account.replacePasswordHash(passwordEncoder.encode(properties.password()));
+        }
+        if (account.getRoles().size() != 1 || account.getRoles().stream().noneMatch(role -> "ADMIN".equals(role.getCode()))) {
+            account.assignPrimaryRole(admin);
+        }
+        boolean needsBranchAssignment = account.getBranchAssignments().stream()
+            .noneMatch(assignment -> assignment.getBranch().getId().equals(branch.getId()));
         account = userAccountRepository.saveAndFlush(account);
-        account.assignBranch(branch, true);
+        if (needsBranchAssignment) {
+            account.assignBranch(branch, true);
+        }
         userAccountRepository.save(account);
     }
 

@@ -34,7 +34,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": ["pricing.preview", "pricing.read-history"],
+    "ADMIN": ["pricing.preview", "pricing.read-history"],
     "MANAGER": ["pricing.preview", "pricing.read-history"],
     "RECEPTIONIST": ["pricing.preview"]
   }

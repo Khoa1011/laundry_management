@@ -23,7 +23,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": [
+    "ADMIN": [
       "location.read"
     ],
     "MANAGER": [

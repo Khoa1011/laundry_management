@@ -78,7 +78,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": ["price-list.read", "price-list.create", "price-list.update-draft", "price-list.duplicate", "price-list.publish", "price-list.archive"],
+    "ADMIN": ["price-list.read", "price-list.create", "price-list.update-draft", "price-list.duplicate", "price-list.publish", "price-list.archive"],
     "MANAGER": ["price-list.read", "price-list.create", "price-list.update-draft", "price-list.duplicate", "price-list.publish", "price-list.archive"],
     "RECEPTIONIST": ["price-list.read"]
   }

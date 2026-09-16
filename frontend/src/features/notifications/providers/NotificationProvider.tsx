@@ -103,6 +103,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user, hasPermission } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
+  const userId = user?.id ?? null
   const canRead = Boolean(user) && hasPermission(PERMISSION_CODES.NOTIFICATION_READ_OWN)
   const canOrderRead = Boolean(user) && hasPermission(PERMISSION_CODES.ORDER_READ)
   const canStream = Boolean(user) && (canRead || canOrderRead)
@@ -125,9 +126,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const streamBlocked = useRef(false)
 
   useEffect(() => {
-    if (!user?.id) return
-    void notificationSoundEngine.prepareStoredCustomSound(`user:${user.id}`)
-  }, [user?.id])
+    if (!userId) return
+    void notificationSoundEngine.prepareStoredCustomSound(`user:${userId}`)
+  }, [userId])
 
   const refresh = useCallback(async () => {
     if (!canRead) return
@@ -150,11 +151,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         void notificationSoundEngine.unlockAndPreview(
           preferences.soundKey,
           preferences.soundVolume,
-          `user:${user?.id ?? 'device'}`,
+          `user:${userId ?? 'device'}`,
         )
       },
     })
-  }, [notify, t, user?.id])
+  }, [notify, t, userId])
 
   const claimAudio = useCallback((eventId: string) => {
     if (document.visibilityState !== 'visible' || !document.hasFocus()) return false
@@ -225,11 +226,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const result = await notificationSoundEngine.play(
         preferences.soundKey,
         preferences.soundVolume,
-        `user:${user?.id ?? 'device'}`,
+        `user:${userId ?? 'device'}`,
       )
       if (result === 'blocked') showAudioUnlock(preferences)
     }
-  }, [claimAudio, notify, queryClient, showAudioUnlock, t, user?.id])
+  }, [claimAudio, notify, queryClient, showAudioUnlock, t, userId])
 
   const queueRealtimeEffect = useCallback((eventId: string, item: NotificationItem) => {
     if (!rememberBounded(effectIds.current, effectOrder.current, eventId)) return
@@ -237,8 +238,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (batchTimer.current === null) {
       batchTimer.current = window.setTimeout(() => { void flushRealtimeBatch() }, 350)
     }
-    broadcastChannel.current?.postMessage({ type: 'effect-seen', eventId, userId: user?.id })
-  }, [flushRealtimeBatch, user?.id])
+    broadcastChannel.current?.postMessage({ type: 'effect-seen', eventId, userId: userId ?? undefined })
+  }, [flushRealtimeBatch, userId])
 
   const handleEvent = useCallback((event: NotificationSseEnvelope, source: 'stream' | 'broadcast' = 'stream') => {
     if (!event.eventId || !rememberBounded(handledIds.current, handledOrder.current, event.eventId)) return
@@ -246,16 +247,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new CustomEvent('laundry:realtime', { detail: event }))
       void queryClient.invalidateQueries({ queryKey: ['orders'] })
     }
-    if (source === 'stream' && user?.id) {
-      broadcastChannel.current?.postMessage({ type: 'sse-event', event, userId: user.id })
+    if (source === 'stream' && userId) {
+      broadcastChannel.current?.postMessage({ type: 'sse-event', event, userId })
     }
     if (typeof event.unreadCount === 'number') {
       queryClient.setQueryData(notificationKeys.unread, { unreadCount: event.unreadCount })
-      if (source === 'stream' && user?.id) {
+      if (source === 'stream' && userId) {
         broadcastChannel.current?.postMessage({
           type: 'unread-count',
           unreadCount: event.unreadCount,
-          userId: user.id,
+          userId,
         })
       }
     }
@@ -298,14 +299,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (event.eventType === 'notification.read' || event.eventType === 'notification.dismissed') {
       void queryClient.invalidateQueries({ queryKey: notificationKeys.all })
     }
-  }, [queryClient, queueRealtimeEffect, user?.id])
+  }, [queryClient, queueRealtimeEffect, userId])
 
   useEffect(() => {
     if (!canRead || typeof BroadcastChannel === 'undefined') return
     const channel = new BroadcastChannel(NOTIFICATION_CHANNEL_NAME)
     broadcastChannel.current = channel
     channel.onmessage = (message: MessageEvent<NotificationBroadcastMessage>) => {
-      if (message.data.userId && message.data.userId !== user?.id) return
+      if (message.data.userId && message.data.userId !== userId) return
       if (message.data.type === 'effect-seen') {
         rememberBounded(effectIds.current, effectOrder.current, message.data.eventId)
       }
@@ -331,10 +332,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       channel.close()
       broadcastChannel.current = null
     }
-  }, [canRead, handleEvent, queryClient, user?.id])
+  }, [canRead, handleEvent, queryClient, userId])
 
   useEffect(() => {
-    if (!canStream || !user) {
+    if (!canStream || !userId) {
       setConnectionState('idle')
       return
     }
@@ -348,13 +349,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     let controller: AbortController | null = null
     let leaderState: NotificationConnectionState = 'connecting'
     const tabId = getTabId()
-    const leaderKey = notificationStreamLeaderKey(user.id)
+    const leaderKey = notificationStreamLeaderKey(userId)
     const canCoordinateTabs = typeof BroadcastChannel !== 'undefined' && typeof localStorage !== 'undefined'
 
     const publishLeaderState = (state: NotificationConnectionState) => {
       leaderState = state
       if (canCoordinateTabs) {
-        broadcastChannel.current?.postMessage({ type: 'leader-state', state, userId: user.id, tabId })
+        broadcastChannel.current?.postMessage({ type: 'leader-state', state, userId, tabId })
       }
     }
 
@@ -374,7 +375,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       isLeader = false
       clearLeaderRenewal()
       if (canCoordinateTabs) {
-        releaseNotificationStreamLeadership(localStorage, leaderKey, tabId, user.id)
+        releaseNotificationStreamLeadership(localStorage, leaderKey, tabId, userId)
       }
     }
     const schedule = () => {
@@ -399,7 +400,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           setConnectionState('offline')
           return
         }
-        if (!hasCurrentNotificationStreamLeader(localStorage, leaderKey, user.id)) {
+        if (!hasCurrentNotificationStreamLeader(localStorage, leaderKey, userId)) {
           void claimAndConnect()
         }
       }, FOLLOWER_CHECK_MS)
@@ -409,7 +410,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       clearLeaderRenewal()
       leaderRenewTimer = window.setInterval(() => {
         if (stopped || streamBlocked.current) return
-        const renewed = renewNotificationStreamLeadership(localStorage, leaderKey, tabId, user.id)
+        const renewed = renewNotificationStreamLeadership(localStorage, leaderKey, tabId, userId)
         if (!renewed) {
           controller?.abort()
           stopLeadership()
@@ -427,7 +428,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         return
       }
       if (canCoordinateTabs) {
-        const claimed = claimNotificationStreamLeadership(localStorage, leaderKey, tabId, user.id)
+        const claimed = claimNotificationStreamLeadership(localStorage, leaderKey, tabId, userId)
         if (!claimed) {
           isLeader = false
           setConnectionState('connecting')
@@ -469,7 +470,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         if (!isRetryableNotificationStreamError(error)) {
           streamBlocked.current = true
           setConnectionState('idle')
-          broadcastChannel.current?.postMessage({ type: 'stream-blocked', userId: user.id })
+          broadcastChannel.current?.postMessage({ type: 'stream-blocked', userId })
           stopLeadership()
           return
         }
@@ -503,7 +504,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       pendingBatch.current = []
       void notificationSoundEngine.suspend()
     }
-  }, [canOrderRead, canStream, handleEvent, queryClient, refresh, user])
+  }, [canOrderRead, canStream, handleEvent, queryClient, refresh, userId])
 
   const value = useMemo<NotificationContextValue>(() => ({
     canRead,

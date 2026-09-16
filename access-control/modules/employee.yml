@@ -287,7 +287,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": [
+    "ADMIN": [
       "employee.read",
       "employee.read-self",
       "employee.create",

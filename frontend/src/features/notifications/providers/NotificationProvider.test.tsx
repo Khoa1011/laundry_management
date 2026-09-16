@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../i18n'
+import type { CurrentUser } from '../../../api/types'
 import type { NotificationItem, NotificationSseEnvelope } from '../model/types'
 import { notificationKeys } from '../api/notificationsApi'
 import { NOTIFICATION_STREAM_LEASE_MS, notificationStreamLeaderKey } from '../utils/notificationStreamLeader'
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   play: vi.fn(),
   suspend: vi.fn(),
   prepareStoredCustom: vi.fn(),
+  authUser: null as CurrentUser | null,
 }))
 const stableUser = {
   id: 1,
@@ -31,7 +33,7 @@ vi.mock('../api/notificationsApi', async (importOriginal) => ({
 }))
 vi.mock('../../../auth/AuthProvider', () => ({
   useAuth: () => ({
-    user: stableUser,
+    user: mocks.authUser,
     hasPermission: () => true,
   }),
 }))
@@ -97,6 +99,7 @@ describe('NotificationProvider', () => {
     mocks.play.mockReset().mockResolvedValue('played')
     mocks.suspend.mockReset().mockResolvedValue(undefined)
     mocks.prepareStoredCustom.mockReset().mockResolvedValue(null)
+    mocks.authUser = stableUser
     localStorage.clear()
     sessionStorage.clear()
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
@@ -242,5 +245,39 @@ describe('NotificationProvider', () => {
 
     expect(mocks.openStream).not.toHaveBeenCalled()
     expect(screen.getByTestId('pulse')).toHaveTextContent('0:connecting')
+  })
+
+  it('keeps the current SSE stream when auth refresh returns an equivalent user object', async () => {
+    mocks.openStream.mockImplementation((signal: AbortSignal, handlers) => {
+      handlers.onOpen()
+      return new Promise<void>((resolve) => {
+        signal.addEventListener('abort', () => resolve(), { once: true })
+      })
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <NotificationProvider><Probe /></NotificationProvider>
+      </QueryClientProvider>,
+    )
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.openStream).toHaveBeenCalledTimes(1)
+
+    mocks.authUser = { ...stableUser, permissions: [...stableUser.permissions] }
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <NotificationProvider><Probe /></NotificationProvider>
+      </QueryClientProvider>,
+    )
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(mocks.openStream).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('pulse')).toHaveTextContent('0:connected')
   })
 })

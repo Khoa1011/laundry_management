@@ -67,7 +67,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": ["price-rule.read", "price-rule.create", "price-rule.update-draft", "price-rule.delete-draft", "price-rule.override-conflict"],
+    "ADMIN": ["price-rule.read", "price-rule.create", "price-rule.update-draft", "price-rule.delete-draft", "price-rule.override-conflict"],
     "MANAGER": ["price-rule.read", "price-rule.create", "price-rule.update-draft", "price-rule.delete-draft"],
     "RECEPTIONIST": ["price-rule.read"]
   }

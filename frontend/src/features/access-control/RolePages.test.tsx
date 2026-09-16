@@ -42,8 +42,8 @@ const customRole: Role = {
   permissionCount: 2,
   createdAt: '2026-07-16T08:00:00Z',
   updatedAt: '2026-07-16T09:00:00Z',
-  createdBy: { id: 1, displayName: 'Owner' },
-  updatedBy: { id: 1, displayName: 'Owner' },
+  createdBy: { id: 1, displayName: 'Admin' },
+  updatedBy: { id: 1, displayName: 'Admin' },
 }
 
 const matrix: RoleMatrix = {
@@ -177,18 +177,18 @@ describe('Role management pages', () => {
   it('switches system role application metadata immediately between English and Vietnamese', async () => {
     const systemRole = {
       ...customRole,
-      code: 'OWNER',
-      displayName: 'Chủ cửa hàng',
-      nameVi: 'Chủ cửa hàng',
-      nameEn: 'Owner',
+      code: 'ADMIN',
+      displayName: 'Quản trị viên',
+      nameVi: 'Quản trị viên',
+      nameEn: 'Administrator',
       system: true,
     }
     apiMocks.useRole.mockReturnValue(query(systemRole))
     apiMocks.useRoleMatrix.mockReturnValue(query({ ...matrix, role: systemRole }))
     renderRoute('/settings/access/roles/12', '/settings/access/roles/:roleId', <RoleDetailPage />)
-    expect(screen.getByRole('heading', { name: 'Owner' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Administrator' })).toBeInTheDocument()
     await i18n.changeLanguage('vi')
-    expect(await screen.findByRole('heading', { name: 'Chủ cửa hàng' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Quản trị viên' })).toBeInTheDocument()
   })
 
   it.each(['laundry-teal', 'laundry-indigo'])('uses semantic tokens under the %s theme', (theme) => {

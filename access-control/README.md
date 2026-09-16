@@ -10,7 +10,7 @@ effectivePermissions =
   MINUS userDenyPermissions
 ```
 
-Precedence is `DENY > ALLOW > ROLE`. Role names never bypass effective permissions, including OWNER or any future ADMIN role.
+Precedence is `DENY > ALLOW > ROLE`. Role names never bypass effective permissions, including the system `ADMIN` role.
 
 Each business module owns one manifest in `access-control/modules/<module>.yml`. The files use JSON syntax, which is valid YAML 1.2, so the repository can validate and generate artifacts with the built-in Node.js runtime and no network-installed parser.
 

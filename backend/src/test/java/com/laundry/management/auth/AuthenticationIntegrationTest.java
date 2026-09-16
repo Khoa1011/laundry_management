@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.laundry.management.auth.application.BootstrapProperties;
+import com.laundry.management.auth.application.BootstrapService;
 import com.laundry.management.auth.domain.Branch;
 import com.laundry.management.auth.domain.Role;
 import com.laundry.management.auth.domain.PermissionOverrideEffect;
@@ -87,6 +89,9 @@ class AuthenticationIntegrationTest {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
+    @Autowired
+    private BootstrapService bootstrapService;
+
     @BeforeEach
     void setUp() {
         customerActivityRepository.deleteAll();
@@ -131,6 +136,50 @@ class AuthenticationIntegrationTest {
             .andExpect(header().string("Cache-Control", containsString("no-store")))
             .andExpect(content().string(not(containsString("passwordHash"))))
             .andExpect(content().string(not(containsString("refreshToken"))));
+    }
+
+    @Test
+    void bootstrapCreatesAndReconcilesTheAdminAccount() throws Exception {
+        BootstrapProperties initial = new BootstrapProperties(
+            true,
+            "admin",
+            "initial-admin-password",
+            "MAIN",
+            "Chi nhánh chính"
+        );
+        bootstrapService.initialize(initial);
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"admin","password":"initial-admin-password"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.username").value("admin"))
+            .andExpect(jsonPath("$.user.roles[0]").value("ADMIN"))
+            .andExpect(jsonPath("$.user.roles.length()").value(1));
+
+        bootstrapService.initialize(new BootstrapProperties(
+            true,
+            "admin",
+            "updated-admin-password",
+            "MAIN",
+            "Chi nhánh chính"
+        ));
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"admin","password":"initial-admin-password"}
+                    """))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"admin","password":"updated-admin-password"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.roles[0]").value("ADMIN"));
     }
 
     @Test

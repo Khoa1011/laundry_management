@@ -56,7 +56,7 @@
     }
   ],
   "defaultRoleGrants": {
-    "OWNER": ["service.read", "service.create", "service.update", "service.archive"],
+    "ADMIN": ["service.read", "service.create", "service.update", "service.archive"],
     "MANAGER": ["service.read", "service.create", "service.update", "service.archive"],
     "RECEPTIONIST": ["service.read"]
   }
