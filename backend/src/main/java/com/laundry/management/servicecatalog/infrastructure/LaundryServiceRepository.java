@@ -6,6 +6,7 @@ import com.laundry.management.servicecatalog.domain.ProcessingType;
 import com.laundry.management.servicecatalog.domain.UnitType;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,6 +35,8 @@ public interface LaundryServiceRepository extends JpaRepository<LaundryService, 
     );
 
     Optional<LaundryService> findByIdAndStatus(Long id, CatalogStatus status);
+
+    List<LaundryService> findByStatusOrderByNameViAscIdAsc(CatalogStatus status);
 
     Optional<LaundryService> findByNameViIgnoreCase(String nameVi);
 

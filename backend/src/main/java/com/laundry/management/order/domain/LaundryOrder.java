@@ -42,15 +42,18 @@ public class LaundryOrder {
 
     protected LaundryOrder() {}
     public LaundryOrder(String code, Branch branch, Customer customer, String name, String phone,
-                        Instant promisedAt, String note, UserAccount actor) {
+                        Instant promisedAt, String note, String currency, UserAccount actor) {
         this.orderCode=code; this.branch=branch; this.customer=customer;
         this.customerNameSnapshot=name; this.customerPhoneSnapshot=phone;
         this.status=OrderStatus.RECEIVED; this.promisedAt=promisedAt; this.note=note;
-        this.currency="VND"; this.totalAmount=BigDecimal.ZERO; this.createdBy=actor; this.updatedBy=actor;
+        this.currency=currency; this.totalAmount=BigDecimal.ZERO; this.createdBy=actor; this.updatedBy=actor;
     }
     public void addItem(OrderItem item) { items.add(item); item.attach(this); recalculate(); }
-    public void replaceItems(List<OrderItem> replacements) { items.clear(); replacements.forEach(this::addItem); recalculate(); }
-    public void updateMetadata(Instant promisedAt, String note, UserAccount actor) { this.promisedAt=promisedAt; this.note=note; this.updatedBy=actor; }
+    public void replaceItems(List<OrderItem> replacements, String currency, UserAccount actor) {
+        items.clear(); this.currency=currency; replacements.forEach(this::addItem); this.updatedBy=actor; recalculate();
+    }
+    public void updatePromisedAt(Instant value, UserAccount actor) { this.promisedAt=value; this.updatedBy=actor; }
+    public void updateNote(String value, UserAccount actor) { this.note=value; this.updatedBy=actor; }
     public void transition(OrderStatus target, UserAccount actor, String reason) {
         this.status=target; this.updatedBy=actor;
         if (target == OrderStatus.CANCELLED) { this.cancelledAt=Instant.now(); this.cancelledBy=actor; this.cancelReason=reason; }

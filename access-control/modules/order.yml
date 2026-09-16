@@ -6,12 +6,12 @@
     "descriptionVi": "Tiếp nhận, tính giá, theo dõi và điều phối vòng đời đơn giặt theo chi nhánh.",
     "descriptionEn": "Create, price, track, and operate branch-scoped laundry orders.",
     "displayOrder": 20,
-    "dataScopeNotes": "Mọi thao tác và sự kiện realtime của Order phải đồng thời nằm trong phạm vi chi nhánh của người dùng.",
-    "businessPolicyNotes": "Trạng thái chỉ đổi qua lệnh nghiệp vụ hợp lệ; giá do backend tính và được đóng băng trong pricing snapshot."
+    "dataScopeNotes": "Mọi thao tác, dữ liệu intake tối thiểu và sự kiện realtime của Order phải đồng thời nằm trong phạm vi chi nhánh của người dùng.",
+    "businessPolicyNotes": "order.create cho phép truy vấn dữ liệu intake tối thiểu nhưng không cấp quyền quản trị catalog; trạng thái chỉ đổi qua lệnh nghiệp vụ hợp lệ; giá do backend tính và được đóng băng trong pricing snapshot."
   },
   "permissions": [
     { "code": "order.read", "resource": "order", "action": "read", "nameVi": "Xem đơn hàng", "nameEn": "View orders", "descriptionVi": "Xem danh sách và chi tiết đơn hàng trong chi nhánh được phép.", "descriptionEn": "View orders within the allowed branch scope.", "riskLevel": "LOW", "displayOrder": 10 },
-    { "code": "order.create", "resource": "order", "action": "create", "nameVi": "Tạo đơn hàng", "nameEn": "Create orders", "descriptionVi": "Tạo đơn mới với giá do hệ thống tính.", "descriptionEn": "Create orders with server-authoritative pricing.", "riskLevel": "MEDIUM", "displayOrder": 20 },
+    { "code": "order.create", "resource": "order", "action": "create", "nameVi": "Tạo đơn hàng", "nameEn": "Create orders", "descriptionVi": "Tra cứu dữ liệu intake tối thiểu và tạo đơn mới với giá do hệ thống tính trong chi nhánh được phép.", "descriptionEn": "Query minimal intake data and create orders with server-authoritative pricing within the allowed branch scope.", "riskLevel": "MEDIUM", "displayOrder": 20 },
     { "code": "order.update", "resource": "order", "action": "update", "nameVi": "Cập nhật đơn hàng", "nameEn": "Update orders", "descriptionVi": "Sửa nội dung đơn khi trạng thái nghiệp vụ cho phép.", "descriptionEn": "Update orders while business state permits it.", "riskLevel": "MEDIUM", "displayOrder": 30 },
     { "code": "order.start-processing", "resource": "order", "action": "start-processing", "nameVi": "Bắt đầu xử lý đơn", "nameEn": "Start order processing", "descriptionVi": "Chuyển đơn hợp lệ sang trạng thái đang xử lý.", "descriptionEn": "Move an eligible order into processing.", "riskLevel": "MEDIUM", "displayOrder": 40 },
     { "code": "order.mark-ready", "resource": "order", "action": "mark-ready", "nameVi": "Đánh dấu đơn sẵn sàng", "nameEn": "Mark orders ready", "descriptionVi": "Xác nhận đơn đã xử lý xong và sẵn sàng trả khách.", "descriptionEn": "Confirm an order is ready for customer pickup.", "riskLevel": "MEDIUM", "displayOrder": 50 },

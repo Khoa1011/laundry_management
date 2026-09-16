@@ -16,9 +16,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.laundry.management.auth.domain.Branch;
 import com.laundry.management.auth.domain.Role;
 import com.laundry.management.auth.domain.UserAccount;
+import com.laundry.management.auth.domain.PermissionOverrideEffect;
 import com.laundry.management.auth.infrastructure.BranchRepository;
 import com.laundry.management.auth.infrastructure.RoleRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
+import com.laundry.management.auth.infrastructure.PermissionRepository;
 import com.laundry.management.notification.infrastructure.NotificationRepository;
 import com.laundry.management.notification.infrastructure.NotificationRecipientRepository;
 import com.laundry.management.order.infrastructure.BranchOrderSequenceRepository;
@@ -56,6 +58,7 @@ class OrderIntegrationTest {
     @Autowired UserAccountRepository users;
     @Autowired BranchRepository branches;
     @Autowired RoleRepository roles;
+    @Autowired PermissionRepository permissions;
     @Autowired OrderRepository orders;
     @Autowired OrderHistoryRepository orderHistory;
     @Autowired BranchOrderSequenceRepository orderSequences;
@@ -87,7 +90,11 @@ class OrderIntegrationTest {
         String receptionistName = "order.reception.a." + run.toLowerCase();
         createAccount(managerAName, "Order Manager A", hash, branchA, "MANAGER");
         createAccount(managerBName, "Order Manager B", hash, branchB, "MANAGER");
-        createAccount(receptionistName, "Order Reception A", hash, branchA, "RECEPTIONIST");
+        UserAccount receptionist = createAccount(receptionistName, "Order Reception A", hash, branchA, "RECEPTIONIST");
+        for (String code : java.util.List.of("pricing.preview","service.read","item-type.read","customer.read")) {
+            receptionist.overridePermission(permissions.findByCode(code).orElseThrow(), PermissionOverrideEffect.DENY);
+        }
+        users.saveAndFlush(receptionist);
         managerA = login(managerAName);
         managerB = login(managerBName);
         receptionistA = login(receptionistName);
@@ -217,6 +224,127 @@ class OrderIntegrationTest {
     }
 
     @Test
+    void requiresConcreteItemTypeAndPreservesOmittedPatchFields() throws Exception {
+        ObjectNode missingType = item(2);
+        missingType.remove("itemTypeId");
+        createGuestOrderExpecting(managerA, 400, missingType);
+
+        ObjectNode create = objectMapper.createObjectNode();
+        create.put("branchId", branchA.getId()); create.put("guestName", "Khách patch");
+        create.put("promisedAt", "2026-09-20T10:00:00Z"); create.put("note", "Ghi chú ban đầu");
+        create.putArray("items").add(item(2));
+        JsonNode order = body(mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(create.toString()))
+            .andExpect(status().isCreated()).andReturn());
+
+        ObjectNode noteOnly = objectMapper.createObjectNode();
+        noteOnly.put("version", order.path("version").asLong()); noteOnly.put("note", "Chỉ đổi ghi chú");
+        order = body(mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(noteOnly.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.promisedAt").value("2026-09-20T10:00:00Z"))
+            .andExpect(jsonPath("$.note").value("Chỉ đổi ghi chú")).andReturn());
+
+        ObjectNode promiseOnly = objectMapper.createObjectNode();
+        promiseOnly.put("version", order.path("version").asLong()); promiseOnly.put("promisedAt", "2026-09-21T10:00:00Z");
+        order = body(mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(promiseOnly.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.note").value("Chỉ đổi ghi chú"))
+            .andExpect(jsonPath("$.items", hasSize(1))).andReturn());
+
+        ObjectNode clearPromise = objectMapper.createObjectNode();
+        clearPromise.put("version", order.path("version").asLong()); clearPromise.putNull("promisedAt");
+        mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(clearPromise.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.promisedAt").isEmpty())
+            .andExpect(jsonPath("$.note").value("Chỉ đổi ghi chú"));
+    }
+
+    @Test
+    void orderCreatePermissionProvidesOnlyMinimalIntakeAndTrustedQuote() throws Exception {
+        mockMvc.perform(get("/api/services").header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/orders/intake/services").param("branchId", branchA.getId().toString())
+                .header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(service.path("id").asLong()))
+            .andExpect(jsonPath("$[0].descriptionVi").doesNotExist());
+        mockMvc.perform(get("/api/orders/intake/services/{id}/items", service.path("id").asLong())
+                .param("branchId", branchA.getId().toString()).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(itemTypeId));
+
+        ObjectNode quote = item(2); quote.put("branchId", branchA.getId());
+        mockMvc.perform(post("/api/orders/intake/quote").header("Authorization", bearer(receptionistA))
+                .contentType(MediaType.APPLICATION_JSON).content(quote.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.currency").value("VND"))
+            .andExpect(jsonPath("$.finalAmount").value(50000.0));
+        mockMvc.perform(get("/api/orders/intake/services").param("branchId", branchB.getId().toString())
+                .header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.errorCode").value("BRANCH_ACCESS_DENIED"));
+
+        JsonNode created = createGuestOrder(receptionistA, item(2));
+        org.assertj.core.api.Assertions.assertThat(created.path("currency").asText()).isEqualTo("VND");
+    }
+
+    @Test
+    void intakeRejectsParentAndInactiveItemTypesAndSupportsPhoneSuffixSearch() throws Exception {
+        JsonNode parent = createItemTypeResponse("Nhóm đồ tổ chức", null);
+        createItemTypeResponse("Loại đồ con", parent.path("id").asLong());
+        ObjectNode parentQuote = item(1);
+        parentQuote.put("branchId", branchA.getId());
+        parentQuote.put("itemTypeId", parent.path("id").asLong());
+        mockMvc.perform(post("/api/orders/intake/quote").header("Authorization", bearer(receptionistA))
+                .contentType(MediaType.APPLICATION_JSON).content(parentQuote.toString()))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.detail", org.hamcrest.Matchers.containsString("Parent item types")));
+
+        JsonNode inactive = createItemTypeResponse("Loại đồ ngừng dùng", null);
+        ObjectNode archive = objectMapper.createObjectNode();
+        archive.put("status", "ARCHIVED"); archive.put("version", inactive.path("version").asLong());
+        mockMvc.perform(patch("/api/item-types/{id}/status", inactive.path("id").asLong())
+                .header("Authorization", bearer(managerA)).contentType(MediaType.APPLICATION_JSON)
+                .content(archive.toString())).andExpect(status().isOk());
+        ObjectNode inactiveQuote = item(1);
+        inactiveQuote.put("branchId", branchA.getId());
+        inactiveQuote.put("itemTypeId", inactive.path("id").asLong());
+        mockMvc.perform(post("/api/orders/intake/quote").header("Authorization", bearer(receptionistA))
+                .contentType(MediaType.APPLICATION_JSON).content(inactiveQuote.toString()))
+            .andExpect(status().isUnprocessableEntity());
+
+        ObjectNode customer = objectMapper.createObjectNode();
+        customer.put("fullName", "Khách tìm bằng đuôi số"); customer.put("phone", "090 324 7812");
+        customer.put("customerType", "INDIVIDUAL"); customer.put("source", "WALK_IN");
+        customer.put("branchId", branchA.getId());
+        mockMvc.perform(post("/api/customers").header("Authorization", bearer(receptionistA))
+                .contentType(MediaType.APPLICATION_JSON).content(customer.toString()))
+            .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/orders/intake/customers").param("query", "7812")
+                .param("branchId", branchA.getId().toString()).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].fullName").value("Khách tìm bằng đuôi số"))
+            .andExpect(jsonPath("$[0].phone").value("0903 247 812"));
+    }
+
+    @Test
+    void structuralAuditContainsSafeBeforeAndAfterPricingIdentity() throws Exception {
+        JsonNode order = createGuestOrder(managerA, item(2));
+        ObjectNode update = objectMapper.createObjectNode(); update.put("version", order.path("version").asLong());
+        update.putArray("items").add(item(4));
+        mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(update.toString()))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/orders/{id}/history", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].changedFields.fields[0]").value("items"))
+            .andExpect(jsonPath("$[0].changedFields.items.before[0].itemTypeCode").isNotEmpty())
+            .andExpect(jsonPath("$[0].changedFields.items.before[0].quantity").value(2.0))
+            .andExpect(jsonPath("$[0].changedFields.items.after[0].quantity").value(4.0))
+            .andExpect(jsonPath("$[0].changedFields.items.after[0].lineAmount").value(100000.0));
+    }
+
+    @Test
     void rollsBackWholeCreateWhenPricingOrEligibilityFails() throws Exception {
         long before = orders.count();
         ObjectNode invalidItem = item(2);
@@ -307,8 +435,11 @@ class OrderIntegrationTest {
 
     private long createUnassignedItemType() throws Exception { return createItemType("Đồ không tương thích " + UUID.randomUUID()); }
 
-    private long createItemType(String name) throws Exception {
+    private long createItemType(String name) throws Exception { return createItemTypeResponse(name, null).path("id").asLong(); }
+
+    private JsonNode createItemTypeResponse(String name, Long parentId) throws Exception {
         ObjectNode request = objectMapper.createObjectNode();
+        if (parentId != null) request.put("parentId", parentId);
         request.put("nameVi", name);
         request.put("defaultUnitType", "KG");
         request.put("requiresSeparateWash", false);
@@ -316,7 +447,7 @@ class OrderIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/item-types").header("Authorization", bearer(managerA))
                 .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
             .andExpect(status().isCreated()).andReturn();
-        return body(result).path("id").asLong();
+        return body(result);
     }
 
     private JsonNode createPriceList() throws Exception {
@@ -355,13 +486,13 @@ class OrderIntegrationTest {
             .andExpect(status().isOk());
     }
 
-    private void createAccount(String username, String displayName, String hash, Branch branch, String roleCode) {
+    private UserAccount createAccount(String username, String displayName, String hash, Branch branch, String roleCode) {
         Role role = roles.findByCode(roleCode).orElseThrow();
         UserAccount account = new UserAccount(username, hash, displayName, branch);
         account.addRole(role);
         account = users.saveAndFlush(account);
         account.assignBranch(branch, true);
-        users.saveAndFlush(account);
+        return users.saveAndFlush(account);
     }
 
     private String login(String username) throws Exception {

@@ -4,6 +4,7 @@ import com.laundry.management.servicecatalog.domain.CatalogStatus;
 import com.laundry.management.servicecatalog.domain.ItemType;
 import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,5 +33,9 @@ public interface ItemTypeRepository extends JpaRepository<ItemType, Long> {
     Optional<ItemType> lockById(@Param("id") Long id);
 
     boolean existsByParentId(Long parentId);
+
+    @Query("select distinct item.parent.id from ItemType item where item.parent.id in :candidateIds")
+    List<Long> findParentIdsWithChildren(@Param("candidateIds") Collection<Long> candidateIds);
+
     long countByStatus(CatalogStatus status);
 }

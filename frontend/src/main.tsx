@@ -8,6 +8,7 @@ import { ThemeProvider } from './providers/ThemeProvider'
 import { ToastProvider } from './providers/ToastProvider'
 import { MotionProvider } from './providers/MotionProvider'
 import { RealtimeProvider } from './providers/RealtimeProvider'
+import { NotificationProvider } from './features/notifications/providers/NotificationProvider'
 import './styles.css'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false }, mutations: { retry: false } } })
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
           <AuthProvider>
             <ToastProvider>
               <RealtimeProvider>
-                <App />
+                <NotificationProvider>
+                  <App />
+                </NotificationProvider>
               </RealtimeProvider>
             </ToastProvider>
           </AuthProvider>

@@ -195,6 +195,28 @@ class ServiceCatalogIntegrationTest {
             .andExpect(jsonPath("$.sortOrder").value(10));
     }
 
+    @Test
+    void rejectsParentItemTypeForServiceEligibilityAndAcceptsActiveLeaf() throws Exception {
+        JsonNode service = createService();
+        JsonNode parent = createItemType("Nhóm đồ tổ chức", null, 0);
+        JsonNode leaf = createItemType("Áo sơ mi", parent.path("id").asLong(), 0);
+        ObjectNode eligibility = objectMapper.createObjectNode();
+        eligibility.put("serviceVersion", service.path("version").asLong());
+        eligibility.putArray("itemTypeIds").add(parent.path("id").asLong());
+        mockMvc.perform(put("/api/services/{id}/eligibility", service.path("id").asLong())
+                .header("Authorization", bearer(managerAToken)).contentType(MediaType.APPLICATION_JSON)
+                .content(eligibility.toString()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Parent item types")));
+
+        eligibility.putArray("itemTypeIds").add(leaf.path("id").asLong());
+        mockMvc.perform(put("/api/services/{id}/eligibility", service.path("id").asLong())
+                .header("Authorization", bearer(managerAToken)).contentType(MediaType.APPLICATION_JSON)
+                .content(eligibility.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.eligibleItemTypes[0].id").value(leaf.path("id").asLong()));
+    }
+
     private JsonNode createService() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/services")
                 .header("Authorization", bearer(managerAToken))

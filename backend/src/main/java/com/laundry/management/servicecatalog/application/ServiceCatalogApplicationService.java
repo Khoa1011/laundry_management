@@ -131,6 +131,12 @@ public class ServiceCatalogApplicationService {
         if (items.size() != requestedIds.size() || items.stream().anyMatch(item -> item.getStatus() != CatalogStatus.ACTIVE)) {
             throw policy("Only active, existing item types can be assigned to a service.");
         }
+        List<Long> parentIds = requestedIds.isEmpty()
+            ? List.of()
+            : itemTypeRepository.findParentIdsWithChildren(requestedIds);
+        if (!parentIds.isEmpty()) {
+            throw policy("Parent item types are organizational only. Assign active leaf item types to a service.");
+        }
         UserAccount actor = authorizationService.actor();
         List<Long> oldIds = eligibilityRepository.findByServiceIdOrderByItemTypeNameViAscItemTypeIdAsc(id)
             .stream().map(value -> value.getItemType().getId()).toList();

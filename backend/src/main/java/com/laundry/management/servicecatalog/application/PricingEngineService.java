@@ -24,6 +24,8 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.HashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -69,12 +71,42 @@ public class PricingEngineService {
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICING_PREVIEW)")
     @Transactional(readOnly = true)
     public CatalogDtos.PricingPreviewResponse preview(CatalogDtos.PricingPreviewRequest request) {
-        return quoteForOrder(request);
+        return quotePublished(request, false, false);
     }
 
     /** Trusted application-service entry point. Callers must enforce their own permission first. */
     @Transactional(readOnly = true)
     public CatalogDtos.PricingPreviewResponse quoteForOrder(CatalogDtos.PricingPreviewRequest request) {
+        return quotePublished(request, true, false);
+    }
+
+    /** Batch Order pricing keeps validation query count bounded for multi-line intake/update operations. */
+    @Transactional(readOnly = true)
+    public List<CatalogDtos.PricingPreviewResponse> quoteForOrder(
+        List<CatalogDtos.PricingPreviewRequest> requests
+    ) {
+        if (requests.isEmpty()) return List.of();
+        Set<Long> itemTypeIds = new HashSet<>();
+        for (CatalogDtos.PricingPreviewRequest request : requests) {
+            if (request.itemTypeId() == null) throw itemTypeRequired();
+            itemTypeIds.add(request.itemTypeId());
+        }
+        List<ItemType> items = itemTypeRepository.findAllById(itemTypeIds);
+        if (items.size() != itemTypeIds.size()
+            || items.stream().anyMatch(item -> item.getStatus() != CatalogStatus.ACTIVE)) {
+            throw unavailable("Item type", ErrorCode.ITEM_TYPE_NOT_FOUND);
+        }
+        if (!itemTypeRepository.findParentIdsWithChildren(itemTypeIds).isEmpty()) {
+            throw compatibility("Parent item types are organizational only. Select an active leaf item type.");
+        }
+        return requests.stream().map(request -> quotePublished(request, true, true)).toList();
+    }
+
+    private CatalogDtos.PricingPreviewResponse quotePublished(
+        CatalogDtos.PricingPreviewRequest request,
+        boolean enforceOrderItemType,
+        boolean itemTypePrevalidated
+    ) {
         authorizationService.requireBranch(request.branchId());
         List<PriceList> lists = priceListRepository.findEffective(
             request.branchId(), QUOTABLE_LIST_STATUSES, request.effectiveAt()
@@ -93,7 +125,8 @@ public class PricingEngineService {
                 "Multiple published price lists are effective for the selected branch and time."
             );
         }
-        return previewFromList(lists.get(0), request, QUOTABLE_RULE_STATUSES);
+        return previewFromList(lists.get(0), request, QUOTABLE_RULE_STATUSES,
+            enforceOrderItemType, itemTypePrevalidated);
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICING_PREVIEW) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_LIST_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_RULE_READ)")
@@ -110,19 +143,25 @@ public class PricingEngineService {
         }
         Collection<PriceRuleStatus> statuses = priceList.getStatus() == PriceListStatus.DRAFT
             ? List.of(PriceRuleStatus.DRAFT) : QUOTABLE_RULE_STATUSES;
-        return previewFromList(priceList, request, statuses);
+        return previewFromList(priceList, request, statuses, false, false);
     }
 
     private CatalogDtos.PricingPreviewResponse previewFromList(
         PriceList priceList,
         CatalogDtos.PricingPreviewRequest request,
-        Collection<PriceRuleStatus> ruleStatuses
+        Collection<PriceRuleStatus> ruleStatuses,
+        boolean enforceOrderItemType,
+        boolean itemTypePrevalidated
     ) {
         LaundryService service = serviceRepository.findByIdAndStatus(request.serviceId(), CatalogStatus.ACTIVE)
             .orElseThrow(() -> unavailable("Service", ErrorCode.SERVICE_NOT_FOUND));
         ItemType itemType = request.itemTypeId() == null ? null
             : itemTypeRepository.findByIdAndStatus(request.itemTypeId(), CatalogStatus.ACTIVE)
                 .orElseThrow(() -> unavailable("Item type", ErrorCode.ITEM_TYPE_NOT_FOUND));
+        if (enforceOrderItemType && itemType == null) throw itemTypeRequired();
+        if (itemType != null && !itemTypePrevalidated && itemTypeRepository.existsByParentId(itemType.getId())) {
+            throw compatibility("Parent item types are organizational only. Select an active leaf item type.");
+        }
         validateEligibility(service, itemType);
         validateSharing(service, request.sharingMode());
         List<PriceRule> candidates = priceRuleRepository.findResolutionCandidates(
@@ -278,6 +317,14 @@ public class PricingEngineService {
         return new ApiException(
             HttpStatus.UNPROCESSABLE_ENTITY, ErrorCode.PRICING_UNIT_MISMATCH,
             "Pricing compatibility check failed", detail
+        );
+    }
+
+    private ApiException itemTypeRequired() {
+        return new ApiException(
+            HttpStatus.UNPROCESSABLE_ENTITY, ErrorCode.PRICING_VALIDATION_ERROR,
+            "Item type is required",
+            "Select an active eligible leaf item type for every order item."
         );
     }
 }

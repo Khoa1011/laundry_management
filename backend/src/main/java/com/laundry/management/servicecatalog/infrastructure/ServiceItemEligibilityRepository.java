@@ -18,6 +18,18 @@ public interface ServiceItemEligibilityRepository extends JpaRepository<ServiceI
     @EntityGraph(attributePaths = {"service", "itemType", "itemType.parent"})
     List<ServiceItemEligibility> findByServiceIdOrderByItemTypeNameViAscItemTypeIdAsc(Long serviceId);
 
+    @Query("""
+        select eligibility from ServiceItemEligibility eligibility
+        where eligibility.service.id = :serviceId
+          and eligibility.service.status = com.laundry.management.servicecatalog.domain.CatalogStatus.ACTIVE
+          and eligibility.itemType.status = com.laundry.management.servicecatalog.domain.CatalogStatus.ACTIVE
+          and not exists (
+              select child.id from ItemType child where child.parent.id = eligibility.itemType.id
+          )
+        order by eligibility.itemType.nameVi asc, eligibility.itemType.id asc
+        """)
+    List<ServiceItemEligibility> findActiveLeafByServiceId(@Param("serviceId") Long serviceId);
+
     @EntityGraph(attributePaths = {"service", "itemType"})
     List<ServiceItemEligibility> findAllByOrderByServiceIdAscItemTypeIdAsc();
 

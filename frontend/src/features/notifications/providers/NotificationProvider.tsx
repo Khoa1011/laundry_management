@@ -3,12 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../../auth/permissionCodes.generated'
+import { useRealtime } from '../../../realtime/context'
 import { useToast } from '../../../providers/ToastProvider'
-import {
-  isRetryableNotificationStreamError,
-  notificationKeys,
-  openNotificationStream,
-} from '../api/notificationsApi'
+import { notificationKeys } from '../api/notificationsApi'
 import { useNotificationPreferences, useNotifications, useUnreadNotificationCount } from '../hooks/useNotifications'
 import type {
   NotificationConnectionState,
@@ -20,21 +17,12 @@ import type {
 } from '../model/types'
 import { notificationSoundEngine } from '../sound/notificationSound'
 import { notificationText, resolveNotificationRoute } from '../utils/notificationDisplay'
-import {
-  claimNotificationStreamLeadership,
-  hasCurrentNotificationStreamLeader,
-  notificationStreamLeaderKey,
-  releaseNotificationStreamLeadership,
-  renewNotificationStreamLeadership,
-} from '../utils/notificationStreamLeader'
 
 const RECENT_FILTERS = { page: 0, size: 10, status: 'ALL' as const }
 const MAX_EVENT_IDS = 240
 const SOUND_COOLDOWN_MS = 4_000
 const AUDIO_LOCK_KEY = 'laundry.notifications.audio-lock'
-const NOTIFICATION_CHANNEL_NAME = 'laundry-notifications'
-const LEADER_RENEW_MS = 4_000
-const FOLLOWER_CHECK_MS = 3_000
+const NOTIFICATION_CHANNEL_NAME = 'laundry-notification-effects'
 
 interface NotificationContextValue {
   canRead: boolean
@@ -49,11 +37,7 @@ interface NotificationContextValue {
 }
 
 type NotificationBroadcastMessage =
-  | { type: 'effect-seen'; eventId: string; userId?: number }
-  | { type: 'unread-count'; unreadCount: number; userId?: number }
-  | { type: 'sse-event'; event: NotificationSseEnvelope; userId: number }
-  | { type: 'leader-state'; state: NotificationConnectionState; userId: number; tabId: string }
-  | { type: 'stream-blocked'; userId: number }
+  { type: 'effect-seen'; eventId: string; userId?: number }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null)
 
@@ -103,27 +87,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user, hasPermission } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
+  const { connectionState, subscribe } = useRealtime()
   const userId = user?.id ?? null
   const canRead = Boolean(user) && hasPermission(PERMISSION_CODES.NOTIFICATION_READ_OWN)
-  const canOrderRead = Boolean(user) && hasPermission(PERMISSION_CODES.ORDER_READ)
-  const canStream = Boolean(user) && (canRead || canOrderRead)
   const canManagePreferences = Boolean(user)
     && hasPermission(PERMISSION_CODES.NOTIFICATION_PREFERENCES_MANAGE_OWN)
   const recentQuery = useNotifications(RECENT_FILTERS, canRead)
   const unreadQuery = useUnreadNotificationCount(canRead)
   useNotificationPreferences(canManagePreferences)
-  const [connectionState, setConnectionState] = useState<NotificationConnectionState>('idle')
   const [bellPulse, setBellPulse] = useState(0)
   const [latestRealtimeNotificationId, setLatestRealtimeNotificationId] = useState<number | null>(null)
-  const handledIds = useRef(new Set<string>())
-  const handledOrder = useRef<string[]>([])
   const effectIds = useRef(new Set<string>())
   const effectOrder = useRef<string[]>([])
   const broadcastChannel = useRef<BroadcastChannel | null>(null)
   const pendingBatch = useRef<Array<{ eventId: string; item: NotificationItem }>>([])
   const batchTimer = useRef<number | null>(null)
   const lastSoundAt = useRef(0)
-  const streamBlocked = useRef(false)
 
   useEffect(() => {
     if (!userId) return
@@ -241,24 +220,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     broadcastChannel.current?.postMessage({ type: 'effect-seen', eventId, userId: userId ?? undefined })
   }, [flushRealtimeBatch, userId])
 
-  const handleEvent = useCallback((event: NotificationSseEnvelope, source: 'stream' | 'broadcast' = 'stream') => {
-    if (!event.eventId || !rememberBounded(handledIds.current, handledOrder.current, event.eventId)) return
-    if (event.type?.startsWith('order.')) {
-      window.dispatchEvent(new CustomEvent('laundry:realtime', { detail: event }))
-      void queryClient.invalidateQueries({ queryKey: ['orders'] })
-    }
-    if (source === 'stream' && userId) {
-      broadcastChannel.current?.postMessage({ type: 'sse-event', event, userId })
-    }
+  const handleEvent = useCallback((event: NotificationSseEnvelope) => {
     if (typeof event.unreadCount === 'number') {
       queryClient.setQueryData(notificationKeys.unread, { unreadCount: event.unreadCount })
-      if (source === 'stream' && userId) {
-        broadcastChannel.current?.postMessage({
-          type: 'unread-count',
-          unreadCount: event.unreadCount,
-          userId,
-        })
-      }
     }
     if (event.eventType === 'notification.created' && event.notification) {
       const item = event.notification
@@ -299,7 +263,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (event.eventType === 'notification.read' || event.eventType === 'notification.dismissed') {
       void queryClient.invalidateQueries({ queryKey: notificationKeys.all })
     }
-  }, [queryClient, queueRealtimeEffect, userId])
+  }, [queryClient, queueRealtimeEffect])
 
   useEffect(() => {
     if (!canRead || typeof BroadcastChannel === 'undefined') return
@@ -310,201 +274,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (message.data.type === 'effect-seen') {
         rememberBounded(effectIds.current, effectOrder.current, message.data.eventId)
       }
-      if (message.data.type === 'unread-count') {
-        queryClient.setQueryData(notificationKeys.unread, { unreadCount: message.data.unreadCount })
-      }
-      if (message.data.type === 'sse-event') {
-        handleEvent(message.data.event, 'broadcast')
-      }
-      if (message.data.type === 'leader-state') {
-        const leaderConnectionState = message.data.state
-        setConnectionState((current) => {
-          if (current === 'offline') return current
-          return leaderConnectionState
-        })
-      }
-      if (message.data.type === 'stream-blocked') {
-        streamBlocked.current = true
-        setConnectionState('idle')
-      }
     }
     return () => {
       channel.close()
       broadcastChannel.current = null
     }
-  }, [canRead, handleEvent, queryClient, userId])
+  }, [canRead, userId])
 
-  useEffect(() => {
-    if (!canStream || !userId) {
-      setConnectionState('idle')
-      return
-    }
-    streamBlocked.current = false
-    let stopped = false
-    let isLeader = false
-    let retryDelay = 1_000
-    let retryTimer: number | null = null
-    let leaderRenewTimer: number | null = null
-    let followerCheckTimer: number | null = null
-    let controller: AbortController | null = null
-    let leaderState: NotificationConnectionState = 'connecting'
-    const tabId = getTabId()
-    const leaderKey = notificationStreamLeaderKey(userId)
-    const canCoordinateTabs = typeof BroadcastChannel !== 'undefined' && typeof localStorage !== 'undefined'
+  useEffect(() => subscribe('notification.', (event) => {
+    handleEvent(event as NotificationSseEnvelope)
+  }), [handleEvent, subscribe])
 
-    const publishLeaderState = (state: NotificationConnectionState) => {
-      leaderState = state
-      if (canCoordinateTabs) {
-        broadcastChannel.current?.postMessage({ type: 'leader-state', state, userId, tabId })
-      }
-    }
-
-    const clearRetry = () => {
-      if (retryTimer !== null) window.clearTimeout(retryTimer)
-      retryTimer = null
-    }
-    const clearLeaderRenewal = () => {
-      if (leaderRenewTimer !== null) window.clearInterval(leaderRenewTimer)
-      leaderRenewTimer = null
-    }
-    const clearFollowerCheck = () => {
-      if (followerCheckTimer !== null) window.clearInterval(followerCheckTimer)
-      followerCheckTimer = null
-    }
-    const stopLeadership = () => {
-      isLeader = false
-      clearLeaderRenewal()
-      if (canCoordinateTabs) {
-        releaseNotificationStreamLeadership(localStorage, leaderKey, tabId, userId)
-      }
-    }
-    const schedule = () => {
-      if (stopped || streamBlocked.current || retryTimer !== null || !navigator.onLine) {
-        if (!navigator.onLine) setConnectionState('offline')
-        return
-      }
-      if (canCoordinateTabs && !isLeader) return
-      setConnectionState('reconnecting')
-      publishLeaderState('reconnecting')
-      retryTimer = window.setTimeout(() => {
-        retryTimer = null
-        void connect()
-      }, retryDelay)
-      retryDelay = Math.min(30_000, retryDelay * 2)
-    }
-    const ensureFollowerCheck = () => {
-      if (!canCoordinateTabs || followerCheckTimer !== null) return
-      followerCheckTimer = window.setInterval(() => {
-        if (stopped || streamBlocked.current) return
-        if (!navigator.onLine) {
-          setConnectionState('offline')
-          return
-        }
-        if (!hasCurrentNotificationStreamLeader(localStorage, leaderKey, userId)) {
-          void claimAndConnect()
-        }
-      }, FOLLOWER_CHECK_MS)
-    }
-    const startLeaderRenewal = () => {
-      if (!canCoordinateTabs) return
-      clearLeaderRenewal()
-      leaderRenewTimer = window.setInterval(() => {
-        if (stopped || streamBlocked.current) return
-        const renewed = renewNotificationStreamLeadership(localStorage, leaderKey, tabId, userId)
-        if (!renewed) {
-          controller?.abort()
-          stopLeadership()
-          setConnectionState('reconnecting')
-          ensureFollowerCheck()
-        } else {
-          publishLeaderState(leaderState)
-        }
-      }, LEADER_RENEW_MS)
-    }
-    const claimAndConnect = async () => {
-      if (stopped || streamBlocked.current) return
-      if (!navigator.onLine) {
-        setConnectionState('offline')
-        return
-      }
-      if (canCoordinateTabs) {
-        const claimed = claimNotificationStreamLeadership(localStorage, leaderKey, tabId, userId)
-        if (!claimed) {
-          isLeader = false
-          setConnectionState('connecting')
-          ensureFollowerCheck()
-          return
-        }
-      }
-      isLeader = true
-      clearFollowerCheck()
-      startLeaderRenewal()
-      await connect()
-    }
-    const connect = async () => {
-      if (stopped || streamBlocked.current || (canCoordinateTabs && !isLeader)) return
-      if (!navigator.onLine) {
-        setConnectionState('offline')
-        return
-      }
-      controller?.abort()
-      controller = new AbortController()
-      setConnectionState((current) => current === 'idle' ? 'connecting' : 'reconnecting')
-      publishLeaderState('reconnecting')
-      try {
-        await openNotificationStream(controller.signal, {
-          onOpen: () => {
-            retryDelay = 1_000
-            setConnectionState('connected')
-            publishLeaderState('connected')
-            void refresh()
-            if (canOrderRead) {
-              void queryClient.invalidateQueries({ queryKey: ['orders'] })
-            }
-          },
-          onEvent: (event) => handleEvent(event, 'stream'),
-        })
-        if (!controller.signal.aborted) schedule()
-      } catch (error) {
-        if (controller.signal.aborted) return
-        if (!isRetryableNotificationStreamError(error)) {
-          streamBlocked.current = true
-          setConnectionState('idle')
-          broadcastChannel.current?.postMessage({ type: 'stream-blocked', userId })
-          stopLeadership()
-          return
-        }
-        schedule()
-      }
-    }
-    const onOffline = () => {
-      clearRetry()
-      controller?.abort()
-      setConnectionState('offline')
-      publishLeaderState('offline')
-    }
-    const onOnline = () => {
-      clearRetry()
-      void claimAndConnect()
-    }
-    window.addEventListener('offline', onOffline)
-    window.addEventListener('online', onOnline)
-    void claimAndConnect()
-    return () => {
-      stopped = true
-      clearRetry()
-      clearLeaderRenewal()
-      clearFollowerCheck()
-      controller?.abort()
-      stopLeadership()
-      window.removeEventListener('offline', onOffline)
-      window.removeEventListener('online', onOnline)
-      if (batchTimer.current !== null) window.clearTimeout(batchTimer.current)
-      batchTimer.current = null
-      pendingBatch.current = []
-      void notificationSoundEngine.suspend()
-    }
-  }, [canOrderRead, canStream, handleEvent, queryClient, refresh, userId])
+  useEffect(() => subscribe('realtime.reconnected', () => {
+    void refresh()
+  }), [refresh, subscribe])
 
   const value = useMemo<NotificationContextValue>(() => ({
     canRead,

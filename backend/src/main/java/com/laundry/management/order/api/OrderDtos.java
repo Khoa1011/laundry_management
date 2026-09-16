@@ -1,6 +1,7 @@
 package com.laundry.management.order.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.laundry.management.order.domain.*;
 import com.laundry.management.servicecatalog.domain.*;
 import jakarta.validation.Valid;
@@ -13,7 +14,7 @@ public final class OrderDtos {
     private OrderDtos() {}
 
     public record ItemRequest(
-        @NotNull Long serviceId, Long itemTypeId, @NotNull SharingMode sharingMode,
+        @NotNull Long serviceId, @NotNull Long itemTypeId, @NotNull SharingMode sharingMode,
         @Min(0) Integer priorityLevel, @NotNull @DecimalMin("0.001") BigDecimal quantity,
         @Size(max=1000) String note
     ) {}
@@ -22,10 +23,25 @@ public final class OrderDtos {
         @Size(max=30) String guestPhone, Instant promisedAt, @Size(max=2000) String note,
         @NotEmpty @Size(max=100) List<@Valid ItemRequest> items
     ) {}
-    public record UpdateRequest(
-        @NotNull Long version, Instant promisedAt, @Size(max=2000) String note,
-        @Size(max=100) List<@Valid ItemRequest> items
-    ) {}
+    public static final class UpdateRequest {
+        @NotNull private Long version;
+        private Instant promisedAt;
+        @Size(max=2000) private String note;
+        @Size(max=100) private List<@Valid ItemRequest> items;
+        private boolean promisedAtPresent;
+        private boolean notePresent;
+        private boolean itemsPresent;
+
+        public UpdateRequest() {}
+        @JsonSetter public void setVersion(Long value) { version=value; }
+        @JsonSetter public void setPromisedAt(Instant value) { promisedAt=value; promisedAtPresent=true; }
+        @JsonSetter public void setNote(String value) { note=value; notePresent=true; }
+        @JsonSetter public void setItems(List<ItemRequest> value) { items=value; itemsPresent=true; }
+        public Long version(){return version;} public Instant promisedAt(){return promisedAt;}
+        public String note(){return note;} public List<ItemRequest> items(){return items;}
+        public boolean promisedAtPresent(){return promisedAtPresent;}
+        public boolean notePresent(){return notePresent;} public boolean itemsPresent(){return itemsPresent;}
+    }
     public record TransitionRequest(@NotNull Long version) {}
     public record ReasonedTransitionRequest(@NotNull Long version, @NotBlank @Size(max=500) String reason) {}
     public record ItemResponse(Long id, Long serviceId, Long itemTypeId, String serviceCode, String serviceName,
@@ -45,4 +61,14 @@ public final class OrderDtos {
     public record PageResponse(List<ListItemResponse> items, int page, int size, long totalElements, int totalPages) {}
     public record HistoryResponse(Long id, OrderHistoryAction action, OrderStatus fromStatus, OrderStatus toStatus,
         String reason, JsonNode changedFields, OrderStatusSource source, ActorResponse actor, Instant createdAt) {}
+
+    public record IntakeCustomerResponse(Long id, String customerCode, String fullName, String phone) {}
+    public record IntakeServiceResponse(Long id, String code, String nameVi, UnitType defaultUnitType,
+        boolean sharingAllowed) {}
+    public record IntakeItemTypeResponse(Long id, String code, String nameVi, UnitType defaultUnitType) {}
+    public record IntakeQuoteRequest(
+        @NotNull Long branchId, @NotNull Long serviceId, @NotNull Long itemTypeId,
+        @NotNull SharingMode sharingMode, @Min(0) Integer priorityLevel,
+        @NotNull @DecimalMin("0.001") BigDecimal quantity
+    ) {}
 }
