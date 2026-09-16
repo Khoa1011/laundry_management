@@ -22,8 +22,11 @@ import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 import org.slf4j.Logger;
@@ -86,10 +89,25 @@ public class PricingEngineService {
         List<CatalogDtos.PricingPreviewRequest> requests
     ) {
         if (requests.isEmpty()) return List.of();
+        CatalogDtos.PricingPreviewRequest first = requests.get(0);
+        if (requests.stream().anyMatch(request ->
+            !Objects.equals(request.branchId(), first.branchId())
+                || !Objects.equals(request.effectiveAt(), first.effectiveAt()))) {
+            throw new ApiException(
+                HttpStatus.UNPROCESSABLE_ENTITY, ErrorCode.PRICING_VALIDATION_ERROR,
+                "Inconsistent pricing batch",
+                "All order items must use the same branch and effective pricing time."
+            );
+        }
+        authorizationService.requireBranch(first.branchId());
+        PriceList priceList = resolvePublishedPriceList(first.branchId(), first.effectiveAt());
+
         Set<Long> itemTypeIds = new HashSet<>();
+        Set<Long> serviceIds = new HashSet<>();
         for (CatalogDtos.PricingPreviewRequest request : requests) {
             if (request.itemTypeId() == null) throw itemTypeRequired();
             itemTypeIds.add(request.itemTypeId());
+            serviceIds.add(request.serviceId());
         }
         List<ItemType> items = itemTypeRepository.findAllById(itemTypeIds);
         if (items.size() != itemTypeIds.size()
@@ -99,7 +117,19 @@ public class PricingEngineService {
         if (!itemTypeRepository.findParentIdsWithChildren(itemTypeIds).isEmpty()) {
             throw compatibility("Parent item types are organizational only. Select an active leaf item type.");
         }
-        return requests.stream().map(request -> quotePublished(request, true, true)).toList();
+        List<LaundryService> services = serviceRepository.findAllById(serviceIds);
+        if (services.size() != serviceIds.size()
+            || services.stream().anyMatch(service -> service.getStatus() != CatalogStatus.ACTIVE)) {
+            throw unavailable("Service", ErrorCode.SERVICE_NOT_FOUND);
+        }
+        Map<Long, ItemType> itemById = new HashMap<>();
+        items.forEach(item -> itemById.put(item.getId(), item));
+        Map<Long, LaundryService> serviceById = new HashMap<>();
+        services.forEach(service -> serviceById.put(service.getId(), service));
+        return requests.stream().map(request -> previewFromList(
+            priceList, request, QUOTABLE_RULE_STATUSES, true, true,
+            serviceById.get(request.serviceId()), itemById.get(request.itemTypeId())
+        )).toList();
     }
 
     private CatalogDtos.PricingPreviewResponse quotePublished(
@@ -108,9 +138,12 @@ public class PricingEngineService {
         boolean itemTypePrevalidated
     ) {
         authorizationService.requireBranch(request.branchId());
-        List<PriceList> lists = priceListRepository.findEffective(
-            request.branchId(), QUOTABLE_LIST_STATUSES, request.effectiveAt()
-        );
+        return previewFromList(resolvePublishedPriceList(request.branchId(), request.effectiveAt()), request,
+            QUOTABLE_RULE_STATUSES, enforceOrderItemType, itemTypePrevalidated);
+    }
+
+    private PriceList resolvePublishedPriceList(Long branchId, Instant effectiveAt) {
+        List<PriceList> lists = priceListRepository.findEffective(branchId, QUOTABLE_LIST_STATUSES, effectiveAt);
         if (lists.isEmpty()) {
             throw new ApiException(
                 HttpStatus.NOT_FOUND, ErrorCode.PRICING_RULE_NOT_FOUND,
@@ -125,8 +158,7 @@ public class PricingEngineService {
                 "Multiple published price lists are effective for the selected branch and time."
             );
         }
-        return previewFromList(lists.get(0), request, QUOTABLE_RULE_STATUSES,
-            enforceOrderItemType, itemTypePrevalidated);
+        return lists.get(0);
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICING_PREVIEW) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_LIST_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).PRICE_RULE_READ)")
@@ -158,6 +190,19 @@ public class PricingEngineService {
         ItemType itemType = request.itemTypeId() == null ? null
             : itemTypeRepository.findByIdAndStatus(request.itemTypeId(), CatalogStatus.ACTIVE)
                 .orElseThrow(() -> unavailable("Item type", ErrorCode.ITEM_TYPE_NOT_FOUND));
+        return previewFromList(priceList, request, ruleStatuses, enforceOrderItemType,
+            itemTypePrevalidated, service, itemType);
+    }
+
+    private CatalogDtos.PricingPreviewResponse previewFromList(
+        PriceList priceList,
+        CatalogDtos.PricingPreviewRequest request,
+        Collection<PriceRuleStatus> ruleStatuses,
+        boolean enforceOrderItemType,
+        boolean itemTypePrevalidated,
+        LaundryService service,
+        ItemType itemType
+    ) {
         if (enforceOrderItemType && itemType == null) throw itemTypeRequired();
         if (itemType != null && !itemTypePrevalidated && itemTypeRepository.existsByParentId(itemType.getId())) {
             throw compatibility("Parent item types are organizational only. Select an active leaf item type.");

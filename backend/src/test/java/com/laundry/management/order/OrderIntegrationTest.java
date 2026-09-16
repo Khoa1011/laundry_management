@@ -224,6 +224,35 @@ class OrderIntegrationTest {
     }
 
     @Test
+    void persistsAndAuditsItemNotesWithoutCopyingTheirTextIntoHistory() throws Exception {
+        ObjectNode originalItem = item(2);
+        originalItem.put("note", "Áo trắng có vết mực ở tay áo");
+        JsonNode order = createGuestOrder(managerA, originalItem);
+        org.assertj.core.api.Assertions.assertThat(order.path("items").get(0).path("note").asText())
+            .isEqualTo("Áo trắng có vết mực ở tay áo");
+
+        ObjectNode updatedItem = item(2);
+        updatedItem.put("note", "Không dùng nước xả");
+        ObjectNode update = objectMapper.createObjectNode();
+        update.put("version", order.path("version").asLong());
+        update.putArray("items").add(updatedItem);
+        mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(update.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].note").value("Không dùng nước xả"));
+
+        MvcResult historyResult = mockMvc.perform(get("/api/orders/{id}/history", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].changedFields.fields[0]").value("items"))
+            .andExpect(jsonPath("$[0].changedFields.items.before[0].noteRecorded").value(true))
+            .andExpect(jsonPath("$[0].changedFields.items.after[0].noteRecorded").value(true))
+            .andReturn();
+        org.assertj.core.api.Assertions.assertThat(historyResult.getResponse().getContentAsString())
+            .doesNotContain("Áo trắng có vết mực ở tay áo", "Không dùng nước xả");
+    }
+
+    @Test
     void requiresConcreteItemTypeAndPreservesOmittedPatchFields() throws Exception {
         ObjectNode missingType = item(2);
         missingType.remove("itemTypeId");

@@ -165,6 +165,7 @@ public class OrderApplicationService {
         value.put("serviceName",item.getServiceNameSnapshot()); value.put("itemTypeCode",item.getItemTypeCodeSnapshot());
         value.put("itemTypeName",item.getItemTypeNameSnapshot()); value.put("quantity",item.getQuantity());
         value.put("lineAmount",item.getLineAmount()); value.put("pricingMethod",item.getPricingMethodSnapshot().name());
+        value.put("noteRecorded",item.getNote()!=null);
         return value;
     }).toList();}
     private Map<String,Object> nullableChange(Object before,Object after){Map<String,Object> value=new LinkedHashMap<>();value.put("before",before);value.put("after",after);return value;}

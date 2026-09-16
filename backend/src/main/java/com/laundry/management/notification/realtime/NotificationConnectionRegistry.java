@@ -1,5 +1,6 @@
 package com.laundry.management.notification.realtime;
 
+import com.laundry.management.realtime.RealtimeTopic;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -52,7 +53,7 @@ public class NotificationConnectionRegistry {
         long timeoutMillis,
         SseEmitter.SseEventBuilder connectedEvent
     ) {
-        return register(userId, timeoutMillis, connectedEvent, Set.of("notification"));
+        return register(userId, timeoutMillis, connectedEvent, Set.of(RealtimeTopic.NOTIFICATION.value()));
     }
 
     public SseEmitter register(
@@ -98,7 +99,7 @@ public class NotificationConnectionRegistry {
     }
 
     public int sendToUser(Long userId, SseEmitter.SseEventBuilder event) {
-        return sendToUser(userId, "notification", event);
+        return sendToUser(userId, RealtimeTopic.NOTIFICATION.value(), event);
     }
 
     public int sendToUser(Long userId, String topic, SseEmitter.SseEventBuilder event) {

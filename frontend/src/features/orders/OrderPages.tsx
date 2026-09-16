@@ -15,6 +15,7 @@ import { useRealtime } from '../../realtime/context'
 import { QuickCustomerDialog } from '../customers/QuickCustomerDialog'
 import type { PricingPreview } from '../service-catalog/types'
 import { orderApi, orderKeys } from './api'
+import { localDayStartIso, nextLocalDayStartIso } from './dateFilters'
 import type { Order, OrderItemPayload, OrderStatus } from './types'
 
 const statusText: Record<OrderStatus, string> = {
@@ -51,8 +52,8 @@ export function OrderListPage() {
   const query = useQuery({
     queryKey: orderKeys.list(branchId, status, search, page, from, to),
     queryFn: () => orderApi.list({ branchId: branchId!, status, search: search || undefined, page, size: 20,
-      from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
-      to: to ? new Date(`${to}T23:59:59.999`).toISOString() : undefined }),
+      from: from ? localDayStartIso(from) : undefined,
+      to: to ? nextLocalDayStartIso(to) : undefined }),
     enabled: Boolean(branchId),
   })
   useEffect(() => subscribe('order.', () => {
@@ -190,6 +191,7 @@ export function OrderCreatePage() {
             <Field label="Loại đồ" required><select value={item.itemTypeId || ''} onChange={(event) => updateItem(item.key, { itemTypeId: event.target.value ? Number(event.target.value) : undefined })}><option value="">Chọn loại đồ</option>{eligible[item.key]?.map((option) => <option key={option.id} value={option.id}>{option.nameVi}</option>)}</select></Field>
             <Field label="Hình thức xử lý" required><select value={item.sharingMode} onChange={(event) => updateItem(item.key, { sharingMode: event.target.value as DraftItem['sharingMode'], priorityLevel: event.target.value === 'SHARED_PRIORITY' ? 1 : undefined })}><option value="ANY">Theo dịch vụ</option><option value="SHARED_STANDARD">Giặt chung</option><option value="SHARED_PRIORITY">Giặt chung ưu tiên</option><option value="PRIVATE_LOAD">Giặt riêng mẻ</option></select></Field>
             <Field label="Số lượng / khối lượng" required><input inputMode="decimal" value={item.quantity} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} /></Field></div>
+          <Field label="Ghi chú xử lý" hint="Tình trạng món hoặc yêu cầu riêng"><textarea rows={2} maxLength={1000} value={item.note ?? ''} onChange={(event) => updateItem(item.key, { note: event.target.value })} /></Field>
           {quotes[item.key] !== undefined && <div className="quoted-price"><span><small>{quotes[item.key].explanation}</small><small>Tính tiền: {quotes[item.key].billableQuantity} {quotes[item.key].unitType}</small></span><strong>{money(quotes[item.key].finalAmount, quotes[item.key].currency)}</strong></div>}
         </div>)}
         <Button type="button" variant="secondary" onClick={() => setItems((value) => [...value, { key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])}><Plus size={18} />Thêm dịch vụ</Button>
@@ -284,7 +286,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
       <Field label="Loại đồ" required><select value={item.itemTypeId || ''} onChange={event => updateItem(item.key, { itemTypeId: event.target.value ? Number(event.target.value) : undefined })}><option value="">Chọn loại đồ</option>{eligible[item.serviceId]?.map(option => <option key={option.id} value={option.id}>{option.nameVi}</option>)}</select></Field>
       <Field label="Hình thức xử lý" required><select value={item.sharingMode} onChange={event => updateItem(item.key, { sharingMode: event.target.value as DraftItem['sharingMode'], priorityLevel: event.target.value === 'SHARED_PRIORITY' ? 1 : undefined })}><option value="ANY">Theo dịch vụ</option><option value="SHARED_STANDARD">Giặt chung</option><option value="SHARED_PRIORITY">Giặt chung ưu tiên</option><option value="PRIVATE_LOAD">Giặt riêng mẻ</option></select></Field>
       <Field label="Số lượng / khối lượng" required><input inputMode="decimal" value={item.quantity} onChange={event => updateItem(item.key, { quantity: Number(event.target.value) })} /></Field>
-    </div>{quotes[item.key] && <div className="quoted-price"><span><small>{quotes[item.key].explanation}</small></span><strong>{money(quotes[item.key].finalAmount, quotes[item.key].currency)}</strong></div>}</div>)}
+    </div><Field label="Ghi chú xử lý" hint="Tình trạng món hoặc yêu cầu riêng"><textarea rows={2} maxLength={1000} value={item.note ?? ''} onChange={event => updateItem(item.key, { note: event.target.value })} /></Field>{quotes[item.key] && <div className="quoted-price"><span><small>{quotes[item.key].explanation}</small></span><strong>{money(quotes[item.key].finalAmount, quotes[item.key].currency)}</strong></div>}</div>)}
       <Button type="button" variant="secondary" onClick={() => setItems(current => [...current, { key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])}><Plus size={18} />Thêm dịch vụ</Button>
       {pricingError && <p className="form-error" role="alert">{pricingError}</p>}
     </div>}
@@ -361,7 +363,7 @@ export function OrderDetailPage() {
     {value.status === 'COMPLETED' && hasPermission(PERMISSION_CODES.ORDER_REOPEN) && <Button variant="secondary" onClick={() => execute('reopen')}><RotateCcw size={18} />Mở lại</Button>}
   </div></header>{editing && <OrderEditPanel order={value} onClose={() => setEditing(false)} onSaved={updated => { queryClient.setQueryData(orderKeys.detail(id), updated); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); setEditing(false) }} />}<div className="order-detail-grid"><div className="order-detail-main">
     <Surface className="order-section"><h2>Thông tin chung</h2><dl className="detail-facts"><div><dt>Khách hàng</dt><dd>{value.customerName || 'Khách vãng lai'}<small>{value.customerPhone}</small></dd></div><div><dt>Hẹn trả</dt><dd>{value.promisedAt ? when(value.promisedAt) : 'Chưa hẹn'}</dd></div><div><dt>Nhân viên nhận</dt><dd>{value.createdBy.displayName}</dd></div><div><dt>Cập nhật cuối</dt><dd>{when(value.updatedAt)}</dd></div></dl></Surface>
-    <Surface className="order-section"><h2>Dịch vụ ({value.items.length})</h2>{value.items.map((item) => <article className="detail-order-item" key={item.id}><div><strong>{item.serviceName}</strong><span>{item.itemTypeName}</span></div><div><span>{item.quantity} {item.unitType}</span><strong>{money(item.lineAmount, value.currency)}</strong></div></article>)}</Surface>
+    <Surface className="order-section"><h2>Dịch vụ ({value.items.length})</h2>{value.items.map((item) => <article className="detail-order-item" key={item.id}><div><strong>{item.serviceName}</strong><span>{item.itemTypeName}</span>{item.note && <small className="detail-order-item__note"><strong>Ghi chú:</strong> {item.note}</small>}</div><div><span>{item.quantity} {item.unitType}</span><strong>{money(item.lineAmount, value.currency)}</strong></div></article>)}</Surface>
     {value.note && <Surface className="order-section"><h2>Ghi chú</h2><p>{value.note}</p></Surface>}
   </div><aside><Surface className="order-total"><span>Tổng tiền</span><strong>{money(value.totalAmount, value.currency)}</strong><small>{value.currency} · giá đã đóng băng khi nhận đơn</small></Surface>
     {canAudit && <Surface className="order-history"><h2>Lịch sử đơn hàng</h2>{history.isLoading ? <LoadingState rows={3} /> : history.isError ? <ErrorState title="Không tải được lịch sử" body="Thử tải lại để xem thay đổi của đơn." onRetry={() => void history.refetch()} /> : history.data?.map((item) => <article key={item.id}><span className="history-dot"><Clock3 size={14} /></span><div><strong>{historyLabel(item.action, item.changedFields)}</strong><p>{item.actor.displayName} · {when(item.createdAt)}</p><HistoryDetails changed={item.changedFields} currency={value.currency} />{item.reason && <small>{item.reason}</small>}</div></article>)}</Surface>}

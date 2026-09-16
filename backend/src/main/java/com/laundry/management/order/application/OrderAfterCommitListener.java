@@ -6,6 +6,7 @@ import com.laundry.management.notification.domain.*;
 import com.laundry.management.notification.infrastructure.NotificationRecipientLookupRepository;
 import com.laundry.management.order.domain.OrderStatus;
 import com.laundry.management.realtime.RealtimeSseService;
+import com.laundry.management.realtime.RealtimeTopic;
 import java.util.*;
 import org.slf4j.*;
 import org.springframework.stereotype.Component;
@@ -20,7 +21,7 @@ public class OrderAfterCommitListener {
     public void onChanged(OrderChangedEvent event){
         try{
             List<Long> users=recipients.findActiveUserIdsByEffectivePermission(event.branchId(),PermissionCodes.ORDER_READ);
-            realtime.dispatch(users,realtime.envelope(event.eventType(),event.branchId(),event.orderId(),event.orderCode(),event.version(),event.occurredAt()));
+            realtime.dispatch(RealtimeTopic.ORDER,users,realtime.envelope(event.eventType(),event.branchId(),event.orderId(),event.orderCode(),event.version(),event.occurredAt()));
             if(Set.of(OrderStatus.READY,OrderStatus.CANCELLED,OrderStatus.REOPENED).contains(event.status())) notifyImportant(event);
         }catch(RuntimeException ex){LOGGER.warn("Order {} committed but secondary realtime/notification dispatch failed",event.orderId(),ex);}
     }

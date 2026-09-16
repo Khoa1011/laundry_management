@@ -4,6 +4,7 @@ import com.laundry.management.auth.security.CurrentUserProvider;
 import com.laundry.management.notification.application.NotificationCreatedEvent;
 import com.laundry.management.notification.application.NotificationStateChangedEvent;
 import com.laundry.management.notification.infrastructure.NotificationRecipientRepository;
+import com.laundry.management.realtime.RealtimeTopic;
 import java.time.Instant;
 import java.time.Duration;
 import java.util.Collection;
@@ -128,7 +129,7 @@ public class NotificationSseService {
     }
 
     private void send(Long userId, String eventName, NotificationSseEnvelope payload) {
-        registry.sendToUser(userId, event(eventName, payload.eventId(), payload));
+        registry.sendToUser(userId, RealtimeTopic.NOTIFICATION.value(), event(eventName, payload.eventId(), payload));
     }
 
     private SseEmitter.SseEventBuilder event(String name, String id, Object data) {

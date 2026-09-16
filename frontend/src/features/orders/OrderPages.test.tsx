@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   customers: vi.fn(), preview: vi.fn(), eligibility: vi.fn(),
   create: vi.fn(), update: vi.fn(), transition: vi.fn(), reasoned: vi.fn(),
   subscribe: vi.fn(),
+  subscriptions: [] as Array<{ prefix: string; listener: (event: { entityId?: number; type: string }) => void }>,
 }))
 
 vi.mock('../../auth/AuthProvider', () => ({
@@ -39,12 +40,13 @@ const order: Order = {
 
 function renderAt(path: string, element: React.ReactNode, pattern = '*') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes><Route path={pattern} element={element} /></Routes></MemoryRouter></QueryClientProvider>)
+  return { ...render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes><Route path={pattern} element={element} /></Routes></MemoryRouter></QueryClientProvider>), client }
 }
 
 describe('Order pages', () => {
   beforeEach(() => {
     mocks.permissions.clear()
+    mocks.subscriptions.length = 0
     Object.values(mocks).forEach((value) => { if (typeof value === 'function' && 'mockReset' in value) value.mockReset() })
     mocks.list.mockResolvedValue({ items: [{
       id: order.id, orderCode: order.orderCode, customerName: order.customerName,
@@ -57,8 +59,13 @@ describe('Order pages', () => {
     mocks.customers.mockResolvedValue([])
     mocks.eligibility.mockResolvedValue([{ id: 3, code: 'SHIRT', nameVi: 'Áo sơ mi', defaultUnitType: 'KG' }])
     mocks.preview.mockResolvedValue({ currency: 'VND', finalAmount: 50000, explanation: 'Giá hệ thống', billableQuantity: 2, unitType: 'KG' })
+    mocks.create.mockResolvedValue(order)
     mocks.update.mockResolvedValue(order)
-    mocks.subscribe.mockImplementation(() => () => undefined)
+    mocks.subscribe.mockImplementation((prefix, listener) => {
+      const subscription = { prefix, listener }
+      mocks.subscriptions.push(subscription)
+      return () => { const index = mocks.subscriptions.indexOf(subscription); if (index >= 0) mocks.subscriptions.splice(index, 1) }
+    })
   })
 
   it('renders touch cards and desktop table from one result set with full phone', async () => {
@@ -68,6 +75,14 @@ describe('Order pages', () => {
     expect(container.querySelector('.orders-page')).toHaveClass('page-container')
     expect(screen.getAllByText('0903 123 456')).toHaveLength(2)
     expect(screen.queryByRole('link', { name: /Tạo đơn hàng/i })).not.toBeInTheDocument()
+  })
+
+  it('invalidates only order queries when an order realtime event arrives', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    renderAt('/orders', <OrderListPage />)
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledOnce())
+    act(() => mocks.subscriptions.filter(item => item.prefix === 'order.').forEach(item => item.listener({ entityId: 7, type: 'order.updated' })))
+    await waitFor(() => expect(mocks.list.mock.calls.length).toBeGreaterThan(1))
   })
 
   it('explains guest persistence and exposes Vietnamese processing choices', async () => {
@@ -103,6 +118,52 @@ describe('Order pages', () => {
     expect(screen.getByRole('button', { name: 'Tạo đơn' })).toBeEnabled()
   })
 
+  it('sends an item processing note when creating an order', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    renderAt('/orders/new', <OrderCreatePage />)
+    await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
+    await userEvent.type(screen.getByLabelText('Tên khách'), 'Khách kiểm thử')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.type(screen.getByRole('textbox', { name: /Ghi chú xử lý/ }), 'Không dùng nước xả')
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo đơn' }))
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({ note: 'Không dùng nước xả' })],
+    })))
+  })
+
+  it('renders a note beneath its corresponding order item', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.get.mockResolvedValue({
+      ...order,
+      items: [{ ...order.items[0], note: 'Áo trắng có vết mực ở tay áo' }],
+    })
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    expect(await screen.findByText(/Áo trắng có vết mực ở tay áo/)).toBeInTheDocument()
+  })
+
+  it('allows item-note edits only while the order is received', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    const received = {
+      ...order,
+      status: 'RECEIVED' as const,
+      items: [{ ...order.items[0], note: 'Vết cũ' }],
+    }
+    mocks.get.mockResolvedValue(received)
+    mocks.update.mockResolvedValue({ ...received, version: 3 })
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await userEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }))
+    const itemNote = screen.getByRole('textbox', { name: /Ghi chú xử lý/ })
+    await userEvent.clear(itemNote)
+    await userEvent.type(itemNote, 'Không dùng nước xả')
+    const save = screen.getByRole('button', { name: 'Lưu thay đổi' })
+    await waitFor(() => expect(save).toBeEnabled())
+    await userEvent.click(save)
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(7, 1, expect.objectContaining({
+      items: [expect.objectContaining({ note: 'Không dùng nước xả' })],
+    })))
+  })
+
   it('allows safe metadata editing in processing without sending structural items', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
     const processing = { ...order, status: 'PROCESSING' as const }
@@ -111,6 +172,7 @@ describe('Order pages', () => {
     renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
     await userEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }))
     expect(screen.queryByLabelText('Dịch vụ')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Ghi chú xử lý')).not.toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Ghi chú'), 'Gọi khách trước khi trả')
     await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     expect(mocks.update).toHaveBeenCalledWith(7, 1, expect.objectContaining({
@@ -151,8 +213,8 @@ describe('Order pages', () => {
     await userEvent.type(screen.getByLabelText('Từ ngày'), '2026-09-01')
     await userEvent.type(screen.getByLabelText('Đến ngày'), '2026-09-16')
     await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      from: new Date('2026-09-01T00:00:00').toISOString(),
-      to: new Date('2026-09-16T23:59:59.999').toISOString(),
+      from: new Date(2026, 8, 1).toISOString(),
+      to: new Date(2026, 8, 17).toISOString(),
     })))
   })
 })
