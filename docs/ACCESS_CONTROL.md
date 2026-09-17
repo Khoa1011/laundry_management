@@ -85,6 +85,26 @@ Default grants are explicit:
 
 The `/notifications` route, bell, settings actions, and management controls use effective frontend permissions. REST and SSE services independently enforce generated Java constants. No role-name bypass exists.
 
+## Wash batch module
+
+The wash batch module is declared in `access-control/modules/batch.yml` and separates ordinary visibility, composition changes, lifecycle commands, and audit access:
+
+- `batch.read`
+- `batch.create`
+- `batch.update`
+- `batch.mark-ready`
+- `batch.cancel`
+- `batch.audit.read`
+
+Default grants are explicit:
+
+- `ADMIN` and `MANAGER` receive all six wash-batch permissions.
+- `RECEPTIONIST` receives `batch.read`, `batch.create`, `batch.update`, and `batch.mark-ready`, but not cancellation or audit-history access.
+
+Every REST operation checks the generated backend constant before resolving branch scope. Creation with `markReady=true` requires both `batch.create` and `batch.mark-ready`. Branch access and compatibility remain independent policy checks after permission authorization. The frontend guards routes, navigation, detail actions, history, and realtime connection using the effective permission list; it never infers access from a role name.
+
+Realtime recipient resolution requires both effective `batch.read` and access to the changed batch's branch. Batch events contain only the branch, batch identifier/code, version, event type, and time. They do not persist notification rows.
+
 ## Legacy bypass scan
 
 Run:

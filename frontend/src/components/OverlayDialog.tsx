@@ -22,6 +22,9 @@ export function OverlayDialog({ open, onClose, title, description, children, foo
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   useEffect(() => {
     if (!open) return
@@ -31,7 +34,7 @@ export function OverlayDialog({ open, onClose, title, description, children, foo
     const focusable = () => Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])
     window.setTimeout(() => focusable()[0]?.focus(), 0)
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
+      if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); return }
       if (event.key !== 'Tab') return
       const items = focusable()
       if (items.length === 0) return
@@ -46,7 +49,7 @@ export function OverlayDialog({ open, onClose, title, description, children, foo
       document.removeEventListener('keydown', handleKeyDown)
       previous?.focus()
     }
-  }, [open, onClose])
+  }, [open])
 
   return createPortal(
     <AnimatePresence initial={false}>

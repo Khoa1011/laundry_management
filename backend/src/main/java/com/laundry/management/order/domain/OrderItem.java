@@ -36,6 +36,7 @@ public class OrderItem {
         this.lineAmount=amount; this.note=note; this.pricingSnapshotJson=snapshot; this.quotedAt=quotedAt;
     }
     void attach(LaundryOrder value){order=value;}
+    public LaundryOrder getOrder(){return order;} public LaundryService getService(){return service;} public ItemType getItemType(){return itemType;}
     public Long getId(){return id;} public Long getServiceId(){return service.getId();} public Long getItemTypeId(){return itemType.getId();}
     public String getServiceCodeSnapshot(){return serviceCodeSnapshot;} public String getServiceNameSnapshot(){return serviceNameSnapshot;}
     public String getItemTypeCodeSnapshot(){return itemTypeCodeSnapshot;} public String getItemTypeNameSnapshot(){return itemTypeNameSnapshot;}

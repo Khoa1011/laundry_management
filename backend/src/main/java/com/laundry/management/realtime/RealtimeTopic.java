@@ -4,7 +4,8 @@ import com.laundry.management.auth.security.permission.PermissionCodes;
 
 public enum RealtimeTopic {
     NOTIFICATION("notification", PermissionCodes.NOTIFICATION_READ_OWN),
-    ORDER("order", PermissionCodes.ORDER_READ);
+    ORDER("order", PermissionCodes.ORDER_READ),
+    BATCH("batch", PermissionCodes.BATCH_READ);
 
     private final String value;
     private final String requiredPermission;

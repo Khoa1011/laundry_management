@@ -6,6 +6,7 @@ import {
   Globe2,
   Home,
   LogOut,
+  Layers3,
   Menu,
   MoreHorizontal,
   PanelLeftClose,
@@ -36,6 +37,7 @@ import { motionDuration, motionEase } from '../providers/motionPresets'
 const navItems = [
   { to: '/overview', key: 'overview', icon: Home },
   { to: '/orders', key: 'orders', icon: ClipboardList, permission: PERMISSION_CODES.ORDER_READ },
+  { to: '/wash-batches', key: 'washBatches', icon: Layers3, permission: PERMISSION_CODES.BATCH_READ },
   { to: '/customers', key: 'customers', icon: Users, permission: PERMISSION_CODES.CUSTOMER_READ },
   { to: '/employees', key: 'employees', icon: UsersRound, permission: PERMISSION_CODES.EMPLOYEE_READ },
   { to: '/more', key: 'more', icon: MoreHorizontal },
@@ -56,6 +58,7 @@ export function AppShell() {
 
   const focused = location.pathname === '/customers/new'
     || location.pathname === '/orders/new'
+    || location.pathname === '/wash-batches/new'
     || /\/customers\/\d+\/edit$/.test(location.pathname)
     || location.pathname === '/employees/new'
     || /\/employees\/\d+\/edit$/.test(location.pathname)

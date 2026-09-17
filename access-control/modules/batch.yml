@@ -1,0 +1,25 @@
+{
+  "module": {
+    "code": "batch",
+    "nameVi": "Mẻ giặt",
+    "nameEn": "Wash Batches",
+    "descriptionVi": "Ghép các món của đơn đang chờ thành mẻ xử lý theo chi nhánh.",
+    "descriptionEn": "Group waiting order items into branch-scoped operational wash batches.",
+    "displayOrder": 25,
+    "dataScopeNotes": "Danh sách chờ, mẻ, lịch sử, lệnh thay đổi và realtime đều phải nằm trong phạm vi chi nhánh được phép.",
+    "businessPolicyNotes": "Mẻ chỉ nhóm OrderItem, không sở hữu giá và không đổi trạng thái Order; thành phần chỉ sửa khi DRAFT."
+  },
+  "permissions": [
+    { "code": "batch.read", "resource": "batch", "action": "read", "nameVi": "Xem mẻ giặt", "nameEn": "View wash batches", "descriptionVi": "Xem danh sách chờ, danh sách và chi tiết mẻ trong chi nhánh được phép.", "descriptionEn": "View candidates, lists, and batch details within allowed branches.", "riskLevel": "LOW", "displayOrder": 10 },
+    { "code": "batch.create", "resource": "batch", "action": "create", "nameVi": "Tạo mẻ giặt", "nameEn": "Create wash batches", "descriptionVi": "Tạo mẻ nháp hoặc mẻ sẵn sàng từ các món hợp lệ.", "descriptionEn": "Create draft or ready batches from eligible items.", "riskLevel": "MEDIUM", "displayOrder": 20 },
+    { "code": "batch.update", "resource": "batch", "action": "update", "nameVi": "Cập nhật mẻ giặt", "nameEn": "Update wash batches", "descriptionVi": "Thêm, xóa món và cập nhật ghi chú khi mẻ còn nháp.", "descriptionEn": "Add or remove items and update notes while a batch is draft.", "riskLevel": "MEDIUM", "displayOrder": 30 },
+    { "code": "batch.mark-ready", "resource": "batch", "action": "mark-ready", "nameVi": "Đánh dấu mẻ sẵn sàng", "nameEn": "Mark wash batches ready", "descriptionVi": "Khóa thành phần của mẻ hợp lệ để chờ đưa vào máy.", "descriptionEn": "Lock a compatible batch composition for future machine assignment.", "riskLevel": "MEDIUM", "displayOrder": 40 },
+    { "code": "batch.cancel", "resource": "batch", "action": "cancel", "nameVi": "Hủy mẻ giặt", "nameEn": "Cancel wash batches", "descriptionVi": "Hủy mẻ nháp hoặc sẵn sàng với lý do bắt buộc và trả đồ về hàng chờ.", "descriptionEn": "Cancel draft or ready batches with a required reason and release their items.", "riskLevel": "HIGH", "displayOrder": 50 },
+    { "code": "batch.audit.read", "resource": "batch.audit", "action": "read", "nameVi": "Xem lịch sử mẻ giặt", "nameEn": "View wash batch history", "descriptionVi": "Xem lịch sử thành phần và trạng thái của mẻ.", "descriptionEn": "View batch composition and lifecycle history.", "riskLevel": "HIGH", "displayOrder": 60 }
+  ],
+  "defaultRoleGrants": {
+    "ADMIN": ["batch.read", "batch.create", "batch.update", "batch.mark-ready", "batch.cancel", "batch.audit.read"],
+    "MANAGER": ["batch.read", "batch.create", "batch.update", "batch.mark-ready", "batch.cancel", "batch.audit.read"],
+    "RECEPTIONIST": ["batch.read", "batch.create", "batch.update", "batch.mark-ready"]
+  }
+}

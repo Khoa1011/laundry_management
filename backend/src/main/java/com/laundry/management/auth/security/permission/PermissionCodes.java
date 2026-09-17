@@ -19,6 +19,12 @@ public final class PermissionCodes {
     public static final String ACCESS_USER_PERMISSION_OVERRIDE = "access.user.permission.override";
     public static final String ACCESS_EFFECTIVE_PERMISSION_READ = "access.effective-permission.read";
     public static final String ACCESS_AUDIT_READ = "access.audit.read";
+    public static final String BATCH_READ = "batch.read";
+    public static final String BATCH_CREATE = "batch.create";
+    public static final String BATCH_UPDATE = "batch.update";
+    public static final String BATCH_MARK_READY = "batch.mark-ready";
+    public static final String BATCH_CANCEL = "batch.cancel";
+    public static final String BATCH_AUDIT_READ = "batch.audit.read";
     public static final String CUSTOMER_READ = "customer.read";
     public static final String CUSTOMER_CREATE = "customer.create";
     public static final String CUSTOMER_UPDATE = "customer.update";

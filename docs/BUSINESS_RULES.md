@@ -103,9 +103,22 @@ This is the initial business-rule template for the laundry shop management syste
 
 ## Future laundry execution model
 
-- The future execution relationship is `OrderItem -> BatchItem -> WashBatch -> MachineCycle`. OrderItem's concrete leaf ItemType and immutable pricing identity are the stable upstream input for that model.
-- Batch, machine, timer, queue, machine log, IoT, and sensor behavior are intentionally not implemented by Order Core V1 hardening.
+- The execution relationship is `OrderItem -> WashBatchItem -> WashBatch -> MachineCycle`. OrderItem's concrete leaf ItemType and immutable pricing identity are the stable upstream input for that model.
+- Wash Batch Foundation implements only the `OrderItem -> WashBatchItem -> WashBatch` portion. Machine assignment, machine cycles, timers, queue automation, machine logs, IoT, and sensors remain future work.
 - A single backend instance does not currently require Redis. If the application is deployed as multiple backend instances, the generic realtime publication boundary may later fan out through Redis Pub/Sub (or another approved broker) without changing feature event contracts; Redis is not an authoritative Order store.
+
+## Wash batches
+
+- A wash batch belongs to exactly one branch and one service. Its code is generated only by the backend from an independent, pessimistically locked branch sequence in the form `<branch-code>-MG-000001`.
+- Only items whose order is still `RECEIVED` are candidates. Creating or preparing a batch does not change the order status; future machine-cycle work owns the transition to processing.
+- A batch may combine items from several orders only when every item uses the same service. A `PRIVATE_LOAD` item may never share a batch with another order. Different item types are allowed but produce a visible warning.
+- Item notes, mixed item types, `SHARED_PRIORITY`, and a promised time within 24 hours are operational warnings. They require attention but do not override the hard compatibility rules.
+- An order item may belong to at most one active batch. The database `wash_batch_active_items` lock table is the concurrency authority; historical memberships remain in `wash_batch_items` after removal or cancellation.
+- The initial lifecycle is `DRAFT -> READY`, with cancellation allowed from `DRAFT` or `READY`. Only drafts may change composition or note. A batch must retain at least one active item; otherwise the operator cancels it.
+- Marking a batch ready revalidates all compatibility rules inside the command transaction and locks its composition for the future machine-assignment phase.
+- Cancelling requires a reason, releases active item locks, and returns eligible items to the candidate queue without deleting the batch or its history.
+- Batch audit metadata retains identifiers, service/item-type codes, counts, status changes, and warnings. It must not copy customer names, phone numbers, order notes, or item notes.
+- Batch realtime events are minimal, branch-scoped, permission-filtered invalidation signals. They do not create durable notifications.
 
 ## Revenue and expenses
 

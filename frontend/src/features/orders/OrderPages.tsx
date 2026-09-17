@@ -14,6 +14,7 @@ import { useToast } from '../../providers/ToastProvider'
 import { useRealtime } from '../../realtime/context'
 import { QuickCustomerDialog } from '../customers/QuickCustomerDialog'
 import type { PricingPreview } from '../service-catalog/types'
+import { batchKeys, washBatchApi } from '../wash-batches/api'
 import { orderApi, orderKeys } from './api'
 import { localDayStartIso, nextLocalDayStartIso } from './dateFilters'
 import type { Order, OrderItemNoteUpdate, OrderItemPayload, OrderStatus } from './types'
@@ -346,7 +347,9 @@ export function OrderDetailPage() {
   const [reason, setReason] = useState('')
   const order = useQuery({ queryKey: orderKeys.detail(id), queryFn: () => orderApi.get(id, branchId!), enabled: Boolean(id && branchId) })
   const canAudit = hasPermission(PERMISSION_CODES.ORDER_AUDIT_READ)
+  const canReadBatches = hasPermission(PERMISSION_CODES.BATCH_READ)
   const history = useQuery({ queryKey: orderKeys.history(id), queryFn: () => orderApi.history(id, branchId!), enabled: Boolean(id && branchId && canAudit) })
+  const batchReferences = useQuery({ queryKey: batchKeys.byOrder(id), queryFn: () => washBatchApi.byOrder(id, branchId!), enabled: Boolean(id && branchId && canReadBatches) })
   useEffect(() => subscribe('order.', event => {
     if (event.entityId !== id || editing) return
     void queryClient.invalidateQueries({ queryKey: orderKeys.detail(id), refetchType: 'active' })
@@ -357,6 +360,9 @@ export function OrderDetailPage() {
     void queryClient.invalidateQueries({ queryKey: orderKeys.detail(id), refetchType: 'active' })
     if (canAudit) void queryClient.invalidateQueries({ queryKey: orderKeys.history(id), refetchType: 'active' })
   }), [canAudit, id, queryClient, subscribe])
+  useEffect(() => subscribe('batch.', () => {
+    if (canReadBatches) void queryClient.invalidateQueries({ queryKey: batchKeys.byOrder(id) })
+  }), [canReadBatches, id, queryClient, subscribe])
   const mutate = useMutation({
     mutationFn: async ({ action, reason }: { action: string; reason?: string }) => {
       const value = order.data!
@@ -387,6 +393,7 @@ export function OrderDetailPage() {
     <Surface className="order-section"><h2>Dịch vụ ({value.items.length})</h2>{value.items.map((item) => <article className="detail-order-item" key={item.id}><div><strong>{item.serviceName}</strong><span>{item.itemTypeName}</span>{item.note && <small className="detail-order-item__note"><strong>Ghi chú:</strong> {item.note}</small>}</div><div><span>{item.quantity} {item.unitType}</span><strong>{money(item.lineAmount, value.currency)}</strong></div></article>)}</Surface>
     {value.note && <Surface className="order-section"><h2>Ghi chú</h2><p>{value.note}</p></Surface>}
   </div><aside><Surface className="order-total"><span>Tổng tiền</span><strong>{money(value.totalAmount, value.currency)}</strong><small>{value.currency} · giá đã đóng băng khi nhận đơn</small></Surface>
+    {canReadBatches && <Surface className="order-batch-references"><h2>Mẻ giặt liên quan</h2>{batchReferences.isLoading ? <LoadingState rows={2} /> : batchReferences.isError ? <ErrorState title="Không tải được mẻ giặt" body="Thông tin đơn vẫn an toàn. Hãy thử tải lại phần này." onRetry={() => void batchReferences.refetch()} /> : batchReferences.data?.length ? batchReferences.data.map(batch => <Link key={batch.id} to={`/wash-batches/${batch.id}`}><span><strong>{batch.batchCode}</strong><small>{batch.serviceName}</small></span><b>{batch.active ? 'Đang hoạt động' : batch.status === 'CANCELLED' ? 'Đã hủy' : batch.status}</b></Link>) : <p>Đơn chưa được xếp vào mẻ giặt.</p>}</Surface>}
     {canAudit && <Surface className="order-history"><h2>Lịch sử đơn hàng</h2>{history.isLoading ? <LoadingState rows={3} /> : history.isError ? <ErrorState title="Không tải được lịch sử" body="Thử tải lại để xem thay đổi của đơn." onRetry={() => void history.refetch()} /> : history.data?.map((item) => <article key={item.id}><span className="history-dot"><Clock3 size={14} /></span><div><strong>{historyLabel(item.action, item.changedFields)}</strong><p>{item.actor.displayName} · {when(item.createdAt)}</p><HistoryDetails changed={item.changedFields} currency={value.currency} />{item.reason && <small>{item.reason}</small>}</div></article>)}</Surface>}
   </aside></div><OverlayDialog open={reasonAction !== null} onClose={() => !mutate.isPending && setReasonAction(null)} title={reasonAction === 'cancel' ? 'Hủy đơn hàng' : 'Mở lại đơn hàng'} description="Lý do sẽ được lưu trong lịch sử kiểm toán." footer={<><Button variant="secondary" onClick={() => setReasonAction(null)} disabled={mutate.isPending}>Đóng</Button><Button variant={reasonAction === 'cancel' ? 'danger' : 'primary'} loading={mutate.isPending} disabled={!reason.trim()} onClick={() => reasonAction && mutate.mutate({ action: reasonAction, reason: reason.trim() })}>{reasonAction === 'cancel' ? 'Xác nhận hủy' : 'Xác nhận mở lại'}</Button></>}><Field label="Lý do" required><textarea rows={4} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></Field></OverlayDialog></div>
 }

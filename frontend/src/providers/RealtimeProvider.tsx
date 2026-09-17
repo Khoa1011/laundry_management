@@ -26,7 +26,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { user, hasPermission } = useAuth()
   const userId = user?.id ?? null
   const canStream = Boolean(user) && (
-    hasPermission(PERMISSION_CODES.NOTIFICATION_READ_OWN) || hasPermission(PERMISSION_CODES.ORDER_READ)
+    hasPermission(PERMISSION_CODES.NOTIFICATION_READ_OWN)
+    || hasPermission(PERMISSION_CODES.ORDER_READ)
+    || hasPermission(PERMISSION_CODES.BATCH_READ)
   )
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('idle')
   const subscribers = useRef(new Map<string, Set<Subscriber>>())
