@@ -25,9 +25,9 @@ describe('order intake API', () => {
 
   it('omits patch fields that the caller does not intend to change', async () => {
     request.mockResolvedValue({})
-    await orderApi.update(5, 7, { version: 3, note: 'Mới' })
+    await orderApi.update(5, 7, { version: 3, note: 'Mới', itemNoteUpdates: [{ itemId: 11, note: null }] })
     expect(request).toHaveBeenCalledWith('/api/orders/5', {
-      method: 'PATCH', branchId: 7, body: { version: 3, note: 'Mới' },
+      method: 'PATCH', branchId: 7, body: { version: 3, note: 'Mới', itemNoteUpdates: [{ itemId: 11, note: null }] },
     })
   })
 })

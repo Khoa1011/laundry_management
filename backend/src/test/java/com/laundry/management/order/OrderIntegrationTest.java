@@ -91,7 +91,7 @@ class OrderIntegrationTest {
         createAccount(managerAName, "Order Manager A", hash, branchA, "MANAGER");
         createAccount(managerBName, "Order Manager B", hash, branchB, "MANAGER");
         UserAccount receptionist = createAccount(receptionistName, "Order Reception A", hash, branchA, "RECEPTIONIST");
-        for (String code : java.util.List.of("pricing.preview","service.read","item-type.read","customer.read")) {
+        for (String code : java.util.List.of("pricing.preview","service.read","item-type.read","customer.read","order.update")) {
             receptionist.overridePermission(permissions.findByCode(code).orElseThrow(), PermissionOverrideEffect.DENY);
         }
         users.saveAndFlush(receptionist);
@@ -180,6 +180,10 @@ class OrderIntegrationTest {
                 .header("X-Branch-Id", branchA.getId()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":" + order.path("version").asLong() + ",\"reason\":\"Không có quyền\"}"))
             .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/orders/{id}", id).header("Authorization", bearer(receptionistA))
+                .header("X-Branch-Id", branchA.getId()).contentType(MediaType.APPLICATION_JSON)
+                .content(itemNoteUpdate(order, order.path("items").get(0).path("id").asLong(), "Không có quyền").toString()))
+            .andExpect(status().isForbidden());
 
         JsonNode processing = command(managerA, order, "start-processing", null, 200);
         ObjectNode stale = objectMapper.createObjectNode();
@@ -224,32 +228,132 @@ class OrderIntegrationTest {
     }
 
     @Test
-    void persistsAndAuditsItemNotesWithoutCopyingTheirTextIntoHistory() throws Exception {
+    void itemNoteOnlyUpdatePreservesHistoricalPricingAfterPriceListChanges() throws Exception {
         ObjectNode originalItem = item(2);
         originalItem.put("note", "Áo trắng có vết mực ở tay áo");
         JsonNode order = createGuestOrder(managerA, originalItem);
-        org.assertj.core.api.Assertions.assertThat(order.path("items").get(0).path("note").asText())
-            .isEqualTo("Áo trắng có vết mực ở tay áo");
+        order = body(mockMvc.perform(get("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andReturn());
+        JsonNode beforeItem = order.path("items").get(0).deepCopy();
+        JsonNode beforeSnapshot = beforeItem.path("pricingSnapshot").deepCopy();
+        long notificationCount = notifications.count();
 
-        ObjectNode updatedItem = item(2);
-        updatedItem.put("note", "Không dùng nước xả");
+        JsonNode replacementList = createPriceList(Instant.now().minusSeconds(2));
+        addWeightRule(replacementList.path("id").asLong(), service.path("id").asLong(),
+            replacementList.path("effectiveFrom").asText(), 30000);
+        publish(replacementList);
+        ObjectNode freshQuote = item(2); freshQuote.put("branchId", branchA.getId());
+        mockMvc.perform(post("/api/orders/intake/quote").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(freshQuote.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.finalAmount").value(60000.0));
+
         ObjectNode update = objectMapper.createObjectNode();
         update.put("version", order.path("version").asLong());
-        update.putArray("items").add(updatedItem);
-        mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+        ObjectNode noteUpdate = update.putArray("itemNoteUpdates").addObject();
+        noteUpdate.put("itemId", beforeItem.path("id").asLong());
+        noteUpdate.put("note", "Không dùng nước xả");
+        JsonNode updated = body(mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
                 .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
                 .contentType(MediaType.APPLICATION_JSON).content(update.toString()))
-            .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].note").value("Không dùng nước xả"));
+            .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].note").value("Không dùng nước xả"))
+            .andReturn());
+
+        JsonNode updatedItem = updated.path("items").get(0);
+        org.assertj.core.api.Assertions.assertThat(updatedItem.path("pricingSnapshot")).isEqualTo(beforeSnapshot);
+        org.assertj.core.api.Assertions.assertThat(updatedItem.path("quotedAt")).isEqualTo(beforeItem.path("quotedAt"));
+        org.assertj.core.api.Assertions.assertThat(updatedItem.path("pricingMethod")).isEqualTo(beforeItem.path("pricingMethod"));
+        org.assertj.core.api.Assertions.assertThat(updatedItem.path("unitType")).isEqualTo(beforeItem.path("unitType"));
+        org.assertj.core.api.Assertions.assertThat(updatedItem.path("billableQuantity")).isEqualTo(beforeItem.path("billableQuantity"));
+        org.assertj.core.api.Assertions.assertThat(updatedItem.path("lineAmount")).isEqualTo(beforeItem.path("lineAmount"));
+        org.assertj.core.api.Assertions.assertThat(updated.path("totalAmount")).isEqualTo(order.path("totalAmount"));
+        org.assertj.core.api.Assertions.assertThat(updated.path("currency")).isEqualTo(order.path("currency"));
+        org.assertj.core.api.Assertions.assertThat(updated.path("version").asLong()).isGreaterThan(order.path("version").asLong());
+        org.assertj.core.api.Assertions.assertThat(updated.path("updatedAt")).isNotEqualTo(order.path("updatedAt"));
+        org.assertj.core.api.Assertions.assertThat(updated.path("updatedBy").path("displayName").asText()).isEqualTo("Order Manager A");
+        org.assertj.core.api.Assertions.assertThat(notifications.count()).isEqualTo(notificationCount);
 
         MvcResult historyResult = mockMvc.perform(get("/api/orders/{id}/history", order.path("id").asLong())
                 .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].changedFields.fields[0]").value("items"))
-            .andExpect(jsonPath("$[0].changedFields.items.before[0].noteRecorded").value(true))
-            .andExpect(jsonPath("$[0].changedFields.items.after[0].noteRecorded").value(true))
+            .andExpect(jsonPath("$[0].changedFields.fields[0]").value("itemNotes"))
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].itemId").value(beforeItem.path("id").asLong()))
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].serviceCode").isNotEmpty())
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].itemTypeCode").isNotEmpty())
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].beforeRecorded").value(true))
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].afterRecorded").value(true))
             .andReturn();
         org.assertj.core.api.Assertions.assertThat(historyResult.getResponse().getContentAsString())
             .doesNotContain("Áo trắng có vết mực ở tay áo", "Không dùng nước xả");
+
+        ObjectNode clear = objectMapper.createObjectNode(); clear.put("version", updated.path("version").asLong());
+        ObjectNode clearItem = clear.putArray("itemNoteUpdates").addObject();
+        clearItem.put("itemId", beforeItem.path("id").asLong()); clearItem.putNull("note");
+        JsonNode cleared = body(mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(clear.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].note").isEmpty())
+            .andReturn());
+        org.assertj.core.api.Assertions.assertThat(cleared.path("items").get(0).path("pricingSnapshot"))
+            .isEqualTo(beforeSnapshot);
+        mockMvc.perform(get("/api/orders/{id}/history", order.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].beforeRecorded").value(true))
+            .andExpect(jsonPath("$[0].changedFields.itemNotes[0].afterRecorded").value(false));
+    }
+
+    @Test
+    void rejectsAmbiguousDuplicateUnknownCrossOrderAndCrossBranchItemNoteUpdates() throws Exception {
+        JsonNode first = createGuestOrder(managerA, item(1));
+        JsonNode second = createGuestOrder(managerA, item(1));
+        long firstItemId = first.path("items").get(0).path("id").asLong();
+        long secondItemId = second.path("items").get(0).path("id").asLong();
+
+        ObjectNode duplicate = itemNoteUpdate(first, firstItemId, "Một");
+        ObjectNode duplicateEntry = duplicate.withArray("itemNoteUpdates").addObject();
+        duplicateEntry.put("itemId", firstItemId); duplicateEntry.put("note", "Hai");
+        patchOrder(managerA, first, duplicate, 400);
+
+        patchOrder(managerA, first, itemNoteUpdate(first, 999999999L, "Không tồn tại"), 404);
+        patchOrder(managerA, first, itemNoteUpdate(first, secondItemId, "Sai đơn"), 404);
+
+        ObjectNode ambiguous = itemNoteUpdate(first, firstItemId, "Mơ hồ");
+        ambiguous.putArray("items").add(item(2));
+        patchOrder(managerA, first, ambiguous, 400);
+
+        ObjectNode tooLong = itemNoteUpdate(first, firstItemId, "x".repeat(1001));
+        patchOrder(managerA, first, tooLong, 400);
+
+        ObjectNode nullEntry = objectMapper.createObjectNode();
+        nullEntry.put("version", first.path("version").asLong());
+        nullEntry.putArray("itemNoteUpdates").addNull();
+        patchOrder(managerA, first, nullEntry, 400);
+
+        mockMvc.perform(patch("/api/orders/{id}", first.path("id").asLong())
+                .header("Authorization", bearer(managerB)).header("X-Branch-Id", branchB.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(itemNoteUpdate(first, firstItemId, "Sai chi nhánh").toString()))
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.errorCode").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    void itemNoteUpdatesRespectStatusesAndOptimisticVersion() throws Exception {
+        JsonNode received = createGuestOrder(managerA, item(1));
+        long itemId = received.path("items").get(0).path("id").asLong();
+        JsonNode updated = body(patchOrder(managerA, received, itemNoteUpdate(received, itemId, "Phiên bản mới"), 200));
+        patchOrder(managerA, received, itemNoteUpdate(received, itemId, "Phiên bản cũ"), 409);
+
+        JsonNode processing = command(managerA, updated, "start-processing", null, 200);
+        patchOrder(managerA, processing, itemNoteUpdate(processing, itemId, "Không cho sửa"), 422);
+        JsonNode ready = command(managerA, processing, "mark-ready", null, 200);
+        patchOrder(managerA, ready, itemNoteUpdate(ready, itemId, "Không cho sửa"), 422);
+        JsonNode completed = command(managerA, ready, "complete", null, 200);
+        patchOrder(managerA, completed, itemNoteUpdate(completed, itemId, "Không cho sửa"), 422);
+
+        JsonNode cancellable = createGuestOrder(managerA, item(1));
+        JsonNode cancelled = command(managerA, cancellable, "cancel", "Khách yêu cầu", 200);
+        patchOrder(managerA, cancelled, itemNoteUpdate(cancelled,
+            cancelled.path("items").get(0).path("id").asLong(), "Không cho sửa"), 422);
     }
 
     @Test
@@ -421,6 +525,21 @@ class OrderIntegrationTest {
         return item;
     }
 
+    private ObjectNode itemNoteUpdate(JsonNode order, long itemId, String note) {
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("version", order.path("version").asLong());
+        ObjectNode update = request.putArray("itemNoteUpdates").addObject();
+        update.put("itemId", itemId); update.put("note", note);
+        return request;
+    }
+
+    private MvcResult patchOrder(String token, JsonNode order, ObjectNode request, int expectedStatus) throws Exception {
+        return mockMvc.perform(patch("/api/orders/{id}", order.path("id").asLong())
+                .header("Authorization", bearer(token)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+            .andExpect(status().is(expectedStatus)).andReturn();
+    }
+
     private JsonNode command(String token, JsonNode order, String action, String reason, int expectedStatus) throws Exception {
         ObjectNode request = objectMapper.createObjectNode();
         request.put("version", order.path("version").asLong());
@@ -480,11 +599,15 @@ class OrderIntegrationTest {
     }
 
     private JsonNode createPriceList() throws Exception {
+        return createPriceList(Instant.now().minusSeconds(3600));
+    }
+
+    private JsonNode createPriceList(Instant effectiveFrom) throws Exception {
         ObjectNode request = objectMapper.createObjectNode();
         request.put("name", "Bảng giá đơn hàng " + UUID.randomUUID());
         request.put("branchId", branchA.getId());
         request.put("currency", "VND");
-        request.put("effectiveFrom", Instant.now().minusSeconds(3600).toString());
+        request.put("effectiveFrom", effectiveFrom.toString());
         MvcResult result = mockMvc.perform(post("/api/price-lists").header("Authorization", bearer(managerA))
                 .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
             .andExpect(status().isCreated()).andReturn();
@@ -492,12 +615,16 @@ class OrderIntegrationTest {
     }
 
     private void addWeightRule(long listId, long serviceId, String listFrom) throws Exception {
+        addWeightRule(listId, serviceId, listFrom, 25000);
+    }
+
+    private void addWeightRule(long listId, long serviceId, String listFrom, int unitPrice) throws Exception {
         ObjectNode request = objectMapper.createObjectNode();
         request.put("serviceId", serviceId);
         request.put("pricingMethod", "BY_WEIGHT");
         request.put("unitType", "KG");
         request.put("sharingMode", "ANY");
-        request.put("unitPrice", 25000);
+        request.put("unitPrice", unitPrice);
         request.put("rulePriority", 0);
         request.put("effectiveFrom", Instant.parse(listFrom).plusSeconds(1).toString());
         request.putArray("tiers");

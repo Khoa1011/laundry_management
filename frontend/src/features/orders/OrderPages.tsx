@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock3, Filter, PackageCheck, Pencil, Plus, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
@@ -16,7 +16,7 @@ import { QuickCustomerDialog } from '../customers/QuickCustomerDialog'
 import type { PricingPreview } from '../service-catalog/types'
 import { orderApi, orderKeys } from './api'
 import { localDayStartIso, nextLocalDayStartIso } from './dateFilters'
-import type { Order, OrderItemPayload, OrderStatus } from './types'
+import type { Order, OrderItemNoteUpdate, OrderItemPayload, OrderStatus } from './types'
 
 const statusText: Record<OrderStatus, string> = {
   RECEIVED: 'Đã nhận', PROCESSING: 'Đang xử lý', READY: 'Sẵn sàng',
@@ -115,6 +115,20 @@ export function OrderListPage() {
 }
 
 type DraftItem = Omit<OrderItemPayload, 'itemTypeId'> & { key: number; itemTypeId?: number }
+type PricingDraftItem = Omit<DraftItem, 'note'>
+
+function pricingInputSignature(values: DraftItem[]) {
+  return JSON.stringify(values.map(({ key, serviceId, itemTypeId, sharingMode, priorityLevel, quantity }) => ({
+    key, serviceId, itemTypeId, sharingMode, priorityLevel, quantity,
+  })))
+}
+
+function usePricingInputs(values: DraftItem[]) {
+  const signature = pricingInputSignature(values)
+  return useMemo(() => JSON.parse(signature) as PricingDraftItem[], [signature])
+}
+
+const normalizedItemNote = (value?: string) => value?.trim() || null
 
 export function OrderCreatePage() {
   const { branchId, hasPermission } = useAuth()
@@ -132,12 +146,13 @@ export function OrderCreatePage() {
   const [eligible, setEligible] = useState<Record<number, Array<{ id: number; nameVi: string }>>>({})
   const [formError, setFormError] = useState('')
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false)
+  const pricingItems = usePricingInputs(items)
   const customers = useQuery({ queryKey: ['orders', 'customer-search', branchId, search], queryFn: () => orderApi.customers(branchId!, search), enabled: mode === 'existing' && Boolean(branchId) && search.trim().length >= 2 })
   const services = useQuery({ queryKey: ['orders', 'service-options', branchId], queryFn: () => orderApi.services(branchId!), enabled: Boolean(branchId) })
   const updateItem = (key: number, patch: Partial<DraftItem>) => setItems((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item))
 
   useEffect(() => {
-    const valid = items.filter((item): item is DraftItem & { itemTypeId: number } => Boolean(item.serviceId && item.itemTypeId && item.quantity > 0))
+    const valid = pricingItems.filter((item): item is PricingDraftItem & { itemTypeId: number } => Boolean(item.serviceId && item.itemTypeId && item.quantity > 0))
     if (!branchId || !valid.length) { setQuotes({}); return }
     const timer = window.setTimeout(() => {
       void Promise.all(valid.map(async (item) => [item.key, await orderApi.preview(branchId, item)] as const))
@@ -145,7 +160,7 @@ export function OrderCreatePage() {
         .catch(() => { setQuotes({}); setFormError('Không tìm thấy mức giá hiệu lực cho một dịch vụ.') })
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [branchId, items])
+  }, [branchId, pricingItems])
 
   const create = useMutation({
     mutationFn: () => orderApi.create({
@@ -224,46 +239,51 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
   const [pricingError, setPricingError] = useState('')
   const [stale, setStale] = useState(false)
   const services = useQuery({ queryKey: ['orders', 'service-options', order.branchId], queryFn: () => orderApi.services(order.branchId), enabled: structural })
-  const comparableItems = (values: DraftItem[]) => values.map(item => ({
-    serviceId: item.serviceId,
-    itemTypeId: item.itemTypeId,
-    sharingMode: item.sharingMode,
-    quantity: item.quantity,
-    note: item.note,
-  }))
-  const changedItems = structural && JSON.stringify(comparableItems(items)) !== JSON.stringify(comparableItems(initialItems))
-  const dirty = promisedAt !== localDateTime(order.promisedAt) || note !== (order.note ?? '') || changedItems
+  const pricingItems = usePricingInputs(items)
+  const pricingRelevantChanged = structural && pricingInputSignature(items) !== pricingInputSignature(initialItems)
+  const itemNoteUpdates: OrderItemNoteUpdate[] = structural ? items.flatMap(item => {
+    const initial = initialItems.find(candidate => candidate.key === item.key)
+    if (!initial || normalizedItemNote(item.note) === normalizedItemNote(initial.note)) return []
+    return [{ itemId: item.key, note: normalizedItemNote(item.note) }]
+  }) : []
+  const metadataChanged = promisedAt !== localDateTime(order.promisedAt) || note !== (order.note ?? '')
+  const dirty = metadataChanged || pricingRelevantChanged || itemNoteUpdates.length > 0
 
   useEffect(() => subscribe('order.', event => {
     if (event.entityId === order.id && dirty) setStale(true)
   }), [dirty, order.id, subscribe])
   useEffect(() => {
     if (!structural) return
-    const serviceIds = [...new Set(items.map(item => item.serviceId).filter(Boolean))]
+    const serviceIds = [...new Set(pricingItems.map(item => item.serviceId).filter(Boolean))]
     void Promise.all(serviceIds.map(async serviceId => [serviceId, await orderApi.eligibility(order.branchId, serviceId)] as const))
       .then(values => setEligible(Object.fromEntries(values)))
-  }, [items, order.branchId, structural])
+  }, [order.branchId, pricingItems, structural])
   useEffect(() => {
-    if (!structural) return
-    const valid = items.filter((item): item is DraftItem & { itemTypeId: number } => Boolean(item.serviceId && item.itemTypeId && item.quantity > 0))
-    if (valid.length !== items.length) { setQuotes({}); return }
+    if (!structural || !pricingRelevantChanged) { setQuotes({}); setPricingError(''); return }
+    const valid = pricingItems.filter((item): item is PricingDraftItem & { itemTypeId: number } => Boolean(item.serviceId && item.itemTypeId && item.quantity > 0))
+    if (valid.length !== pricingItems.length) { setQuotes({}); return }
     const timer = window.setTimeout(() => {
       void Promise.all(valid.map(async item => [item.key, await orderApi.preview(order.branchId, item)] as const))
         .then(values => { setQuotes(Object.fromEntries(values)); setPricingError('') })
         .catch(() => { setQuotes({}); setPricingError('Không thể tính lại giá. Kiểm tra loại đồ và bảng giá hiệu lực.') })
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [items, order.branchId, structural])
+  }, [order.branchId, pricingItems, pricingRelevantChanged, structural])
 
   const save = useMutation({
     mutationFn: () => {
-      const body: { version: number; promisedAt?: string | null; note?: string | null; items?: OrderItemPayload[] } = { version: order.version }
+      const body: { version: number; promisedAt?: string | null; note?: string | null; items?: OrderItemPayload[]; itemNoteUpdates?: OrderItemNoteUpdate[] } = { version: order.version }
       if (promisedAt !== localDateTime(order.promisedAt)) body.promisedAt = promisedAt ? new Date(promisedAt).toISOString() : null
       if (note !== (order.note ?? '')) body.note = note.trim() || null
-      if (changedItems) body.items = items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId: itemTypeId!, sharingMode, priorityLevel, quantity, note: itemNote }))
+      if (pricingRelevantChanged) body.items = items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId: itemTypeId!, sharingMode, priorityLevel, quantity, note: itemNote }))
+      else if (itemNoteUpdates.length) body.itemNoteUpdates = itemNoteUpdates
       return orderApi.update(order.id, order.branchId, body)
     },
-    onSuccess: value => { notify({ message: 'Đã cập nhật đơn và tính lại giá.', tone: 'success' }); onSaved(value) },
+    onSuccess: value => {
+      const message = pricingRelevantChanged ? 'Đã cập nhật đơn và tính lại giá.'
+        : itemNoteUpdates.length > 0 && !metadataChanged ? 'Đã cập nhật ghi chú xử lý.' : 'Đã cập nhật đơn hàng.'
+      notify({ message, tone: 'success' }); onSaved(value)
+    },
     onError: error => {
       if (error instanceof ApiError && error.status === 409) setStale(true)
       else notify({ message: error instanceof ApiError ? error.message : 'Không thể cập nhật đơn.', tone: 'error' })
@@ -275,7 +295,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
     if (serviceId) void orderApi.eligibility(order.branchId, serviceId).then(value => setEligible(current => ({ ...current, [serviceId]: value })))
   }
   const valid = items.length > 0 && items.every(item => item.serviceId && item.itemTypeId && item.quantity > 0)
-  const repricedTotal = structural && Object.keys(quotes).length === items.length
+  const repricedTotal = pricingRelevantChanged && Object.keys(quotes).length === items.length
     ? Object.values(quotes).reduce((sum, quote) => sum + quote.finalAmount, 0) : order.totalAmount
 
   return <Surface className="order-edit-panel">
@@ -291,7 +311,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
       {pricingError && <p className="form-error" role="alert">{pricingError}</p>}
     </div>}
     <div className="form-grid order-edit-metadata"><Field label="Thời gian hẹn trả"><input type="datetime-local" value={promisedAt} onChange={event => setPromisedAt(event.target.value)} /></Field><Field label="Ghi chú"><textarea rows={4} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></Field></div>
-    <div className="order-edit-panel__footer"><span><small>{changedItems ? 'Tổng sau khi tính lại' : 'Tổng hiện tại'}</small><strong>{money(repricedTotal, Object.values(quotes)[0]?.currency ?? order.currency)}</strong></span><Button type="button" loading={save.isPending} disabled={!dirty || stale || !valid || Boolean(pricingError)} onClick={() => save.mutate()}>Lưu thay đổi</Button></div>
+    <div className="order-edit-panel__footer"><span><small>{pricingRelevantChanged ? 'Tổng sau khi tính lại' : 'Tổng hiện tại'}</small><strong>{money(repricedTotal, Object.values(quotes)[0]?.currency ?? order.currency)}</strong></span><Button type="button" loading={save.isPending} disabled={!dirty || stale || !valid || Boolean(pricingError)} onClick={() => save.mutate()}>Lưu thay đổi</Button></div>
   </Surface>
 }
 
@@ -302,6 +322,7 @@ const historyLabels: Record<string, string> = {
 function historyLabel(action: string, changed?: Record<string, unknown>) {
   const fields = Array.isArray(changed?.fields) ? changed.fields as string[] : []
   if (action === 'UPDATED' && fields.includes('items')) return 'Cập nhật dịch vụ và tính lại giá'
+  if (action === 'UPDATED' && fields.includes('itemNotes')) return 'Cập nhật ghi chú xử lý'
   if (action === 'UPDATED' && fields.includes('promisedAt')) return 'Cập nhật thời gian hẹn trả'
   if (action === 'UPDATED' && fields.includes('note')) return 'Cập nhật ghi chú'
   return historyLabels[action] ?? 'Cập nhật đơn hàng'

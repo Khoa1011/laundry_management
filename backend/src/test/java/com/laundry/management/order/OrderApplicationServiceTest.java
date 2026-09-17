@@ -3,7 +3,11 @@ package com.laundry.management.order;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,10 +22,13 @@ import com.laundry.management.common.exception.ErrorCode;
 import com.laundry.management.customer.infrastructure.CustomerRepository;
 import com.laundry.management.order.api.OrderDtos;
 import com.laundry.management.order.application.OrderApplicationService;
+import com.laundry.management.order.application.OrderChangedEvent;
 import com.laundry.management.order.application.OrderMapper;
 import com.laundry.management.order.application.OrderNumberGenerator;
 import com.laundry.management.order.application.OrderTransitionPolicy;
 import com.laundry.management.order.domain.LaundryOrder;
+import com.laundry.management.order.domain.OrderItem;
+import com.laundry.management.order.domain.OrderStatusHistory;
 import com.laundry.management.order.domain.OrderStatus;
 import com.laundry.management.order.infrastructure.OrderHistoryRepository;
 import com.laundry.management.order.infrastructure.OrderRepository;
@@ -113,6 +120,37 @@ class OrderApplicationServiceTest {
         assertThatThrownBy(() -> service.update(11L, 7L, request)).isSameAs(stop);
         assertThat(captured.get()).hasSize(2).allSatisfy(value ->
             assertThat(value.effectiveAt()).isEqualTo(EFFECTIVE_AT));
+    }
+
+    @Test
+    void itemNoteOnlyUpdateNeverInvokesPricingAndStillTouchesAuditsAndPublishes() {
+        LaundryOrder order = mock(LaundryOrder.class);
+        OrderItem item = mock(OrderItem.class);
+        Branch branch = mock(Branch.class);
+        when(branch.getId()).thenReturn(7L);
+        when(order.getId()).thenReturn(11L);
+        when(order.getOrderCode()).thenReturn("OA-DH-000011");
+        when(order.getBranch()).thenReturn(branch);
+        when(order.getStatus()).thenReturn(OrderStatus.RECEIVED);
+        when(order.getVersion()).thenReturn(3L);
+        when(order.getItems()).thenReturn(List.of(item));
+        when(item.getId()).thenReturn(41L);
+        when(item.getNote()).thenReturn("Ghi chú cũ");
+        when(item.getServiceCodeSnapshot()).thenReturn("WASH");
+        when(item.getItemTypeCodeSnapshot()).thenReturn("SHIRT");
+        when(orders.findForUpdate(11L, 7L)).thenReturn(Optional.of(order));
+        OrderDtos.UpdateRequest request = new OrderDtos.UpdateRequest();
+        request.setVersion(3L);
+        request.setItemNoteUpdates(List.of(new OrderDtos.ItemNoteUpdate(41L, "Không dùng nước xả")));
+
+        service.update(11L, 7L, request);
+
+        verify(pricing, never()).quoteForOrder(anyList());
+        verify(item).updateNote("Không dùng nước xả");
+        verify(order).touch(any(UserAccount.class), org.mockito.ArgumentMatchers.eq(EFFECTIVE_AT));
+        verify(history).save(isA(OrderStatusHistory.class));
+        verify(orders).flush();
+        verify(events).publishEvent(isA(OrderChangedEvent.class));
     }
 
     @Test

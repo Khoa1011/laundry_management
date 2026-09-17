@@ -76,10 +76,14 @@ public class OrderApplicationService {
     @Transactional
     public OrderDtos.Response update(Long id, Long requestedBranchId, OrderDtos.UpdateRequest request) {
         LaundryOrder order=locked(id,requestedBranchId); requireVersion(order,request.version());
+        if(request.itemsPresent() && request.itemNoteUpdatesPresent())
+            throw invalidUpdate("Submit either structural items or item note updates, not both.");
         if(order.getStatus()==OrderStatus.COMPLETED || order.getStatus()==OrderStatus.CANCELLED)
             throw immutable("Completed or cancelled orders cannot be edited.");
         if(request.itemsPresent() && order.getStatus()!=OrderStatus.RECEIVED)
             throw immutable("Services can only be edited while an order is received.");
+        if(request.itemNoteUpdatesPresent() && order.getStatus()!=OrderStatus.RECEIVED)
+            throw immutable("Order item notes can only be edited while an order is received.");
         UserAccount actor=actor();
         List<String> fields=new ArrayList<>(); Map<String,Object> changed=new LinkedHashMap<>();
         if(request.itemsPresent()){
@@ -91,6 +95,31 @@ public class OrderApplicationService {
             fields.add("items"); changed.put("items",Map.of("before",before,"after",auditItems(replacement.items())));
             changed.put("currency",Map.of("before",beforeCurrency,"after",replacement.currency()));
             changed.put("pricingEffectiveAt",replacement.effectiveAt());
+        }
+        if(request.itemNoteUpdatesPresent()){
+            List<OrderDtos.ItemNoteUpdate> updates=request.itemNoteUpdates();
+            if(updates==null)throw invalidUpdate("Item note updates must be an array when provided.");
+            Set<Long> requestedIds=new HashSet<>();
+            for(OrderDtos.ItemNoteUpdate update:updates){
+                if(!requestedIds.add(update.itemId()))throw invalidUpdate("Each order item can be updated only once per request.");
+            }
+            Map<Long,OrderItem> existing=new HashMap<>();
+            order.getItems().forEach(item->existing.put(item.getId(),item));
+            List<Map<String,Object>> noteAudit=new ArrayList<>();
+            for(OrderDtos.ItemNoteUpdate update:updates){
+                OrderItem item=existing.get(update.itemId());
+                if(item==null)throw notFound();
+                String requestedItemNote=clean(update.note());
+                if(Objects.equals(item.getNote(),requestedItemNote))continue;
+                Map<String,Object> audit=new LinkedHashMap<>();
+                audit.put("itemId",item.getId()); audit.put("serviceCode",item.getServiceCodeSnapshot());
+                audit.put("itemTypeCode",item.getItemTypeCodeSnapshot());
+                audit.put("beforeRecorded",item.getNote()!=null); audit.put("afterRecorded",requestedItemNote!=null);
+                noteAudit.add(audit); item.updateNote(requestedItemNote);
+            }
+            if(!noteAudit.isEmpty()){
+                order.touch(actor,Instant.now(clock)); fields.add("itemNotes"); changed.put("itemNotes",noteAudit);
+            }
         }
         if(request.promisedAtPresent()&&!Objects.equals(order.getPromisedAt(),request.promisedAt())){
             changed.put("promisedAt",nullableChange(order.getPromisedAt(),request.promisedAt()));
@@ -158,6 +187,7 @@ public class OrderApplicationService {
     private ApiException notFound(){return new ApiException(HttpStatus.NOT_FOUND,ErrorCode.ORDER_NOT_FOUND,"Order resource unavailable","The requested order resource was not found in your branch.");}
     private ApiException invalidCustomer(String d){return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_CUSTOMER_INVALID,"Invalid order customer",d);}
     private ApiException invalidItems(){return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_ITEMS_REQUIRED,"Order items required","Add at least one eligible service item.");}
+    private ApiException invalidUpdate(String detail){return new ApiException(HttpStatus.BAD_REQUEST,ErrorCode.VALIDATION_ERROR,"Invalid order update",detail);}
     private ApiException immutable(String d){return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_IMMUTABLE,"Order is immutable",d);}
     private String clean(String v){if(v==null||v.isBlank())return null;return v.trim();}
     private List<Map<String,Object>> auditItems(List<OrderItem> values){return values.stream().map(item->{

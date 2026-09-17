@@ -23,24 +23,30 @@ public final class OrderDtos {
         @Size(max=30) String guestPhone, Instant promisedAt, @Size(max=2000) String note,
         @NotEmpty @Size(max=100) List<@Valid ItemRequest> items
     ) {}
+    public record ItemNoteUpdate(@NotNull Long itemId, @Size(max=1000) String note) {}
     public static final class UpdateRequest {
         @NotNull private Long version;
         private Instant promisedAt;
         @Size(max=2000) private String note;
         @Size(max=100) private List<@Valid ItemRequest> items;
+        @Size(max=100) private List<@NotNull @Valid ItemNoteUpdate> itemNoteUpdates;
         private boolean promisedAtPresent;
         private boolean notePresent;
         private boolean itemsPresent;
+        private boolean itemNoteUpdatesPresent;
 
         public UpdateRequest() {}
         @JsonSetter public void setVersion(Long value) { version=value; }
         @JsonSetter public void setPromisedAt(Instant value) { promisedAt=value; promisedAtPresent=true; }
         @JsonSetter public void setNote(String value) { note=value; notePresent=true; }
         @JsonSetter public void setItems(List<ItemRequest> value) { items=value; itemsPresent=true; }
+        @JsonSetter public void setItemNoteUpdates(List<ItemNoteUpdate> value) { itemNoteUpdates=value; itemNoteUpdatesPresent=true; }
         public Long version(){return version;} public Instant promisedAt(){return promisedAt;}
         public String note(){return note;} public List<ItemRequest> items(){return items;}
+        public List<ItemNoteUpdate> itemNoteUpdates(){return itemNoteUpdates;}
         public boolean promisedAtPresent(){return promisedAtPresent;}
         public boolean notePresent(){return notePresent;} public boolean itemsPresent(){return itemsPresent;}
+        public boolean itemNoteUpdatesPresent(){return itemNoteUpdatesPresent;}
     }
     public record TransitionRequest(@NotNull Long version) {}
     public record ReasonedTransitionRequest(@NotNull Long version, @NotBlank @Size(max=500) String reason) {}

@@ -43,4 +43,5 @@ public class OrderItem {
     public SharingMode getSharingModeSnapshot(){return sharingModeSnapshot;} public BigDecimal getQuantity(){return quantity;}
     public BigDecimal getBillableQuantity(){return billableQuantity;} public BigDecimal getLineAmount(){return lineAmount;}
     public String getNote(){return note;} public String getPricingSnapshotJson(){return pricingSnapshotJson;} public Instant getQuotedAt(){return quotedAt;}
+    public void updateNote(String value){this.note=value;}
 }

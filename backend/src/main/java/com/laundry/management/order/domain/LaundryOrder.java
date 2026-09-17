@@ -54,6 +54,7 @@ public class LaundryOrder {
     }
     public void updatePromisedAt(Instant value, UserAccount actor) { this.promisedAt=value; this.updatedBy=actor; }
     public void updateNote(String value, UserAccount actor) { this.note=value; this.updatedBy=actor; }
+    public void touch(UserAccount actor, Instant changedAt) { this.updatedBy=actor; this.updatedAt=changedAt; }
     public void transition(OrderStatus target, UserAccount actor, String reason) {
         this.status=target; this.updatedBy=actor;
         if (target == OrderStatus.CANCELLED) { this.cancelledAt=Instant.now(); this.cancelledBy=actor; this.cancelReason=reason; }

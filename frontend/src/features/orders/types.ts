@@ -7,6 +7,7 @@ export interface OrderListItem { id:number;orderCode:string;customerName?:string
 export interface OrderPage { items:OrderListItem[];page:number;size:number;totalElements:number;totalPages:number }
 export interface OrderHistory { id:number;action:string;fromStatus?:OrderStatus;toStatus?:OrderStatus;reason?:string;changedFields?:Record<string,unknown>;source:string;actor:{id:number;displayName:string};createdAt:string }
 export interface OrderItemPayload { serviceId:number;itemTypeId:number;sharingMode:SharingMode;priorityLevel?:number;quantity:number;note?:string }
+export interface OrderItemNoteUpdate { itemId:number;note:string|null }
 export interface IntakeCustomer { id:number;customerCode:string;fullName:string;phone:string }
 export interface IntakeService { id:number;code:string;nameVi:string;defaultUnitType:UnitType;sharingAllowed:boolean }
 export interface IntakeItemType { id:number;code:string;nameVi:string;defaultUnitType:UnitType }

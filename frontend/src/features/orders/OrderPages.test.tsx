@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(), get: vi.fn(), history: vi.fn(), services: vi.fn(),
   customers: vi.fn(), preview: vi.fn(), eligibility: vi.fn(),
   create: vi.fn(), update: vi.fn(), transition: vi.fn(), reasoned: vi.fn(),
+  notify: vi.fn(),
   subscribe: vi.fn(),
   subscriptions: [] as Array<{ prefix: string; listener: (event: { entityId?: number; type: string }) => void }>,
 }))
@@ -20,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../auth/AuthProvider', () => ({
   useAuth: () => ({ branchId: 1, hasPermission: (code: string) => mocks.permissions.has(code) }),
 }))
-vi.mock('../../providers/ToastProvider', () => ({ useToast: () => ({ notify: vi.fn() }) }))
+vi.mock('../../providers/ToastProvider', () => ({ useToast: () => ({ notify: mocks.notify }) }))
 vi.mock('../../realtime/context', () => ({ useRealtime: () => ({ connectionState: 'connected', subscribe: mocks.subscribe }) }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -132,6 +133,42 @@ describe('Order pages', () => {
     })))
   })
 
+  it('does not re-preview when typing an item note on create', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    renderAt('/orders/new', <OrderCreatePage />)
+    await screen.findByRole('option', { name: 'Giặt sấy thường' })
+    await userEvent.selectOptions(screen.getByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    expect(await screen.findByText('Giá hệ thống')).toBeInTheDocument()
+    mocks.preview.mockClear()
+
+    await userEvent.type(screen.getByRole('textbox', { name: /Ghi chú xử lý/ }), 'Không dùng nước xả')
+    await act(() => new Promise(resolve => window.setTimeout(resolve, 350)))
+
+    expect(mocks.preview).not.toHaveBeenCalled()
+  })
+
+  it('re-previews create pricing when quantity or item type changes', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    renderAt('/orders/new', <OrderCreatePage />)
+    await screen.findByRole('option', { name: 'Giặt sấy thường' })
+    await userEvent.selectOptions(screen.getByLabelText(/^Dịch vụ/), '2')
+    const itemType = screen.getByLabelText(/^Loại đồ/)
+    await userEvent.selectOptions(itemType, '3')
+    expect(await screen.findByText('Giá hệ thống')).toBeInTheDocument()
+    mocks.preview.mockClear()
+
+    const quantity = screen.getByLabelText(/^Số lượng \/ khối lượng/)
+    await userEvent.clear(quantity)
+    await userEvent.type(quantity, '3')
+    await waitFor(() => expect(mocks.preview).toHaveBeenCalled())
+    mocks.preview.mockClear()
+
+    await userEvent.selectOptions(itemType, '')
+    await userEvent.selectOptions(itemType, '3')
+    await waitFor(() => expect(mocks.preview).toHaveBeenCalled())
+  })
+
   it('renders a note beneath its corresponding order item', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
     mocks.get.mockResolvedValue({
@@ -142,7 +179,7 @@ describe('Order pages', () => {
     expect(await screen.findByText(/Áo trắng có vết mực ở tay áo/)).toBeInTheDocument()
   })
 
-  it('allows item-note edits only while the order is received', async () => {
+  it('sends itemNoteUpdates without structural items or preview for a received note-only edit', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
     const received = {
       ...order,
@@ -156,12 +193,57 @@ describe('Order pages', () => {
     const itemNote = screen.getByRole('textbox', { name: /Ghi chú xử lý/ })
     await userEvent.clear(itemNote)
     await userEvent.type(itemNote, 'Không dùng nước xả')
+    await act(() => new Promise(resolve => window.setTimeout(resolve, 300)))
+    expect(mocks.preview).not.toHaveBeenCalled()
     const save = screen.getByRole('button', { name: 'Lưu thay đổi' })
     await waitFor(() => expect(save).toBeEnabled())
     await userEvent.click(save)
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(7, 1, expect.objectContaining({
-      items: [expect.objectContaining({ note: 'Không dùng nước xả' })],
-    })))
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(7, 1, {
+      version: 2, itemNoteUpdates: [{ itemId: 1, note: 'Không dùng nước xả' }],
+    }))
+    expect(mocks.update.mock.calls[0][2]).not.toHaveProperty('items')
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ message: 'Đã cập nhật ghi chú xử lý.' }))
+  })
+
+  it('sends structural items for pricing changes and omits redundant note updates', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    const received = { ...order, status: 'RECEIVED' as const, items: [{ ...order.items[0], note: 'Vết cũ' }] }
+    mocks.get.mockResolvedValue(received)
+    mocks.update.mockResolvedValue({ ...received, version: 3 })
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await userEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }))
+    await userEvent.clear(screen.getByLabelText(/^Số lượng \/ khối lượng/))
+    await userEvent.type(screen.getByLabelText(/^Số lượng \/ khối lượng/), '4')
+    await userEvent.clear(screen.getByRole('textbox', { name: /Ghi chú xử lý/ }))
+    await userEvent.type(screen.getByRole('textbox', { name: /Ghi chú xử lý/ }), 'Ghi chú cùng thay đổi giá')
+    await waitFor(() => expect(mocks.preview).toHaveBeenCalled())
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+
+    await waitFor(() => expect(mocks.update).toHaveBeenCalled())
+    const body = mocks.update.mock.calls[0][2]
+    expect(body.items).toEqual([expect.objectContaining({ quantity: 4, note: 'Ghi chú cùng thay đổi giá' })])
+    expect(body).not.toHaveProperty('itemNoteUpdates')
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ message: 'Đã cập nhật đơn và tính lại giá.' }))
+  })
+
+  it('sends structural items for a pricing-only edit', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    const received = { ...order, status: 'RECEIVED' as const }
+    mocks.get.mockResolvedValue(received)
+    mocks.update.mockResolvedValue({ ...received, version: 3 })
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await userEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }))
+    const quantity = screen.getByLabelText(/^Số lượng \/ khối lượng/)
+    await userEvent.clear(quantity)
+    await userEvent.type(quantity, '4')
+    await waitFor(() => expect(mocks.preview).toHaveBeenCalled())
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+
+    await waitFor(() => expect(mocks.update).toHaveBeenCalled())
+    expect(mocks.update.mock.calls[0][2]).toEqual(expect.objectContaining({
+      version: 2, items: [expect.objectContaining({ quantity: 4 })],
+    }))
+    expect(mocks.update.mock.calls[0][2]).not.toHaveProperty('itemNoteUpdates')
   })
 
   it('allows safe metadata editing in processing without sending structural items', async () => {
@@ -179,6 +261,26 @@ describe('Order pages', () => {
       version: 2, note: 'Gọi khách trước khi trả',
     }))
     expect(mocks.update.mock.calls[0][2]).not.toHaveProperty('items')
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ message: 'Đã cập nhật đơn hàng.' }))
+  })
+
+  it('keeps item-note editor hidden in ready state', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    mocks.get.mockResolvedValue({ ...order, status: 'READY' as const })
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await userEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }))
+    expect(screen.queryByLabelText('Ghi chú xử lý')).not.toBeInTheDocument()
+  })
+
+  it('shows a friendly history label for item-note updates', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_AUDIT_READ)
+    mocks.history.mockResolvedValue([{
+      id: 9, action: 'UPDATED', changedFields: { fields: ['itemNotes'], itemNotes: [{ itemId: 1 }] },
+      source: 'MANUAL_COMMAND', actor: { id: 1, displayName: 'Nhân viên A' }, createdAt: order.updatedAt,
+    }])
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    expect(await screen.findByText('Cập nhật ghi chú xử lý')).toBeInTheDocument()
+    expect(screen.queryByText('itemNotes')).not.toBeInTheDocument()
   })
 
   it('keeps unsaved edit input and shows reload action on optimistic conflict', async () => {
