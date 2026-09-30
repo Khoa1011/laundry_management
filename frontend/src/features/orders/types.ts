@@ -5,6 +5,7 @@ export interface OrderItem { id:number;serviceId:number;itemTypeId:number;servic
 export interface Order { id:number;orderCode:string;branchId:number;branchCode:string;customerId?:number;customerName?:string;customerPhone?:string;status:OrderStatus;promisedAt?:string;note?:string;currency:string;totalAmount:number;items:OrderItem[];createdAt:string;createdBy:{id:number;displayName:string};updatedAt:string;updatedBy:{id:number;displayName:string};cancelledAt?:string;cancelledBy?:{id:number;displayName:string};cancelReason?:string;reopenedAt?:string;reopenedBy?:{id:number;displayName:string};reopenReason?:string;version:number }
 export interface OrderListItem { id:number;orderCode:string;customerName?:string;customerPhone?:string;serviceSummary:string;totalAmount:number;currency:string;status:OrderStatus;promisedAt?:string;createdAt:string;version:number }
 export interface OrderPage { items:OrderListItem[];page:number;size:number;totalElements:number;totalPages:number }
+export interface OrderFilterOptions { services:Array<{id:number;label:string}> }
 export interface OrderHistory { id:number;action:string;fromStatus?:OrderStatus;toStatus?:OrderStatus;reason?:string;changedFields?:Record<string,unknown>;source:string;actor:{id:number;displayName:string};createdAt:string }
 export interface OrderItemPayload { serviceId:number;itemTypeId:number;sharingMode:SharingMode;priorityLevel?:number;quantity:number;note?:string }
 export interface OrderItemNoteUpdate { itemId:number;note:string|null }

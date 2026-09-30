@@ -1,5 +1,6 @@
 import { AlertTriangle, Ban, CheckCircle2, StickyNote } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { promisedDateLabel } from '../../utils/promisedDate'
 import { quantityText, sharingText, warningText, type Compatibility } from './presentation'
 import type { BatchCandidate, BatchItem, WashBatchStatus } from './types'
 
@@ -38,6 +39,6 @@ export function BatchSummary({ selected }: { selected:BatchCandidate[] }){
 
 export function BatchItemGroups({ items,canRemove,onRemove }: { items:BatchItem[];canRemove:boolean;onRemove:(item:BatchItem)=>void }){
   const groups=groupByOrder(items)
-  return <div className="batch-item-groups">{groups.map(group=><section className="batch-order-group" key={group[0].orderId}><header><div><Link to={`/orders/${group[0].orderId}`}>{group[0].orderCode}</Link><p>{group[0].customerName||'Khách vãng lai'}{group[0].customerPhone&&` · ${group[0].customerPhone}`}</p></div>{group[0].promisedAt&&<small>Hẹn trả {new Date(group[0].promisedAt).toLocaleString('vi-VN')}</small>}</header>
+  return <div className="batch-item-groups">{groups.map(group=><section className="batch-order-group" key={group[0].orderId}><header><div><Link to={`/orders/${group[0].orderId}`}>{group[0].orderCode}</Link><p>{group[0].customerName||'Khách vãng lai'}{group[0].customerPhone&&` · ${group[0].customerPhone}`}</p></div>{group[0].promisedAt&&<small>Hẹn trả {promisedDateLabel(group[0].promisedAt)}</small>}</header>
     {group.map(item=><article key={item.batchItemId} className={!item.active?'batch-item--removed':''}><div><strong>{item.itemTypeName}</strong><span>{quantityText(item.quantity,item.unitType)} · {sharingText(item.sharingMode)}</span>{item.itemNote&&<p><StickyNote size={14}/> Ghi chú xử lý: {item.itemNote}</p>}{!item.active&&<small>Đã rời khỏi mẻ</small>}</div>{canRemove&&item.active&&<button type="button" className="button button--secondary" onClick={()=>onRemove(item)}>Xóa khỏi mẻ</button>}</article>)}</section>)}</div>
 }

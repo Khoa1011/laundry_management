@@ -1,19 +1,17 @@
 package com.laundry.management.servicecatalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.laundry.management.auth.domain.Branch;
 import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.infrastructure.BranchRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
-import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.servicecatalog.application.PricingCalculator;
 import com.laundry.management.servicecatalog.domain.ItemType;
 import com.laundry.management.servicecatalog.domain.PriceList;
 import com.laundry.management.servicecatalog.domain.PriceListStatus;
 import com.laundry.management.servicecatalog.domain.PriceRule;
-import com.laundry.management.servicecatalog.domain.PricingMethod;
+import com.laundry.management.servicecatalog.domain.PriceRuleStatus;
 import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
 import com.laundry.management.servicecatalog.infrastructure.LaundryServiceRepository;
 import com.laundry.management.servicecatalog.infrastructure.PriceListRepository;
@@ -52,7 +50,7 @@ class DemoCatalogSeedIntegrationTest {
         actor.assignBranch(branch, true);
         userRepository.saveAndFlush(actor);
         DemoCatalogSeedProperties properties = new DemoCatalogSeedProperties(
-            true, actor.getUsername(), branch.getCode()
+            true, actor.getUsername(), branch.getCode(), true
         );
 
         seedService.initialize(properties);
@@ -60,33 +58,30 @@ class DemoCatalogSeedIntegrationTest {
         List<ItemType> seededItems = itemRepository.findAllByOrderBySortOrderAscNameViAscIdAsc().stream()
             .filter(item -> DEMO_ITEM_NAMES.contains(item.getNameVi()))
             .toList();
-        assertThat(seededItems).hasSize(29);
+        assertThat(seededItems).hasSize(19);
         assertThat(serviceRepository.findAll().stream().filter(service ->
-            DEMO_SERVICE_NAMES.contains(service.getNameVi()))).hasSize(6);
-        assertThat(itemRepository.findByNameViIgnoreCase("Áo sơ mi").orElseThrow().getParent().getNameVi())
+            DEMO_SERVICE_NAMES.contains(service.getNameVi()))).hasSize(5);
+        assertThat(itemRepository.findByNameViIgnoreCase("Quần áo theo kg").orElseThrow().getParent().getNameVi())
             .isEqualTo("Quần áo");
-        assertThat(itemRepository.findByNameViIgnoreCase("Quần áo giặt theo kg").orElseThrow().getParent())
-            .isNull();
 
         var shoeService = serviceRepository.findByNameViIgnoreCase("Vệ sinh giày").orElseThrow();
         Set<String> shoeEligibility = eligibilityRepository
             .findByServiceIdOrderByItemTypeNameViAscItemTypeIdAsc(shoeService.getId()).stream()
             .map(value -> value.getItemType().getNameVi()).collect(Collectors.toSet());
         assertThat(shoeEligibility).containsExactlyInAnyOrder(
-            "Giày thể thao", "Giày da", "Giày vải", "Boot / Ủng", "Dép / Sandal"
+            "Giày thường", "Giày cần xử lý kỹ"
         );
         assertThat(eligibilityRepository.findAllByOrderByServiceIdAscItemTypeIdAsc())
-            .allMatch(value -> value.getItemType().getParent() != null
-                || value.getItemType().getNameVi().equals("Quần áo giặt theo kg"));
+            .allMatch(value -> value.getItemType().getParent() != null);
 
         PriceList priceList = priceListRepository
-            .findByNameIgnoreCaseAndBranchId("Giá bán tiêu chuẩn", branch.getId()).orElseThrow();
-        assertThat(priceList.getStatus()).isEqualTo(PriceListStatus.DRAFT);
+            .findByNameIgnoreCaseAndBranchId("Bảng giá menu tiệm Dung", branch.getId()).orElseThrow();
+        assertThat(priceList.getStatus()).isEqualTo(PriceListStatus.ACTIVE);
         List<PriceRule> rules = ruleRepository.findByPriceListIdOrderByRulePriorityDescIdAsc(priceList.getId());
-        assertThat(rules).hasSize(8);
-        assertHybrid(rules);
-        assertQuantityPackage(rules);
-        assertThat(eligibilityRepository.count() - rules.size()).isGreaterThanOrEqualTo(3);
+        assertThat(rules).hasSize(16).allMatch(rule -> rule.getStatus() == PriceRuleStatus.ACTIVE);
+        assertClothingBands(rules);
+        assertMenuPrices(rules);
+        assertThat(eligibilityRepository.count()).isEqualTo(14);
 
         long itemCount = itemRepository.count();
         long serviceCount = serviceRepository.count();
@@ -101,28 +96,42 @@ class DemoCatalogSeedIntegrationTest {
         assertThat(ruleRepository.count()).isEqualTo(ruleCount);
     }
 
-    private void assertHybrid(List<PriceRule> rules) {
-        PriceRule hybrid = rules.stream().filter(rule -> rule.getPricingMethod() == PricingMethod.HYBRID)
-            .findFirst().orElseThrow();
+    private void assertClothingBands(List<PriceRule> rules) {
+        List<PriceRule> clothing = rules.stream()
+            .filter(rule -> rule.getItemType().getNameVi().equals("Quần áo theo kg"))
+            .sorted(java.util.Comparator.comparingInt(PriceRule::getRulePriority).reversed())
+            .toList();
+        assertThat(clothing).hasSize(3);
         PricingCalculator calculator = new PricingCalculator();
-        PricingCalculator.RuleTerms terms = terms(hybrid);
-        assertThat(calculator.calculate(terms, bd("1")).finalAmount()).isEqualByComparingTo("25000");
-        assertThat(calculator.calculate(terms, bd("3")).finalAmount()).isEqualByComparingTo("25000");
-        assertThat(calculator.calculate(terms, bd("4")).finalAmount()).isEqualByComparingTo("35000");
-        assertThat(calculator.calculate(terms, bd("5")).finalAmount()).isEqualByComparingTo("45000");
+        assertThat(calculator.calculate(terms(clothing.get(0)), bd("2.5")).finalAmount())
+            .isEqualByComparingTo("30000");
+        assertThat(calculator.calculate(terms(clothing.get(1)), bd("3.5")).finalAmount())
+            .isEqualByComparingTo("40000");
+        assertThat(calculator.calculate(terms(clothing.get(2)), bd("5")).finalAmount())
+            .isEqualByComparingTo("50000");
     }
 
-    private void assertQuantityPackage(List<PriceRule> rules) {
-        PriceRule packages = rules.stream()
-            .filter(rule -> rule.getPricingMethod() == PricingMethod.QUANTITY_PACKAGE)
-            .findFirst().orElseThrow();
+    private void assertMenuPrices(List<PriceRule> rules) {
         PricingCalculator calculator = new PricingCalculator();
-        PricingCalculator.RuleTerms terms = terms(packages);
-        assertThat(calculator.calculate(terms, bd("1")).finalAmount()).isEqualByComparingTo("80000");
-        assertThat(calculator.calculate(terms, bd("2")).finalAmount()).isEqualByComparingTo("150000");
-        assertThat(calculator.calculate(terms, bd("3")).finalAmount()).isEqualByComparingTo("210000");
-        assertThatThrownBy(() -> calculator.calculate(terms, bd("4"))).isInstanceOf(ApiException.class)
-            .hasMessageContaining("Chưa có giá bán");
+        assertPrice(calculator, rules, "Mền nhỏ / mỏng", "1", "30000");
+        assertPrice(calculator, rules, "Mền dày lớn", "1", "100000");
+        assertPrice(calculator, rules, "Rèm cửa", "2", "50000");
+        assertPrice(calculator, rules, "Gấu / gối nhỏ", "1", "25000");
+        assertPrice(calculator, rules, "Giày cần xử lý kỹ", "1", "40000");
+        assertPrice(calculator, rules, "Thêm nước xả", "1", "10000");
+    }
+
+    private void assertPrice(
+        PricingCalculator calculator,
+        List<PriceRule> rules,
+        String itemName,
+        String quantity,
+        String expected
+    ) {
+        PriceRule rule = rules.stream().filter(value -> value.getItemType().getNameVi().equals(itemName))
+            .findFirst().orElseThrow();
+        assertThat(calculator.calculate(terms(rule), bd(quantity)).finalAmount())
+            .isEqualByComparingTo(expected);
     }
 
     private PricingCalculator.RuleTerms terms(PriceRule rule) {
@@ -142,16 +151,14 @@ class DemoCatalogSeedIntegrationTest {
     }
 
     private static final Set<String> DEMO_SERVICE_NAMES = Set.of(
-        "Giặt sấy thường", "Giặt sấy cao cấp", "Giặt chăn mền",
-        "Vệ sinh giày", "Giặt thú bông", "Ủi đồ"
+        "Giặt sấy quần áo", "Giặt mền / ga / rèm", "Giặt gấu / gối",
+        "Vệ sinh giày", "Nhu cầu khác"
     );
 
     private static final Set<String> DEMO_ITEM_NAMES = Set.of(
-        "Quần áo", "Áo sơ mi", "Áo thun", "Quần dài", "Quần short", "Váy / Đầm",
-        "Đồ trẻ em", "Đồ mặc nhà", "Chăn ga", "Chăn mỏng", "Chăn dày", "Mền",
-        "Ga giường", "Vỏ gối", "Topper / Tấm trải", "Giày dép", "Giày thể thao",
-        "Giày da", "Giày vải", "Boot / Ủng", "Dép / Sandal", "Đồ đặc biệt",
-        "Gấu bông nhỏ", "Gấu bông lớn", "Rèm cửa", "Thảm nhỏ", "Túi vải",
-        "Quần áo giặt theo kg", "Đồ cần xử lý vết bẩn"
+        "Quần áo", "Quần áo theo kg", "Mền", "Mền nhỏ / mỏng", "Mền dày",
+        "Mền dày lớn", "Mùng", "Ga giường", "Rèm cửa", "Vật dụng",
+        "Gấu / gối nhỏ", "Gấu / gối lớn", "Giày dép", "Giày thường",
+        "Giày cần xử lý kỹ", "Nhu cầu khác", "Thêm nước giặt", "Thêm nước xả", "Tẩy trắng"
     );
 }

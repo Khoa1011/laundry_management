@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record DemoCatalogSeedProperties(
     boolean enabled,
     String actorUsername,
-    String branchCode
+    String branchCode,
+    boolean publish
 ) {
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock3, Filter, PackageCheck, Pencil, Plus, RefreshCw, RotateCcw, Search, X } from 'lucide-react'
+import { ArrowLeft, Ban, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cog, Layers3, PackageCheck, Pencil, Plus, RefreshCw, RotateCcw, Search, Shirt, ShoppingBag, Timer, Trash2, UserRound, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
@@ -9,6 +9,8 @@ import { Field } from '../../components/Field'
 import { OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, StatePanel } from '../../components/States'
 import { Button, ButtonLink } from '../../components/ui/Button'
+import { CollapsibleFilterPanel } from '../../components/ui/CollapsibleFilterPanel'
+import { DatePickerField } from '../../components/ui/DatePickerField'
 import { Surface } from '../../components/ui/Surface'
 import { useToast } from '../../providers/ToastProvider'
 import { useRealtime } from '../../realtime/context'
@@ -17,7 +19,9 @@ import type { PricingPreview } from '../service-catalog/types'
 import { batchKeys, washBatchApi } from '../wash-batches/api'
 import { orderApi, orderKeys } from './api'
 import { localDayStartIso, nextLocalDayStartIso } from './dateFilters'
-import type { Order, OrderItemNoteUpdate, OrderItemPayload, OrderStatus } from './types'
+import { promisedDateInstant, promisedDateKey, promisedDateLabel } from '../../utils/promisedDate'
+import type { IntakeCustomer, Order, OrderItemNoteUpdate, OrderItemPayload, OrderStatus } from './types'
+import { OrderBatchComposer } from './OrderBatchComposer'
 
 const statusText: Record<OrderStatus, string> = {
   RECEIVED: 'Đã nhận', PROCESSING: 'Đang xử lý', READY: 'Sẵn sàng',
@@ -29,19 +33,41 @@ const money = (value: number, currency = 'VND') => new Intl.NumberFormat('vi-VN'
 const when = (value: string) => new Intl.DateTimeFormat('vi-VN', {
   dateStyle: 'short', timeStyle: 'short',
 }).format(new Date(value))
-const localDateTime = (value?: string) => {
-  if (!value) return ''
-  const date = new Date(value)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+const initials = (value?: string) => (value || 'Khách vãng lai')
+  .trim()
+  .split(/\s+/)
+  .slice(-2)
+  .map((part) => part[0]?.toLocaleUpperCase('vi-VN'))
+  .join('')
+type DueFilter = '' | 'OVERDUE' | 'TODAY' | 'TOMORROW' | 'NEXT_7_DAYS' | 'NO_DATE'
+const localDateKey = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+const shiftedLocalDateKey = (days: number) => { const value = new Date(); value.setHours(12, 0, 0, 0); value.setDate(value.getDate() + days); return localDateKey(value) }
+function dueFilterParams(value: DueFilter) {
+  if (value === 'OVERDUE') return { promisedTo: localDayStartIso(shiftedLocalDateKey(0)), overdueOnly: true }
+  if (value === 'TODAY') return { promisedFrom: localDayStartIso(shiftedLocalDateKey(0)), promisedTo: localDayStartIso(shiftedLocalDateKey(1)) }
+  if (value === 'TOMORROW') return { promisedFrom: localDayStartIso(shiftedLocalDateKey(1)), promisedTo: localDayStartIso(shiftedLocalDateKey(2)) }
+  if (value === 'NEXT_7_DAYS') return { promisedFrom: localDayStartIso(shiftedLocalDateKey(0)), promisedTo: localDayStartIso(shiftedLocalDateKey(7)) }
+  if (value === 'NO_DATE') return { promisedMissing: true }
+  return {}
 }
-
 function Status({ value }: { value: OrderStatus }) {
   return <span className={`order-status order-status--${value.toLowerCase()}`}>{statusText[value]}</span>
+}
+
+function StatusFilterIcon({ value }: { value?: OrderStatus }) {
+  if (!value) return <ClipboardList size={18} />
+  if (value === 'RECEIVED') return <Timer size={18} />
+  if (value === 'PROCESSING') return <Cog size={18} />
+  if (value === 'READY') return <Clock3 size={18} />
+  if (value === 'COMPLETED') return <CheckCircle2 size={18} />
+  if (value === 'CANCELLED') return <Ban size={18} />
+  return <RotateCcw size={18} />
 }
 
 export function OrderListPage() {
   const { branchId, hasPermission } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const { subscribe } = useRealtime()
   const [status, setStatus] = useState<OrderStatus>()
@@ -49,13 +75,20 @@ export function OrderListPage() {
   const [page, setPage] = useState(0)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [serviceId, setServiceId] = useState('')
+  const [due, setDue] = useState<DueFilter>('')
   const canCreate = hasPermission(PERMISSION_CODES.ORDER_CREATE)
+  const canCreateBatch = hasPermission(PERMISSION_CODES.BATCH_CREATE)
+  const batchMode = canCreateBatch && location.pathname === '/orders/batching'
+  const filterOptions = useQuery({ queryKey: orderKeys.filterOptions(branchId), queryFn: () => orderApi.filterOptions(branchId!), enabled: Boolean(branchId && !batchMode) })
   const query = useQuery({
-    queryKey: orderKeys.list(branchId, status, search, page, from, to),
+    queryKey: orderKeys.list(branchId, status, search, page, from, to, serviceId ? Number(serviceId) : undefined, due),
     queryFn: () => orderApi.list({ branchId: branchId!, status, search: search || undefined, page, size: 20,
       from: from ? localDayStartIso(from) : undefined,
-      to: to ? nextLocalDayStartIso(to) : undefined }),
-    enabled: Boolean(branchId),
+      to: to ? nextLocalDayStartIso(to) : undefined,
+      serviceId: serviceId ? Number(serviceId) : undefined,
+      ...dueFilterParams(due) }),
+    enabled: Boolean(branchId && !batchMode),
   })
   useEffect(() => subscribe('order.', () => {
     void queryClient.invalidateQueries({ queryKey: orderKeys.all, refetchType: 'active' })
@@ -64,46 +97,70 @@ export function OrderListPage() {
     void queryClient.invalidateQueries({ queryKey: orderKeys.all, refetchType: 'active' })
   }), [queryClient, subscribe])
 
+  const statusCount = (value?: OrderStatus) => {
+    if (!query.data) return undefined
+    if (status === value) return query.data.totalElements
+    if (status === undefined && query.data.totalPages <= 1 && value) {
+      return query.data.items.filter((order) => order.status === value).length
+    }
+    return undefined
+  }
+  const advancedFilterCount = Number(Boolean(from)) + Number(Boolean(to)) + Number(Boolean(serviceId)) + Number(Boolean(due))
+  const hasActiveFilters = Boolean(status || search || advancedFilterCount)
+
   return <div className="page-container orders-page">
     <header className="orders-heading">
-      <div><p className="eyebrow">Vận hành tại quầy</p><h1>Đơn hàng</h1><p>Theo dõi đơn theo trạng thái và cập nhật theo thời gian thực.</p></div>
-      {canCreate && <ButtonLink to="/orders/new" variant="create"><Plus size={18} />Tạo đơn hàng</ButtonLink>}
+      <div className="orders-heading__copy"><p className="eyebrow">Vận hành tại quầy</p><h1>{batchMode ? 'Ghép mẻ từ đơn hàng' : 'Đơn hàng'}</h1><p>{batchMode ? 'Chọn đồ từ nhiều đơn, kiểm tra tổng khối lượng và yêu cầu trước khi tạo mẻ.' : 'Theo dõi đơn theo trạng thái và cập nhật theo thời gian thực.'}</p></div>
+      {!batchMode && <div className="orders-heading__actions">
+        {canCreateBatch && <Button variant="secondary" onClick={() => navigate('/orders/batching')}><Layers3 size={18} />Ghép mẻ</Button>}
+        {canCreate && <ButtonLink to="/orders/new" variant="primary"><Plus size={18} />Tạo đơn hàng</ButtonLink>}
+      </div>}
     </header>
-    <div className="order-tabs" role="tablist" aria-label="Trạng thái đơn">
-      {([undefined, 'RECEIVED', 'PROCESSING', 'READY', 'COMPLETED', 'CANCELLED', 'REOPENED'] as const).map((value) =>
-        <button key={value ?? 'all'} className={status === value ? 'active' : ''} onClick={() => { setStatus(value); setPage(0) }}>
-          {value ? statusText[value] : 'Tất cả'}
-        </button>)}
+    {batchMode ? <OrderBatchComposer onClose={() => navigate('/orders')} /> : <><div className="order-tabs" role="group" aria-label="Trạng thái đơn hàng">
+      {([undefined, 'RECEIVED', 'PROCESSING', 'READY', 'COMPLETED', 'CANCELLED', 'REOPENED'] as const).map((value) => {
+        const count = statusCount(value)
+        return <button key={value ?? 'all'} type="button" data-status={(value ?? 'all').toLowerCase()} aria-pressed={status === value} className={status === value ? 'active' : ''} onClick={() => { setStatus(value); setPage(0) }}>
+          <span className="order-tabs__icon"><StatusFilterIcon value={value} /></span>
+          <span>{value ? statusText[value] : 'Tất cả'}</span>
+          <span className={`order-tabs__count${count === undefined ? ' order-tabs__count--placeholder' : ''}`} aria-hidden={count === undefined ? true : undefined} aria-label={count === undefined ? undefined : `${count} đơn`}>{count ?? 0}</span>
+        </button>
+      })}
     </div>
     <Surface className="orders-list-surface">
       <div className="orders-toolbar">
         <label className="order-search"><Search size={18} /><span className="sr-only">Tìm đơn</span>
           <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Mã đơn, tên khách, số điện thoại, dịch vụ" />
-        </label><span>{query.data?.totalElements ?? 0} đơn</span>
+        </label><span className="orders-count" aria-live="polite">{query.isLoading ? 'Đang tải' : `${query.data?.totalElements ?? 0} đơn`}</span>
       </div>
-      <details className="orders-advanced-filters"><summary><Filter size={17} />Lọc theo ngày nhận{(from || to) && <span>Đang áp dụng</span>}</summary><div>
-        <Field label="Từ ngày"><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></Field>
-        <Field label="Đến ngày"><input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></Field>
-        {(from || to) && <Button variant="ghost" type="button" onClick={() => { setFrom(''); setTo(''); setPage(0) }}>Xóa lọc</Button>}
-      </div></details>
+      <div className="orders-filter-row">
+        <CollapsibleFilterPanel className="orders-advanced-filters" label="Bộ lọc nâng cao" activeCount={advancedFilterCount} fieldsClassName="orders-date-fields">
+          <Field label="Dịch vụ"><select value={serviceId} onChange={(event) => { setServiceId(event.target.value); setPage(0) }}><option value="">Tất cả dịch vụ</option>{filterOptions.data?.services.map((service) => <option key={service.id} value={service.id}>{service.label}</option>)}</select></Field>
+          <Field label="Hạn trả"><select value={due} onChange={(event) => { setDue(event.target.value as DueFilter); setPage(0) }}><option value="">Tất cả hạn trả</option><option value="OVERDUE">Đã quá hạn</option><option value="TODAY">Hẹn trả hôm nay</option><option value="TOMORROW">Hẹn trả ngày mai</option><option value="NEXT_7_DAYS">Trong 7 ngày tới</option><option value="NO_DATE">Chưa hẹn trả</option></select></Field>
+          <Field label="Từ ngày"><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></Field>
+          <Field label="Đến ngày"><input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></Field>
+          {advancedFilterCount > 0 && <Button variant="ghost" type="button" onClick={() => { setFrom(''); setTo(''); setServiceId(''); setDue(''); setPage(0) }}>Xóa lọc</Button>}
+        </CollapsibleFilterPanel>
+        <img className="orders-filter-slogan" src="/images/orders/orders-slogan.webp" alt="" aria-hidden="true" />
+      </div>
       {query.isLoading ? <LoadingState rows={6} /> : query.isError
         ? <ErrorState title="Không tải được đơn hàng" body="Kiểm tra kết nối rồi thử lại." onRetry={() => void query.refetch()} />
         : !query.data?.items.length
-          ? <StatePanel title="Chưa có đơn phù hợp" body="Thử đổi trạng thái, từ khóa hoặc tạo đơn hàng đầu tiên." action={canCreate ? <ButtonLink to="/orders/new">Tạo đơn hàng</ButtonLink> : undefined} />
+          ? <StatePanel className="orders-empty-state" icon={<img className="orders-empty-illustration" src="/images/wash-batches/wash-batches-empty.png" alt="" decoding="async" />} title={hasActiveFilters ? 'Không tìm thấy đơn phù hợp' : 'Chưa có đơn hàng'} body={hasActiveFilters ? 'Thử đổi trạng thái, từ khóa hoặc bộ lọc nâng cao.' : 'Tạo đơn hàng đầu tiên để bắt đầu theo dõi và xử lý.'} action={canCreate ? <ButtonLink to="/orders/new"><Plus size={18} />Tạo đơn hàng</ButtonLink> : undefined} />
           : <>
             <div className="orders-mobile-list">{query.data.items.map((order) =>
               <button className="order-card" key={order.id} onClick={() => navigate(`/orders/${order.id}`)}>
-                <div><strong>{order.orderCode}</strong><Status value={order.status} /></div>
-                <h2>{order.customerName || 'Khách vãng lai'}</h2>{order.customerPhone && <p>{order.customerPhone}</p>}<p>{order.serviceSummary || 'Dịch vụ giặt là'}</p>
-                <div><span>{when(order.createdAt)}</span><strong>{money(order.totalAmount, order.currency)}</strong><ChevronRight size={18} /></div>
+                <div className="order-card__head"><strong>{order.orderCode}</strong><Status value={order.status} /></div>
+                <div className="order-card__customer"><span className="order-customer-avatar" aria-hidden="true">{initials(order.customerName)}</span><span><h2>{order.customerName || 'Khách vãng lai'}</h2>{order.customerPhone && <small>{order.customerPhone}</small>}</span></div>
+                <p className="order-card__service"><span aria-hidden="true"><Shirt size={17} /></span>{order.serviceSummary || 'Dịch vụ giặt là'}</p>
+                <div className="order-card__foot"><span>{when(order.createdAt)}</span><strong>{money(order.totalAmount, order.currency)}</strong><ChevronRight size={18} /></div>
               </button>)}</div>
             <div className="orders-table-wrap"><table className="orders-table"><thead><tr>
               <th>Mã đơn</th><th>Thời gian nhận</th><th>Khách hàng</th><th>Dịch vụ</th><th>Tổng tiền</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th>
             </tr></thead><tbody>{query.data.items.map((order) => <tr key={order.id}>
               <td><Link to={`/orders/${order.id}`}>{order.orderCode}</Link></td><td>{when(order.createdAt)}</td>
-              <td><strong>{order.customerName || 'Khách vãng lai'}</strong><small>{order.customerPhone}</small></td>
-              <td>{order.serviceSummary}</td><td>{money(order.totalAmount, order.currency)}</td><td><Status value={order.status} /></td>
-              <td><ButtonLink size="sm" variant="ghost" to={`/orders/${order.id}`}>Xem</ButtonLink></td>
+              <td><span className="orders-table__customer"><span className="order-customer-avatar" aria-hidden="true">{initials(order.customerName)}</span><span><strong>{order.customerName || 'Khách vãng lai'}</strong><small>{order.customerPhone}</small></span></span></td>
+              <td><span className="orders-table__service"><span aria-hidden="true"><Shirt size={17} /></span>{order.serviceSummary || 'Dịch vụ giặt là'}</span></td><td><strong className="orders-table__amount">{money(order.totalAmount, order.currency)}</strong></td><td><Status value={order.status} /></td>
+              <td><ButtonLink className="orders-table__view-button" size="sm" variant="ghost" to={`/orders/${order.id}`}>Xem</ButtonLink></td>
             </tr>)}</tbody></table></div>
             {query.data.totalPages > 1 && <nav className="orders-pagination" aria-label="Phân trang đơn hàng">
               <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={17} />Trước</Button>
@@ -111,7 +168,7 @@ export function OrderListPage() {
               <Button variant="secondary" size="sm" disabled={page + 1 >= query.data.totalPages} onClick={() => setPage((value) => value + 1)}>Sau<ChevronRight size={17} /></Button>
             </nav>}
           </>}
-    </Surface>
+    </Surface></>}
   </div>
 }
 
@@ -138,19 +195,25 @@ export function OrderCreatePage() {
   const [mode, setMode] = useState<'existing' | 'guest'>('existing')
   const [search, setSearch] = useState('')
   const [customerId, setCustomerId] = useState<number>()
+  const [chosenCustomer, setChosenCustomer] = useState<IntakeCustomer>()
   const [guestName, setGuestName] = useState('')
   const [guestPhone, setGuestPhone] = useState('')
-  const [promisedAt, setPromisedAt] = useState('')
+  const [promisedDate, setPromisedDate] = useState('')
   const [note, setNote] = useState('')
   const [items, setItems] = useState<DraftItem[]>([{ key: 1, serviceId: 0, sharingMode: 'ANY', quantity: 1 }])
   const [quotes, setQuotes] = useState<Record<number, PricingPreview>>({})
   const [eligible, setEligible] = useState<Record<number, Array<{ id: number; nameVi: string }>>>({})
   const [formError, setFormError] = useState('')
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false)
+  const [createBatchAfterSave, setCreateBatchAfterSave] = useState(false)
+  const canCreateBatch = hasPermission(PERMISSION_CODES.BATCH_CREATE)
   const pricingItems = usePricingInputs(items)
   const customers = useQuery({ queryKey: ['orders', 'customer-search', branchId, search], queryFn: () => orderApi.customers(branchId!, search), enabled: mode === 'existing' && Boolean(branchId) && search.trim().length >= 2 })
   const services = useQuery({ queryKey: ['orders', 'service-options', branchId], queryFn: () => orderApi.services(branchId!), enabled: Boolean(branchId) })
   const updateItem = (key: number, patch: Partial<DraftItem>) => setItems((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item))
+  const hasPrivateLoad = items.some((item) => item.sharingMode === 'PRIVATE_LOAD')
+  const shouldCreateBatch = canCreateBatch && (createBatchAfterSave || hasPrivateLoad)
+  const serviceGroupCount = new Set(items.filter((item) => item.serviceId).map((item) => item.serviceId)).size
 
   useEffect(() => {
     const valid = pricingItems.filter((item): item is PricingDraftItem & { itemTypeId: number } => Boolean(item.serviceId && item.itemTypeId && item.quantity > 0))
@@ -164,19 +227,35 @@ export function OrderCreatePage() {
   }, [branchId, pricingItems])
 
   const create = useMutation({
-    mutationFn: () => orderApi.create({
-      branchId: branchId!, customerId: mode === 'existing' ? customerId : undefined,
-      guestName: mode === 'guest' ? guestName : undefined, guestPhone: mode === 'guest' ? guestPhone : undefined,
-      promisedAt: promisedAt ? new Date(promisedAt).toISOString() : undefined, note: note || undefined,
-      items: items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId: itemTypeId!, sharingMode, priorityLevel, quantity, note: itemNote })),
-    }),
-    onSuccess: (order) => { notify({ title: 'Đã tạo đơn hàng', message: order.orderCode, tone: 'success' }); navigate(`/orders/${order.id}`, { replace: true }) },
+    mutationFn: async () => {
+      const order = await orderApi.create({
+        branchId: branchId!, customerId: mode === 'existing' ? customerId : undefined,
+        guestName: mode === 'guest' ? guestName : undefined, guestPhone: mode === 'guest' ? guestPhone : undefined,
+        promisedAt: promisedDate ? promisedDateInstant(promisedDate) : undefined, note: note || undefined,
+        items: items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId: itemTypeId!, sharingMode, priorityLevel, quantity, note: itemNote })),
+      })
+      if (!shouldCreateBatch) return { order, batchCount: 0, batchFailures: 0 }
+      const groupedItems = new Map<number, number[]>()
+      order.items.forEach((item) => groupedItems.set(item.serviceId, [...(groupedItems.get(item.serviceId) ?? []), item.id]))
+      const results = await Promise.allSettled([...groupedItems.values()].map((orderItemIds) => washBatchApi.create({
+        branchId: order.branchId,
+        orderItemIds,
+        note: `Tạo trực tiếp từ ${order.orderCode}`,
+        markReady: false,
+      })))
+      return { order, batchCount: results.filter((result) => result.status === 'fulfilled').length, batchFailures: results.filter((result) => result.status === 'rejected').length }
+    },
+    onSuccess: ({ order, batchCount, batchFailures }) => {
+      if (batchFailures) notify({ title: 'Đã tạo đơn hàng', message: `${order.orderCode} đã lưu; ${batchFailures} mẻ chưa tạo được. Bạn có thể ghép lại tại danh sách đơn.`, tone: 'info' })
+      else notify({ title: 'Đã tạo đơn hàng', message: batchCount ? `${order.orderCode} · Đã tạo ${batchCount} mẻ nháp riêng` : order.orderCode, tone: 'success' })
+      navigate(`/orders/${order.id}`, { replace: true })
+    },
   })
   useEffect(() => {
-    const dirty = Boolean(customerId || guestName || guestPhone || note || promisedAt || items.some((item) => item.serviceId))
+    const dirty = Boolean(customerId || guestName || guestPhone || note || promisedDate || createBatchAfterSave || items.some((item) => item.serviceId))
     const warn = (event: BeforeUnloadEvent) => { if (dirty && !create.isSuccess) event.preventDefault() }
     window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn)
-  }, [create.isSuccess, customerId, guestName, guestPhone, items, note, promisedAt])
+  }, [create.isSuccess, createBatchAfterSave, customerId, guestName, guestPhone, items, note, promisedDate])
   const selectService = (key: number, serviceId: number) => {
     updateItem(key, { serviceId, itemTypeId: undefined })
     if (serviceId && branchId) void orderApi.eligibility(branchId, serviceId).then((value) => setEligible((current) => ({ ...current, [key]: value })))
@@ -190,33 +269,47 @@ export function OrderCreatePage() {
     create.mutate()
   }
   const total = Object.values(quotes).reduce((sum, value) => sum + value.finalAmount, 0)
+  const customerSummary = mode === 'existing'
+    ? chosenCustomer ? { name: chosenCustomer.fullName, phone: chosenCustomer.phone } : undefined
+    : (guestName.trim() || guestPhone.trim()) ? { name: guestName.trim() || 'Khách vãng lai', phone: guestPhone.trim() } : undefined
+  const validItemCount = items.filter((item) => item.serviceId && item.itemTypeId).length
+  const readyToSubmit = Boolean(branchId && customerSummary && items.every((item) => item.serviceId && item.itemTypeId && item.quantity > 0) && !formError)
 
   return <form className="page-container order-create" onSubmit={submit}>
-    <header className="focused-page-header"><ButtonLink to="/orders" variant="ghost"><ArrowLeft size={18} />Đơn hàng</ButtonLink><div><p className="eyebrow">Tiếp nhận tại quầy</p><h1>Tạo đơn hàng</h1></div></header>
+    <nav className="order-breadcrumb" aria-label="Đường dẫn"><Link to="/orders">Đơn hàng</Link><ChevronRight size={15} /><span>Tạo đơn hàng</span></nav>
+    <header className="order-create-heading"><div><h1>Tạo đơn hàng</h1><p>Tiếp nhận đơn mới tại quầy</p></div><ButtonLink to="/orders" variant="secondary"><ArrowLeft size={18} />Quay lại</ButtonLink></header>
+    <ol className="order-steps" aria-label="Tiến trình tạo đơn">
+      <li className="active"><span>1</span><div><strong>Khách hàng</strong><small>Chọn hoặc tạo khách hàng</small></div></li>
+      <li className={customerSummary ? 'complete' : ''}><span>2</span><div><strong>Dịch vụ</strong><small>Thêm dịch vụ và thông tin</small></div></li>
+      <li className={validItemCount ? 'complete' : ''}><span>3</span><div><strong>Hẹn trả</strong><small>Xác nhận và hoàn tất</small></div></li>
+    </ol>
     <div className="order-create-grid"><div className="order-form-stack">
-      <Surface className="order-section"><div className="section-title"><span>1</span><div><h2>Khách hàng</h2><p>Chọn hồ sơ có sẵn hoặc ghi nhận khách vãng lai.</p></div></div>
-        <div className="segmented"><button type="button" className={mode === 'existing' ? 'active' : ''} onClick={() => setMode('existing')}>Khách có sẵn</button><button type="button" className={mode === 'guest' ? 'active' : ''} onClick={() => setMode('guest')}>Khách vãng lai</button></div>
-        {mode === 'existing' ? <><Field label="Tìm khách hàng" hint="Tên, số điện thoại đầy đủ hoặc 3–4 số cuối"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nhập ít nhất 2 ký tự" /></Field>
-          {customers.data?.map((customer) => <button type="button" key={customer.id} className={`customer-result${customerId === customer.id ? ' selected' : ''}`} onClick={() => setCustomerId(customer.id)}><span><strong>{customer.fullName}</strong><small>{customer.phone} · {customer.customerCode}</small></span>{customerId === customer.id ? <span className="customer-result__choice"><Check size={18} />Đã chọn</span> : <span className="customer-result__choice">Chọn</span>}</button>)}</>
-          : <><div className="form-grid"><Field label="Tên khách"><input value={guestName} onChange={(event) => setGuestName(event.target.value)} maxLength={150} /></Field><Field label="Số điện thoại"><input type="tel" inputMode="tel" value={guestPhone} onChange={(event) => setGuestPhone(event.target.value)} maxLength={30} /></Field></div><p className="field-hint">Thông tin này chỉ được lưu trên đơn hàng, không tự tạo hồ sơ khách hàng.</p></>}
+      <Surface className="order-section order-section--customer"><div className="section-title"><span>1</span><div><h2>Thông tin khách hàng</h2><p>Tìm kiếm khách hàng có sẵn hoặc ghi nhận khách vãng lai.</p></div></div>
+        <div className="segmented" role="group" aria-label="Loại khách hàng"><button type="button" aria-pressed={mode === 'existing'} className={mode === 'existing' ? 'active' : ''} onClick={() => { setMode('existing'); setFormError('') }}><UserRound size={17} />Khách hàng có sẵn</button><button type="button" aria-pressed={mode === 'guest'} className={mode === 'guest' ? 'active' : ''} onClick={() => { setMode('guest'); setFormError('') }}><Plus size={17} />Khách vãng lai</button></div>
+        {mode === 'existing' ? <><Field label="Tìm khách hàng" hint="Nhập tên, số điện thoại đầy đủ hoặc 3–4 số cuối"><div className="order-customer-search"><Search size={18} aria-hidden="true" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nhập ít nhất 2 ký tự" /></div></Field>
+          {customers.isFetching && <p className="order-search-status">Đang tìm khách hàng…</p>}
+          {customers.data?.length ? <div className="customer-results" aria-label="Kết quả khách hàng">{customers.data.map((customer) => <button type="button" key={customer.id} className={`customer-result${customerId === customer.id ? ' selected' : ''}`} onClick={() => { setCustomerId(customer.id); setChosenCustomer(customer); setFormError('') }}><span className="customer-avatar" aria-hidden="true">{customer.fullName.trim().slice(0, 1).toUpperCase()}</span><span><strong>{customer.fullName}</strong><small>{customer.phone} · {customer.customerCode}</small></span>{customerId === customer.id ? <span className="customer-result__choice"><Check size={18} />Đã chọn</span> : <span className="customer-result__choice">Chọn</span>}</button>)}</div> : search.trim().length >= 2 && !customers.isFetching ? <p className="order-search-status">Không tìm thấy khách hàng phù hợp.</p> : null}</>
+          : <><div className="form-grid"><Field label="Tên khách"><input value={guestName} onChange={(event) => { setGuestName(event.target.value); setFormError('') }} maxLength={150} placeholder="Nhập tên khách hàng" /></Field><Field label="Số điện thoại"><input type="tel" inputMode="tel" value={guestPhone} onChange={(event) => { setGuestPhone(event.target.value); setFormError('') }} maxLength={30} placeholder="Nhập số điện thoại" /></Field></div><p className="field-hint">Thông tin này chỉ được lưu trên đơn hàng, không tự tạo hồ sơ khách hàng.</p></>}
         {mode === 'existing' && hasPermission(PERMISSION_CODES.CUSTOMER_CREATE) && <Button type="button" variant="secondary" onClick={() => setQuickCustomerOpen(true)}><Plus size={18} />Tạo nhanh khách hàng</Button>}
       </Surface>
-      <Surface className="order-section"><div className="section-title"><span>2</span><div><h2>Dịch vụ</h2><p>Giá được tính và xác nhận bởi hệ thống.</p></div></div>
-        {items.map((item, index) => <div className="order-item-editor" key={item.key}><div className="order-item-editor__head"><strong>Dịch vụ {index + 1}</strong>{items.length > 1 && <button type="button" onClick={() => setItems((value) => value.filter((candidate) => candidate.key !== item.key))} aria-label="Xóa dịch vụ"><X size={18} /></button>}</div>
+      <Surface className="order-section order-section--services"><div className="section-title"><span>2</span><div><h2>Dịch vụ</h2><p>Thêm dịch vụ vào đơn hàng, giá sẽ được tính tự động.</p></div></div>
+        {items.map((item, index) => <div className="order-item-editor" key={item.key}><div className="order-item-editor__head"><strong>Dịch vụ {index + 1}</strong>{items.length > 1 && <button type="button" onClick={() => setItems((value) => value.filter((candidate) => candidate.key !== item.key))} aria-label={`Xóa dịch vụ ${index + 1}`}><Trash2 size={18} /></button>}</div>
           <div className="form-grid"><Field label="Dịch vụ" required><select value={item.serviceId || ''} onChange={(event) => selectService(item.key, Number(event.target.value))}><option value="">Chọn dịch vụ</option>{services.data?.map((service) => <option key={service.id} value={service.id}>{service.nameVi}</option>)}</select></Field>
             <Field label="Loại đồ" required><select value={item.itemTypeId || ''} onChange={(event) => updateItem(item.key, { itemTypeId: event.target.value ? Number(event.target.value) : undefined })}><option value="">Chọn loại đồ</option>{eligible[item.key]?.map((option) => <option key={option.id} value={option.id}>{option.nameVi}</option>)}</select></Field>
             <Field label="Hình thức xử lý" required><select value={item.sharingMode} onChange={(event) => updateItem(item.key, { sharingMode: event.target.value as DraftItem['sharingMode'], priorityLevel: event.target.value === 'SHARED_PRIORITY' ? 1 : undefined })}><option value="ANY">Theo dịch vụ</option><option value="SHARED_STANDARD">Giặt chung</option><option value="SHARED_PRIORITY">Giặt chung ưu tiên</option><option value="PRIVATE_LOAD">Giặt riêng mẻ</option></select></Field>
             <Field label="Số lượng / khối lượng" required><input inputMode="decimal" value={item.quantity} onChange={(event) => updateItem(item.key, { quantity: Number(event.target.value) })} /></Field></div>
-          <Field label="Ghi chú xử lý" hint="Tình trạng món hoặc yêu cầu riêng"><textarea rows={2} maxLength={1000} value={item.note ?? ''} onChange={(event) => updateItem(item.key, { note: event.target.value })} /></Field>
+          <Field label="Ghi chú xử lý" hint={`${item.note?.length ?? 0}/1000 · Tình trạng món hoặc yêu cầu riêng`}><textarea rows={2} maxLength={1000} value={item.note ?? ''} onChange={(event) => updateItem(item.key, { note: event.target.value })} placeholder="Ví dụ: vết bẩn, giặt riêng, yêu cầu đặc biệt…" /></Field>
           {quotes[item.key] !== undefined && <div className="quoted-price"><span><small>{quotes[item.key].explanation}</small><small>Tính tiền: {quotes[item.key].billableQuantity} {quotes[item.key].unitType}</small></span><strong>{money(quotes[item.key].finalAmount, quotes[item.key].currency)}</strong></div>}
         </div>)}
         <Button type="button" variant="secondary" onClick={() => setItems((value) => [...value, { key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])}><Plus size={18} />Thêm dịch vụ</Button>
         {formError && <p className="form-error" role="alert">{formError}</p>}
       </Surface>
-      <Surface className="order-section"><div className="section-title"><span>3</span><div><h2>Hẹn trả và ghi chú</h2></div></div><Field label="Thời gian hẹn trả"><input type="datetime-local" value={promisedAt} onChange={(event) => setPromisedAt(event.target.value)} /></Field><Field label="Ghi chú"><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={4} /></Field></Surface>
-    </div><Surface className="order-summary"><h2>Tóm tắt đơn hàng</h2><dl><div><dt>Số dịch vụ</dt><dd>{items.length}</dd></div><div><dt>Tổng tạm tính</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div></dl><p>Giá cuối cùng được backend tính lại khi lưu đơn.</p><Button type="submit" size="lg" loading={create.isPending} disabled={!branchId || Boolean(formError) || !items.every((item) => item.serviceId && item.itemTypeId)}>Lưu đơn hàng</Button>{create.error && <p className="form-error">{create.error instanceof ApiError ? create.error.message : 'Không thể tạo đơn.'}</p>}</Surface></div>
-    <div className="mobile-order-action"><span><small>Tổng tạm tính</small><strong>{money(total, Object.values(quotes)[0]?.currency)}</strong></span><Button type="submit" loading={create.isPending} disabled={!branchId || Boolean(formError) || !items.every((item) => item.serviceId && item.itemTypeId)}>Tạo đơn</Button></div>
-    <QuickCustomerDialog open={quickCustomerOpen} onClose={() => setQuickCustomerOpen(false)} onCreated={(customer) => { setCustomerId(customer.id); setSearch(customer.fullName) }} />
+      <Surface className="order-section order-section--promise"><div className="section-title"><span>3</span><div><h2>Hẹn trả và ghi chú</h2><p>Chọn ngày hẹn trả và thêm thông tin bổ sung.</p></div></div><div className="form-grid"><DatePickerField label="Ngày hẹn trả" value={promisedDate} onChange={setPromisedDate} hint="Không cần chọn giờ." /><Field label="Ghi chú" hint={`${note.length}/2000`}><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={2} placeholder="Ghi chú thêm…" /></Field></div>
+        {canCreateBatch && <label className="order-create-batch-choice"><input type="checkbox" checked={shouldCreateBatch} disabled={hasPrivateLoad} onChange={(event) => setCreateBatchAfterSave(event.target.checked)} /><span className="order-create-batch-choice__icon"><Layers3 size={20} /></span><span><strong>{hasPrivateLoad ? 'Tự tạo mẻ nháp riêng' : 'Tạo mẻ nháp riêng sau khi lưu'}</strong><small>{hasPrivateLoad ? 'Đơn có yêu cầu giặt riêng nên hệ thống sẽ tự tạo mẻ.' : `Không cần chuyển sang trang Mẻ giặt để tạo lại${serviceGroupCount > 1 ? `; hệ thống sẽ tách thành ${serviceGroupCount} mẻ theo dịch vụ` : ''}.`}</small></span></label>}
+      </Surface>
+    </div><Surface as="aside" className="order-summary"><div className="order-summary__head"><span><ClipboardList size={21} /></span><div><h2>Tóm tắt đơn hàng</h2><p>Thông tin đơn sẽ được cập nhật tự động.</p></div></div><div className="order-summary__body"><section><div className="order-summary__label"><span><UserRound size={18} /></span><strong>Khách hàng</strong></div>{customerSummary ? <div className="order-summary__selection"><strong>{customerSummary.name}</strong><small>{customerSummary.phone || 'Không có số điện thoại'}</small></div> : <div className="order-summary__placeholder"><strong>Chưa chọn khách hàng</strong><small>Vui lòng chọn hoặc nhập khách hàng.</small></div>}</section><section><div className="order-summary__label"><span><ShoppingBag size={18} /></span><strong>Dịch vụ</strong></div>{validItemCount ? <div className="order-summary__services">{items.filter((item) => item.serviceId && item.itemTypeId).map((item) => <div key={item.key}><span>{services.data?.find((service) => service.id === item.serviceId)?.nameVi ?? 'Dịch vụ'}</span><strong>{quotes[item.key] ? money(quotes[item.key].finalAmount, quotes[item.key].currency) : 'Đang tính…'}</strong></div>)}</div> : <div className="order-summary__placeholder"><strong>Chưa có dịch vụ</strong><small>Thêm dịch vụ để xem chi tiết.</small></div>}</section><dl><div><dt>Số dịch vụ</dt><dd>{validItemCount}</dd></div><div><dt>Tạm tính</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div><div><dt>Giảm giá</dt><dd>{money(0)}</dd></div><div><dt>Phụ phí</dt><dd>{money(0)}</dd></div><div className="order-summary__total"><dt>Tổng cộng</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div></dl><p className="order-summary__note">Giá cuối cùng được hệ thống tính lại khi lưu đơn.</p><Button type="submit" size="lg" loading={create.isPending} disabled={!readyToSubmit}>Lưu đơn hàng</Button>{create.error && <p className="form-error">{create.error instanceof ApiError ? create.error.message : 'Không thể tạo đơn.'}</p>}</div></Surface></div>
+    <div className="mobile-order-action"><span><small>Tổng tạm tính</small><strong>{money(total, Object.values(quotes)[0]?.currency)}</strong></span><Button type="submit" loading={create.isPending} disabled={!readyToSubmit}>Tạo đơn</Button></div>
+    <QuickCustomerDialog open={quickCustomerOpen} onClose={() => setQuickCustomerOpen(false)} onCreated={(customer) => { setCustomerId(customer.id); setChosenCustomer(customer); setSearch(customer.fullName) }} />
   </form>
 }
 
@@ -231,7 +324,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
   const { subscribe } = useRealtime()
   const { notify } = useToast()
   const structural = order.status === 'RECEIVED'
-  const [promisedAt, setPromisedAt] = useState(localDateTime(order.promisedAt))
+  const [promisedDate, setPromisedDate] = useState(promisedDateKey(order.promisedAt))
   const [note, setNote] = useState(order.note ?? '')
   const initialItems = order.items.map(item => ({ key: item.id, serviceId: item.serviceId, itemTypeId: item.itemTypeId, sharingMode: item.sharingMode, quantity: item.quantity, note: item.note }))
   const [items, setItems] = useState<DraftItem[]>(initialItems)
@@ -247,7 +340,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
     if (!initial || normalizedItemNote(item.note) === normalizedItemNote(initial.note)) return []
     return [{ itemId: item.key, note: normalizedItemNote(item.note) }]
   }) : []
-  const metadataChanged = promisedAt !== localDateTime(order.promisedAt) || note !== (order.note ?? '')
+  const metadataChanged = promisedDate !== promisedDateKey(order.promisedAt) || note !== (order.note ?? '')
   const dirty = metadataChanged || pricingRelevantChanged || itemNoteUpdates.length > 0
 
   useEffect(() => subscribe('order.', event => {
@@ -274,7 +367,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
   const save = useMutation({
     mutationFn: () => {
       const body: { version: number; promisedAt?: string | null; note?: string | null; items?: OrderItemPayload[]; itemNoteUpdates?: OrderItemNoteUpdate[] } = { version: order.version }
-      if (promisedAt !== localDateTime(order.promisedAt)) body.promisedAt = promisedAt ? new Date(promisedAt).toISOString() : null
+      if (promisedDate !== promisedDateKey(order.promisedAt)) body.promisedAt = promisedDate ? promisedDateInstant(promisedDate) : null
       if (note !== (order.note ?? '')) body.note = note.trim() || null
       if (pricingRelevantChanged) body.items = items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId: itemTypeId!, sharingMode, priorityLevel, quantity, note: itemNote }))
       else if (itemNoteUpdates.length) body.itemNoteUpdates = itemNoteUpdates
@@ -311,7 +404,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
       <Button type="button" variant="secondary" onClick={() => setItems(current => [...current, { key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])}><Plus size={18} />Thêm dịch vụ</Button>
       {pricingError && <p className="form-error" role="alert">{pricingError}</p>}
     </div>}
-    <div className="form-grid order-edit-metadata"><Field label="Thời gian hẹn trả"><input type="datetime-local" value={promisedAt} onChange={event => setPromisedAt(event.target.value)} /></Field><Field label="Ghi chú"><textarea rows={4} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></Field></div>
+    <div className="form-grid order-edit-metadata"><DatePickerField label="Ngày hẹn trả" value={promisedDate} onChange={setPromisedDate} hint="Không cần chọn giờ." /><Field label="Ghi chú"><textarea rows={4} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></Field></div>
     <div className="order-edit-panel__footer"><span><small>{pricingRelevantChanged ? 'Tổng sau khi tính lại' : 'Tổng hiện tại'}</small><strong>{money(repricedTotal, Object.values(quotes)[0]?.currency ?? order.currency)}</strong></span><Button type="button" loading={save.isPending} disabled={!dirty || stale || !valid || Boolean(pricingError)} onClick={() => save.mutate()}>Lưu thay đổi</Button></div>
   </Surface>
 }
@@ -324,7 +417,7 @@ function historyLabel(action: string, changed?: Record<string, unknown>) {
   const fields = Array.isArray(changed?.fields) ? changed.fields as string[] : []
   if (action === 'UPDATED' && fields.includes('items')) return 'Cập nhật dịch vụ và tính lại giá'
   if (action === 'UPDATED' && fields.includes('itemNotes')) return 'Cập nhật ghi chú xử lý'
-  if (action === 'UPDATED' && fields.includes('promisedAt')) return 'Cập nhật thời gian hẹn trả'
+  if (action === 'UPDATED' && fields.includes('promisedAt')) return 'Cập nhật ngày hẹn trả'
   if (action === 'UPDATED' && fields.includes('note')) return 'Cập nhật ghi chú'
   return historyLabels[action] ?? 'Cập nhật đơn hàng'
 }
@@ -389,7 +482,7 @@ export function OrderDetailPage() {
     {(['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_CANCEL) && <Button variant="danger" onClick={() => execute('cancel')}>Hủy đơn</Button>}
     {value.status === 'COMPLETED' && hasPermission(PERMISSION_CODES.ORDER_REOPEN) && <Button variant="secondary" onClick={() => execute('reopen')}><RotateCcw size={18} />Mở lại</Button>}
   </div></header>{editing && <OrderEditPanel order={value} onClose={() => setEditing(false)} onSaved={updated => { queryClient.setQueryData(orderKeys.detail(id), updated); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); setEditing(false) }} />}<div className="order-detail-grid"><div className="order-detail-main">
-    <Surface className="order-section"><h2>Thông tin chung</h2><dl className="detail-facts"><div><dt>Khách hàng</dt><dd>{value.customerName || 'Khách vãng lai'}<small>{value.customerPhone}</small></dd></div><div><dt>Hẹn trả</dt><dd>{value.promisedAt ? when(value.promisedAt) : 'Chưa hẹn'}</dd></div><div><dt>Nhân viên nhận</dt><dd>{value.createdBy.displayName}</dd></div><div><dt>Cập nhật cuối</dt><dd>{when(value.updatedAt)}</dd></div></dl></Surface>
+    <Surface className="order-section"><h2>Thông tin chung</h2><dl className="detail-facts"><div><dt>Khách hàng</dt><dd>{value.customerName || 'Khách vãng lai'}<small>{value.customerPhone}</small></dd></div><div><dt>Ngày hẹn trả</dt><dd>{value.promisedAt ? promisedDateLabel(value.promisedAt) : 'Chưa hẹn'}</dd></div><div><dt>Nhân viên nhận</dt><dd>{value.createdBy.displayName}</dd></div><div><dt>Cập nhật cuối</dt><dd>{when(value.updatedAt)}</dd></div></dl></Surface>
     <Surface className="order-section"><h2>Dịch vụ ({value.items.length})</h2>{value.items.map((item) => <article className="detail-order-item" key={item.id}><div><strong>{item.serviceName}</strong><span>{item.itemTypeName}</span>{item.note && <small className="detail-order-item__note"><strong>Ghi chú:</strong> {item.note}</small>}</div><div><span>{item.quantity} {item.unitType}</span><strong>{money(item.lineAmount, value.currency)}</strong></div></article>)}</Surface>
     {value.note && <Surface className="order-section"><h2>Ghi chú</h2><p>{value.note}</p></Surface>}
   </div><aside><Surface className="order-total"><span>Tổng tiền</span><strong>{money(value.totalAmount, value.currency)}</strong><small>{value.currency} · giá đã đóng băng khi nhận đơn</small></Surface>

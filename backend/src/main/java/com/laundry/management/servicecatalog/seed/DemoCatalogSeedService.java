@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DemoCatalogSeedService {
 
     private static final Logger log = LoggerFactory.getLogger(DemoCatalogSeedService.class);
-    private static final String PRICE_LIST_NAME = "Giá bán tiêu chuẩn";
+    private static final String PRICE_LIST_NAME = "Bảng giá menu tiệm Dung";
 
     private final Environment environment;
     private final UserAccountRepository userRepository;
@@ -81,7 +81,7 @@ public class DemoCatalogSeedService {
         seedEligibility(actor, services, items);
 
         branch(properties.branchCode()).ifPresentOrElse(
-            branch -> seedPriceList(actor, branch, services, items),
+            branch -> seedPriceList(actor, branch, services, items, properties.publish()),
             () -> log.warn("Demo catalog seed skipped pricing because branch '{}' does not exist.",
                 properties.branchCode())
         );
@@ -122,38 +122,28 @@ public class DemoCatalogSeedService {
         Map<String, ItemType> items = new LinkedHashMap<>();
 
         ItemType clothing = item(items, "Quần áo", null, UnitType.KG, false, 10, actor);
-        item(items, "Áo sơ mi", clothing, null, false, 10, actor);
-        item(items, "Áo thun", clothing, null, false, 20, actor);
-        item(items, "Quần dài", clothing, null, false, 30, actor);
-        item(items, "Quần short", clothing, null, false, 40, actor);
-        item(items, "Váy / Đầm", clothing, null, false, 50, actor);
-        item(items, "Đồ trẻ em", clothing, null, false, 60, actor);
-        item(items, "Đồ mặc nhà", clothing, null, false, 70, actor);
+        item(items, "Quần áo theo kg", clothing, UnitType.KG, false, 10, actor);
 
-        ItemType bedding = item(items, "Chăn ga", null, null, false, 20, actor);
-        item(items, "Chăn mỏng", bedding, UnitType.ITEM, false, 10, actor);
-        item(items, "Chăn dày", bedding, UnitType.ITEM, false, 20, actor);
-        item(items, "Mền", bedding, UnitType.ITEM, false, 30, actor);
-        item(items, "Ga giường", bedding, UnitType.SET, false, 40, actor);
-        item(items, "Vỏ gối", bedding, UnitType.ITEM, false, 50, actor);
-        item(items, "Topper / Tấm trải", bedding, UnitType.ITEM, false, 60, actor);
+        ItemType bedding = item(items, "Mền", null, null, false, 20, actor);
+        item(items, "Mền nhỏ / mỏng", bedding, UnitType.ITEM, false, 10, actor);
+        item(items, "Mền dày", bedding, UnitType.ITEM, true, 20, actor);
+        item(items, "Mền dày lớn", bedding, UnitType.ITEM, true, 30, actor);
+        item(items, "Mùng", bedding, UnitType.KG, false, 40, actor);
+        item(items, "Ga giường", bedding, UnitType.KG, false, 50, actor);
+        item(items, "Rèm cửa", bedding, UnitType.KG, true, 60, actor);
 
-        ItemType shoes = item(items, "Giày dép", null, UnitType.PAIR, false, 30, actor);
-        item(items, "Giày thể thao", shoes, null, false, 10, actor);
-        item(items, "Giày da", shoes, null, false, 20, actor);
-        item(items, "Giày vải", shoes, null, false, 30, actor);
-        item(items, "Boot / Ủng", shoes, null, false, 40, actor);
-        item(items, "Dép / Sandal", shoes, null, false, 50, actor);
+        ItemType objects = item(items, "Vật dụng", null, null, false, 30, actor);
+        item(items, "Gấu / gối nhỏ", objects, UnitType.ITEM, false, 10, actor);
+        item(items, "Gấu / gối lớn", objects, UnitType.ITEM, true, 20, actor);
 
-        ItemType special = item(items, "Đồ đặc biệt", null, null, false, 40, actor);
-        item(items, "Gấu bông nhỏ", special, UnitType.ITEM, false, 10, actor);
-        item(items, "Gấu bông lớn", special, UnitType.ITEM, true, 20, actor);
-        item(items, "Rèm cửa", special, UnitType.KG, true, 30, actor);
-        item(items, "Thảm nhỏ", special, UnitType.ITEM, false, 40, actor);
-        item(items, "Túi vải", special, UnitType.ITEM, false, 50, actor);
+        ItemType shoes = item(items, "Giày dép", null, UnitType.PAIR, false, 40, actor);
+        item(items, "Giày thường", shoes, UnitType.PAIR, false, 10, actor);
+        item(items, "Giày cần xử lý kỹ", shoes, UnitType.PAIR, true, 20, actor);
 
-        item(items, "Quần áo giặt theo kg", null, UnitType.KG, false, 50, actor);
-        item(items, "Đồ cần xử lý vết bẩn", null, UnitType.ITEM, true, 60, actor);
+        ItemType extras = item(items, "Nhu cầu khác", null, null, false, 50, actor);
+        item(items, "Thêm nước giặt", extras, UnitType.ITEM, false, 10, actor);
+        item(items, "Thêm nước xả", extras, UnitType.ITEM, false, 20, actor);
+        item(items, "Tẩy trắng", extras, UnitType.ITEM, true, 30, actor);
         return items;
     }
 
@@ -179,12 +169,11 @@ public class DemoCatalogSeedService {
 
     private Map<String, LaundryService> seedServices(UserAccount actor) {
         Map<String, LaundryService> services = new LinkedHashMap<>();
-        service(services, "Giặt sấy thường", ProcessingType.WASH_DRY, UnitType.KG, true, 360, actor);
-        service(services, "Giặt sấy cao cấp", ProcessingType.WASH_DRY, UnitType.KG, false, 480, actor);
-        service(services, "Giặt chăn mền", ProcessingType.WASH_DRY, UnitType.ITEM, false, 720, actor);
+        service(services, "Giặt sấy quần áo", ProcessingType.WASH_DRY, UnitType.KG, true, 360, actor);
+        service(services, "Giặt mền / ga / rèm", ProcessingType.WASH_DRY, UnitType.ITEM, false, 720, actor);
+        service(services, "Giặt gấu / gối", ProcessingType.WASH_DRY, UnitType.ITEM, false, 720, actor);
         service(services, "Vệ sinh giày", ProcessingType.SHOE_CLEANING, UnitType.PAIR, false, 1440, actor);
-        service(services, "Giặt thú bông", ProcessingType.WASH_DRY, UnitType.ITEM, false, 720, actor);
-        service(services, "Ủi đồ", ProcessingType.IRON, UnitType.ITEM, true, 120, actor);
+        service(services, "Nhu cầu khác", ProcessingType.OTHER, UnitType.ITEM, false, 30, actor);
         return services;
     }
 
@@ -212,16 +201,12 @@ public class DemoCatalogSeedService {
         Map<String, LaundryService> services,
         Map<String, ItemType> items
     ) {
-        eligible(actor, services, items, "Giặt sấy thường",
-            "Áo sơ mi", "Áo thun", "Quần dài", "Quần short", "Váy / Đầm", "Đồ trẻ em",
-            "Đồ mặc nhà", "Quần áo giặt theo kg");
-        eligible(actor, services, items, "Giặt sấy cao cấp", "Áo sơ mi", "Váy / Đầm", "Quần dài");
-        eligible(actor, services, items, "Giặt chăn mền",
-            "Chăn mỏng", "Chăn dày", "Mền", "Ga giường", "Vỏ gối", "Topper / Tấm trải");
-        eligible(actor, services, items, "Vệ sinh giày",
-            "Giày thể thao", "Giày da", "Giày vải", "Boot / Ủng", "Dép / Sandal");
-        eligible(actor, services, items, "Giặt thú bông", "Gấu bông nhỏ", "Gấu bông lớn");
-        eligible(actor, services, items, "Ủi đồ", "Áo sơ mi", "Áo thun", "Quần dài", "Váy / Đầm");
+        eligible(actor, services, items, "Giặt sấy quần áo", "Quần áo theo kg");
+        eligible(actor, services, items, "Giặt mền / ga / rèm",
+            "Mền nhỏ / mỏng", "Mền dày", "Mền dày lớn", "Mùng", "Ga giường", "Rèm cửa");
+        eligible(actor, services, items, "Giặt gấu / gối", "Gấu / gối nhỏ", "Gấu / gối lớn");
+        eligible(actor, services, items, "Vệ sinh giày", "Giày thường", "Giày cần xử lý kỹ");
+        eligible(actor, services, items, "Nhu cầu khác", "Thêm nước giặt", "Thêm nước xả", "Tẩy trắng");
     }
 
     private void eligible(
@@ -235,9 +220,7 @@ public class DemoCatalogSeedService {
         for (String itemName : itemNames) {
             ItemType item = items.get(itemName);
             if (item.getParent() == null) {
-                if (!itemName.equals("Quần áo giặt theo kg")) {
-                    throw new IllegalStateException("Demo eligibility must not reference a group: " + itemName);
-                }
+                throw new IllegalStateException("Demo eligibility must not reference a group: " + itemName);
             }
             if (!eligibilityRepository.existsByServiceIdAndItemTypeId(service.getId(), item.getId())) {
                 eligibilityRepository.save(new ServiceItemEligibility(service, item, actor));
@@ -250,12 +233,13 @@ public class DemoCatalogSeedService {
         UserAccount actor,
         Branch branch,
         Map<String, LaundryService> services,
-        Map<String, ItemType> items
+        Map<String, ItemType> items,
+        boolean publish
     ) {
         PriceList list = priceListRepository.findByNameIgnoreCaseAndBranchId(PRICE_LIST_NAME, branch.getId())
             .orElseGet(() -> priceListRepository.saveAndFlush(new PriceList(
                 codeGenerator.nextPriceListCode(), PRICE_LIST_NAME,
-                "Bảng giá demo có cả giá cấu hình và tổ hợp cố tình để trống cho Coverage.",
+                "Bảng giá lấy từ menu dịch vụ do cửa hàng cung cấp.",
                 branch, "VND", Instant.now().minus(1, ChronoUnit.DAYS), null, actor
             )));
         if (list.getStatus() != PriceListStatus.DRAFT) {
@@ -264,34 +248,80 @@ public class DemoCatalogSeedService {
             return;
         }
 
-        hybrid(list, services.get("Giặt sấy thường"), items.get("Quần áo giặt theo kg"), actor);
-        packageRule(list, services.get("Vệ sinh giày"), items.get("Giày thể thao"), actor);
-        unitRule(list, services.get("Giặt chăn mền"), items.get("Chăn mỏng"), "60000", actor);
-        unitRule(list, services.get("Giặt chăn mền"), items.get("Chăn dày"), "90000", actor);
-        unitRule(list, services.get("Giặt chăn mền"), items.get("Mền"), "75000", actor);
-        unitRule(list, services.get("Giặt thú bông"), items.get("Gấu bông nhỏ"), "50000", actor);
-        unitRule(list, services.get("Giặt thú bông"), items.get("Gấu bông lớn"), "90000", actor);
-        unitRule(list, services.get("Ủi đồ"), items.get("Áo sơ mi"), "15000", actor);
-        log.info("Demo price list '{}' is available as DRAFT for safe admin preview.", PRICE_LIST_NAME);
+        clothingRule(list, services.get("Giặt sấy quần áo"), items.get("Quần áo theo kg"),
+            "3", "30000", 30, actor);
+        clothingRule(list, services.get("Giặt sấy quần áo"), items.get("Quần áo theo kg"),
+            "4", "40000", 20, actor);
+        clothingRule(list, services.get("Giặt sấy quần áo"), items.get("Quần áo theo kg"),
+            null, null, 10, actor);
+
+        unitRule(list, services.get("Giặt mền / ga / rèm"), items.get("Mền nhỏ / mỏng"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "30000", actor);
+        unitRule(list, services.get("Giặt mền / ga / rèm"), items.get("Mền dày"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "80000", actor);
+        unitRule(list, services.get("Giặt mền / ga / rèm"), items.get("Mền dày lớn"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "100000", actor);
+        unitRule(list, services.get("Giặt mền / ga / rèm"), items.get("Mùng"),
+            PricingMethod.BY_WEIGHT, UnitType.KG, "25000", actor);
+        unitRule(list, services.get("Giặt mền / ga / rèm"), items.get("Ga giường"),
+            PricingMethod.BY_WEIGHT, UnitType.KG, "25000", actor);
+        unitRule(list, services.get("Giặt mền / ga / rèm"), items.get("Rèm cửa"),
+            PricingMethod.BY_WEIGHT, UnitType.KG, "25000", actor);
+
+        unitRule(list, services.get("Giặt gấu / gối"), items.get("Gấu / gối nhỏ"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "25000", actor);
+        unitRule(list, services.get("Giặt gấu / gối"), items.get("Gấu / gối lớn"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "40000", actor);
+
+        unitRule(list, services.get("Vệ sinh giày"), items.get("Giày thường"),
+            PricingMethod.BY_PAIR, UnitType.PAIR, "35000", actor);
+        unitRule(list, services.get("Vệ sinh giày"), items.get("Giày cần xử lý kỹ"),
+            PricingMethod.BY_PAIR, UnitType.PAIR, "40000", actor);
+
+        unitRule(list, services.get("Nhu cầu khác"), items.get("Thêm nước giặt"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "10000", actor);
+        unitRule(list, services.get("Nhu cầu khác"), items.get("Thêm nước xả"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "10000", actor);
+        unitRule(list, services.get("Nhu cầu khác"), items.get("Tẩy trắng"),
+            PricingMethod.BY_ITEM, UnitType.ITEM, "10000", actor);
+
+        if (publish) {
+            Instant now = Instant.now();
+            List<PriceList> conflicts = priceListRepository.findOverlappingPublished(
+                branch.getId(), list.getId(),
+                List.of(PriceListStatus.ACTIVE, PriceListStatus.SCHEDULED, PriceListStatus.EXPIRED),
+                list.getEffectiveFrom(), list.getEffectiveTo()
+            );
+            if (!conflicts.isEmpty()) {
+                throw new IllegalStateException(
+                    "Cannot publish demo pricing while another published price list overlaps the same branch."
+                );
+            }
+            List<PriceRule> rules = priceRuleRepository.findByPriceListIdOrderByRulePriorityDescIdAsc(list.getId());
+            rules.forEach(rule -> rule.publish(now, actor));
+            list.publish(now, actor);
+            priceRuleRepository.flush();
+            priceListRepository.flush();
+            log.info("Demo price list '{}' is ACTIVE and ready for order testing.", PRICE_LIST_NAME);
+        } else {
+            log.info("Demo price list '{}' is available as DRAFT for safe admin preview.", PRICE_LIST_NAME);
+        }
     }
 
-    private void hybrid(PriceList list, LaundryService service, ItemType item, UserAccount actor) {
-        ensureRule(list, service, item, actor, rule -> rule.configure(
-            service, item, PricingMethod.HYBRID, UnitType.KG, SharingMode.ANY, null,
-            money("25000"), null, null, null, null, quantity("3"), money("10000"), null,
-            0, list.getEffectiveFrom(), list.getEffectiveTo(), 1, List.of(), List.of(), actor
-        ));
-    }
-
-    private void packageRule(PriceList list, LaundryService service, ItemType item, UserAccount actor) {
-        ensureRule(list, service, item, actor, rule -> rule.configure(
-            service, item, PricingMethod.QUANTITY_PACKAGE, UnitType.PAIR, SharingMode.ANY, null,
-            null, null, null, null, null, null, null, null,
-            0, list.getEffectiveFrom(), list.getEffectiveTo(), 1, List.of(), List.of(
-                new PriceRule.PriceRulePackagePriceValue(quantity("1"), money("80000"), 10),
-                new PriceRule.PriceRulePackagePriceValue(quantity("2"), money("150000"), 20),
-                new PriceRule.PriceRulePackagePriceValue(quantity("3"), money("210000"), 30)
-            ), actor
+    private void clothingRule(
+        PriceList list,
+        LaundryService service,
+        ItemType item,
+        String maximumQuantity,
+        String minimumCharge,
+        int priority,
+        UserAccount actor
+    ) {
+        ensureRule(list, service, item, priority, actor, rule -> rule.configure(
+            service, item, PricingMethod.BY_WEIGHT, UnitType.KG, SharingMode.ANY, null,
+            null, money("10000"), null, maximumQuantity == null ? null : quantity(maximumQuantity),
+            minimumCharge == null ? null : money(minimumCharge), null, null, null,
+            priority, list.getEffectiveFrom(), list.getEffectiveTo(), 1, List.of(), List.of(), actor
         ));
     }
 
@@ -299,11 +329,13 @@ public class DemoCatalogSeedService {
         PriceList list,
         LaundryService service,
         ItemType item,
+        PricingMethod method,
+        UnitType unit,
         String price,
         UserAccount actor
     ) {
-        ensureRule(list, service, item, actor, rule -> rule.configure(
-            service, item, PricingMethod.BY_ITEM, UnitType.ITEM, SharingMode.ANY, null,
+        ensureRule(list, service, item, 0, actor, rule -> rule.configure(
+            service, item, method, unit, SharingMode.ANY, null,
             null, money(price), null, null, null, null, null, null,
             0, list.getEffectiveFrom(), list.getEffectiveTo(), 1, List.of(), List.of(), actor
         ));
@@ -313,11 +345,12 @@ public class DemoCatalogSeedService {
         PriceList list,
         LaundryService service,
         ItemType item,
+        int rulePriority,
         UserAccount actor,
         java.util.function.Consumer<PriceRule> configure
     ) {
-        if (priceRuleRepository.existsByPriceListIdAndServiceIdAndItemTypeId(
-            list.getId(), service.getId(), item.getId())) return;
+        if (priceRuleRepository.existsByPriceListIdAndServiceIdAndItemTypeIdAndRulePriority(
+            list.getId(), service.getId(), item.getId(), rulePriority)) return;
         PriceRule rule = new PriceRule(list, service, item, actor);
         configure.accept(rule);
         priceRuleRepository.saveAndFlush(rule);

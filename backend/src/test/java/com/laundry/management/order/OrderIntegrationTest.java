@@ -148,6 +148,29 @@ class OrderIntegrationTest {
     }
 
     @Test
+    void listFiltersByServiceAndPromiseWindowWithoutRequiringCatalogPermission() throws Exception {
+        JsonNode noPromise = createGuestOrder(receptionistA, item(1));
+        JsonNode promised = createGuestOrder(managerA, item(1));
+        ObjectNode promiseUpdate = objectMapper.createObjectNode();
+        promiseUpdate.put("version", promised.path("version").asLong());
+        promiseUpdate.put("promisedAt", "2030-01-15T10:00:00Z");
+        patchOrder(managerA, promised, promiseUpdate, 200);
+
+        mockMvc.perform(get("/api/orders/filter-options").param("branchId", branchA.getId().toString())
+                .header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.services[0].id").value(service.path("id").asLong()));
+        mockMvc.perform(get("/api/orders").param("branchId", branchA.getId().toString())
+                .param("promisedMissing", "true").header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.items[0].id").value(noPromise.path("id").asLong()));
+        mockMvc.perform(get("/api/orders").param("branchId", branchA.getId().toString())
+                .param("promisedFrom", "2030-01-15T00:00:00Z").param("promisedTo", "2030-01-16T00:00:00Z")
+                .param("serviceId", service.path("id").asText()).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.items[0].id").value(promised.path("id").asLong()));
+    }
+
+    @Test
     void enforcesTransitionPolicyReasonsAndCurrentTransitionMetadata() throws Exception {
         JsonNode order = createGuestOrder(managerA, item(2));
         order = command(managerA, order, "start-processing", null, 200);

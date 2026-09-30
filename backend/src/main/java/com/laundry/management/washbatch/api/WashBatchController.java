@@ -4,6 +4,7 @@ import com.laundry.management.washbatch.application.*;
 import com.laundry.management.washbatch.domain.WashBatchStatus;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +14,8 @@ import org.springframework.web.bind.annotation.*;
 public class WashBatchController {
     private final WashBatchApplicationService commands; private final WashBatchQueryService queries;
     public WashBatchController(WashBatchApplicationService commands,WashBatchQueryService queries){this.commands=commands;this.queries=queries;}
-    @GetMapping public WashBatchDtos.PageResponse list(@RequestParam(required=false) Long branchId,@RequestParam(required=false) WashBatchStatus status,@RequestParam(required=false) String search,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){return queries.list(branchId,status,search,page,size);}
+    @GetMapping public WashBatchDtos.PageResponse list(@RequestParam(required=false) Long branchId,@RequestParam(required=false) WashBatchStatus status,@RequestParam(required=false) String search,@RequestParam(required=false) Long serviceId,@RequestParam(required=false) Long createdBy,@RequestParam(required=false) Instant createdFrom,@RequestParam(required=false) Instant createdTo,@RequestParam(required=false) String loadType,@RequestParam(required=false) String warning,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){return queries.list(branchId,status,search,serviceId,createdBy,createdFrom,createdTo,loadType,warning,page,size);}
+    @GetMapping("/filter-options") public WashBatchDtos.FilterOptions filterOptions(@RequestParam(required=false) Long branchId){return queries.filterOptions(branchId);}
     @GetMapping("/candidates") public WashBatchDtos.CandidatePage candidates(@RequestParam(required=false) Long branchId,@RequestParam(required=false) String search,@RequestParam(required=false) Long serviceId,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){return queries.candidates(branchId,search,serviceId,page,size);}
     @GetMapping("/stats") public WashBatchDtos.Stats stats(@RequestParam(required=false) Long branchId){return queries.stats(branchId);}
     @GetMapping("/{id}") public WashBatchDtos.Detail detail(@PathVariable Long id,@RequestHeader(value="X-Branch-Id",required=false) Long branchId){return queries.detail(id,branchId);}

@@ -1,17 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import type { BatchCandidate, BatchHistory, WashBatch } from './types'
 import { candidateCompatibility, quantitiesText, sharingText } from './presentation'
-import { WashBatchCreatePage, WashBatchDetailPage, WashBatchListPage } from './WashBatchPages'
+import { WashBatchDetailPage, WashBatchListPage } from './WashBatchPages'
 
 const mocks = vi.hoisted(() => ({
   permissions: new Set<string>(),
-  list: vi.fn(), candidates: vi.fn(), stats: vi.fn(), get: vi.fn(), history: vi.fn(),
+  list: vi.fn(), filterOptions: vi.fn(), candidates: vi.fn(), stats: vi.fn(), get: vi.fn(), history: vi.fn(),
   create: vi.fn(), addItems: vi.fn(), removeItems: vi.fn(), updateNote: vi.fn(), markReady: vi.fn(), cancel: vi.fn(),
   notify: vi.fn(), subscribe: vi.fn(),
 }))
@@ -49,21 +49,13 @@ function renderAt(path: string, element: React.ReactNode, pattern = '*') {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes><Route path={pattern} element={element} /></Routes></MemoryRouter></QueryClientProvider>)
 }
 
-function renderCreate() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  const router = createMemoryRouter([
-    { path: '/wash-batches/new', element: <WashBatchCreatePage /> },
-    { path: '/wash-batches/:batchId', element: <div>Chi tiết vừa tạo</div> },
-  ], { initialEntries: ['/wash-batches/new'] })
-  return render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
-}
-
 describe('Wash batch operational UI', () => {
   beforeEach(() => {
     mocks.permissions.clear()
     Object.values(mocks).forEach((value) => { if (typeof value === 'function' && 'mockReset' in value) value.mockReset() })
     mocks.subscribe.mockReturnValue(() => undefined)
     mocks.stats.mockResolvedValue({ candidateCount: 1, draftCount: 1, readyCount: 0 })
+    mocks.filterOptions.mockResolvedValue({ services: [{ id: 2, label: 'Giặt thường' }], creators: [{ id: 1, label: 'Admin' }] })
     mocks.candidates.mockResolvedValue({ items: [candidate()], page: 0, size: 50, totalElements: 1, totalPages: 1 })
     mocks.list.mockResolvedValue({ items: [], page: 0, size: 50, totalElements: 0, totalPages: 0 })
     mocks.get.mockResolvedValue(batch)
@@ -76,21 +68,51 @@ describe('Wash batch operational UI', () => {
     mocks.cancel.mockResolvedValue({ ...batch, status: 'CANCELLED', version: 1 })
   })
 
-  it('renders one candidate result as mobile card and desktop table with the full phone number', async () => {
+  it('opens as a monitoring board for created batches instead of a second composition queue', async () => {
     mocks.permissions.add(PERMISSION_CODES.BATCH_READ)
+    mocks.list.mockResolvedValue({ items: [{
+      id: 5, batchCode: 'CN01-MG-000005', serviceName: 'Giặt thường', status: 'DRAFT',
+      orderCount: 2, itemCount: 3, quantities: [{ unitType: 'KG', quantity: 5.5 }], privateLoad: false, warnings: [],
+      createdAt: '2026-09-17T10:00:00Z', createdBy: { id: 1, displayName: 'Admin' },
+    }], page: 0, size: 50, totalElements: 1, totalPages: 1 })
     const { container } = renderAt('/wash-batches', <WashBatchListPage />)
-    expect(await screen.findAllByText('CN01-DH-000007')).toHaveLength(2)
-    expect(screen.getAllByText('0903 123 456')).toHaveLength(2)
-    expect(container.querySelector('.batch-candidate-mobile')).toBeInTheDocument()
+    expect(await screen.findAllByText('CN01-MG-000005')).toHaveLength(2)
+    expect(screen.getByRole('tab', { name: 'Mẻ nháp' })).toHaveAttribute('aria-selected', 'true')
+    expect(container.querySelector('.batch-page-hero')).toBeInTheDocument()
+    expect(container.querySelectorAll('.batch-stats .stat-card__icon')).toHaveLength(3)
+    expect(screen.getByRole('link', { name: 'Xem' })).toHaveClass('batch-list-table__view-button')
+    expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({ status: 'DRAFT' }))
+    expect(screen.queryByRole('tab', { name: /Đồ chờ ghép/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Tạo mẻ/i })).not.toBeInTheDocument()
   })
 
-  it('shows create action only with batch.create and switches tabs without a second data flow', async () => {
-    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+  it('switches between operational statuses using one batch-list data flow', async () => {
+    mocks.permissions.add(PERMISSION_CODES.BATCH_READ)
     renderAt('/wash-batches', <WashBatchListPage />)
-    expect(await screen.findByRole('link', { name: /Tạo mẻ/i })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('tab', { name: 'Mẻ nháp' }))
-    await waitFor(() => expect(mocks.list).toHaveBeenCalledOnce())
+    await screen.findByText('Chưa có mẻ ở trạng thái này')
+    await userEvent.click(screen.getByRole('tab', { name: 'Sẵn sàng' }))
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({ status: 'READY' })))
+    await userEvent.click(screen.getByRole('tab', { name: 'Đang xử lý' }))
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({ status: 'PROCESSING' })))
+    expect(document.querySelectorAll('.batch-tabs__count--placeholder')).toHaveLength(2)
+  })
+
+  it('applies operational filters and pages through the server result', async () => {
+    mocks.permissions.add(PERMISSION_CODES.BATCH_READ)
+    mocks.list.mockResolvedValue({ items: [{
+      id: 5, batchCode: 'CN01-MG-000005', serviceName: 'Giặt thường', status: 'DRAFT', orderCount: 1, itemCount: 1,
+      quantities: [{ unitType: 'KG', quantity: 3.5 }], privateLoad: true, warnings: ['ITEM_NOTE_PRESENT'],
+      createdAt: '2026-09-17T10:00:00Z', createdBy: { id: 1, displayName: 'Admin' }, version: 0,
+    }], page: 0, size: 20, totalElements: 21, totalPages: 2 })
+    renderAt('/wash-batches', <WashBatchListPage />)
+    await userEvent.click(await screen.findByText('Bộ lọc nâng cao'))
+    await userEvent.selectOptions(screen.getByLabelText('Dịch vụ'), '2')
+    await userEvent.selectOptions(screen.getByLabelText('Loại tải'), 'PRIVATE')
+    await userEvent.selectOptions(screen.getByLabelText('Cần kiểm tra'), 'ITEM_NOTE_PRESENT')
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ serviceId: 2, loadType: 'PRIVATE', warning: 'ITEM_NOTE_PRESENT', page: 0, size: 20 })))
+    expect(screen.getAllByText('Giặt riêng').length).toBeGreaterThan(0)
+    await userEvent.click(screen.getByRole('button', { name: /Sau/ }))
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })))
   })
 
   it('guards detail actions independently by effective permissions', async () => {
@@ -108,42 +130,6 @@ describe('Wash batch operational UI', () => {
     expect(candidateCompatibility(candidate({ orderItemId: 12, orderId: 8 }), [candidate({ sharingMode: 'PRIVATE_LOAD' })]))
       .toEqual({ kind: 'blocked', reasons: ['PRIVATE_LOAD_CONFLICT'] })
     expect(candidateCompatibility(candidate({ warnings: ['ITEM_NOTE_PRESENT'] }), [])).toEqual({ kind: 'warning', reasons: ['ITEM_NOTE_PRESENT'] })
-  })
-
-  it('selects compatible candidates, groups orders and units, blocks incompatible choices, and creates a draft', async () => {
-    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
-    mocks.permissions.add(PERMISSION_CODES.BATCH_MARK_READY)
-    mocks.candidates.mockResolvedValue({
-      items: [
-        candidate(),
-        candidate({ orderItemId: 12, orderId: 8, orderCode: 'CN01-DH-000008', itemTypeId: 4, itemTypeName: 'Chăn', quantity: 2, unitType: 'ITEM', warnings: ['ITEM_NOTE_PRESENT'] }),
-        candidate({ orderItemId: 13, orderId: 9, orderCode: 'CN01-DH-000009', serviceId: 9, serviceName: 'Sấy' }),
-        candidate({ orderItemId: 14, orderId: 10, orderCode: 'CN01-DH-000010', sharingMode: 'PRIVATE_LOAD' }),
-      ], page: 0, size: 100, totalElements: 4, totalPages: 1,
-    })
-    const { container } = renderCreate()
-    const first = await screen.findByRole('checkbox', { name: /CN01-DH-000007/ })
-    await userEvent.click(first)
-    await userEvent.click(screen.getByRole('checkbox', { name: /CN01-DH-000008/ }))
-    expect(screen.getByRole('checkbox', { name: /CN01-DH-000009/ })).toBeDisabled()
-    expect(screen.getByRole('checkbox', { name: /CN01-DH-000010/ })).toBeDisabled()
-    expect(screen.getByText(/Có ghi chú xử lý · Có loại đồ khác nhau/)).toBeInTheDocument()
-    expect(screen.getAllByText('2').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('3,5 KG').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('2 MÓN').length).toBeGreaterThan(0)
-    expect(container.querySelector('.batch-mobile-action')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Lưu mẻ nháp' }))
-    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ branchId: 1, orderItemIds: [11, 12], markReady: false })))
-    expect(await screen.findByText('Chi tiết vừa tạo')).toBeInTheDocument()
-  })
-
-  it('creates and marks ready only when the generated permission is effective', async () => {
-    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
-    mocks.permissions.add(PERMISSION_CODES.BATCH_MARK_READY)
-    renderCreate()
-    await userEvent.click(await screen.findByRole('checkbox', { name: /CN01-DH-000007/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Đánh dấu sẵn sàng' }))
-    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ orderItemIds: [11], markReady: true })))
   })
 
   it('groups detail items by order, shows item notes, and prevents removing the final item', async () => {
@@ -216,13 +202,14 @@ describe('Wash batch operational UI', () => {
 
   it('covers empty and error states without reporting a failed request as empty', async () => {
     mocks.permissions.add(PERMISSION_CODES.BATCH_READ)
-    mocks.candidates.mockResolvedValue({ items: [], page: 0, size: 100, totalElements: 0, totalPages: 0 })
+    mocks.list.mockResolvedValue({ items: [], page: 0, size: 50, totalElements: 0, totalPages: 0 })
     const empty = renderAt('/wash-batches', <WashBatchListPage />)
-    expect(await screen.findByText('Không có đồ đang chờ ghép')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa có mẻ ở trạng thái này')).toBeInTheDocument()
+    expect(empty.container.querySelector('.batch-empty-illustration')).toHaveAttribute('src', '/images/wash-batches/wash-batches-empty.png')
     empty.unmount()
-    mocks.candidates.mockRejectedValue(new Error('offline'))
+    mocks.list.mockRejectedValue(new Error('offline'))
     renderAt('/wash-batches', <WashBatchListPage />)
-    expect(await screen.findByText('Không tải được danh sách chờ')).toBeInTheDocument()
-    expect(screen.queryByText('Không có đồ đang chờ ghép')).not.toBeInTheDocument()
+    expect(await screen.findByText('Không tải được danh sách mẻ')).toBeInTheDocument()
+    expect(screen.queryByText('Chưa có mẻ ở trạng thái này')).not.toBeInTheDocument()
   })
 })

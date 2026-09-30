@@ -85,7 +85,7 @@ Mobile uses a drawer plus an opaque bottom navigation bar with no more than five
 
 Canonical shared primitives include:
 
-- `Button`, `ButtonLink`, `IconButton`, `IconButtonLink`, portaled `ActionMenu`, and `CollapsibleFilterPanel`.
+- `Button`, `ButtonLink`, `IconButton`, `IconButtonLink`, portaled `ActionMenu`, `CollapsibleFilterPanel`, and the date-only `DatePickerField`.
 - `Surface` for opaque panels and grouped regions.
 - `StatCard` for single operational metrics, counts, status summaries, and compact comparison values.
 - `AppNavLink` for sidebar, drawer, bottom navigation, and module tabs.
@@ -112,6 +112,8 @@ Shared primitives own interaction styling. Feature modules must not recreate but
 ## Forms and data
 
 Inputs have visible labels, appropriate input modes, nearby validation, and visible focus. On invalid submit, focus or scroll to the first invalid field. Important forms warn before leaving only after actual changes.
+
+Operational promised-return fields use a date-only picker with quick choices and an accessible calendar. Do not expose browser-specific date-time wheels when the workflow does not require a time of day.
 
 Desktop may use tables for comparison and bulk work. Mobile uses cards for primary business lists unless the data is inherently tabular. Mobile and desktop presentations share the same query, filters, permissions, mutations, and business state.
 

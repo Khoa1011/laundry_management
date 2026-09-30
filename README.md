@@ -71,9 +71,10 @@ APP_BOOTSTRAP_PASSWORD=replace-with-a-local-password
 APP_DEMO_SEED_ENABLED=true
 APP_DEMO_SEED_ACTOR_USERNAME=admin
 APP_DEMO_SEED_BRANCH_CODE=MAIN
+APP_DEMO_SEED_PUBLISH=true
 ```
 
-Then rebuild/restart the backend with `docker compose up -d --build backend frontend`. The seed creates six Vietnamese laundry services, 29 item types, explicit leaf eligibility, and a safe DRAFT price list named `Giá bán tiêu chuẩn`. It is idempotent, does not truncate or overwrite existing records, and refuses to run with the `prod` or `production` profile. To reset a disposable demo database, stop the stack and remove its Compose volumes explicitly; never use that reset procedure for a database containing user data.
+Then rebuild/restart the backend with `docker compose up -d --build backend frontend`. The seed creates the five service groups and menu prices used by the local shop workflow, with explicit leaf eligibility and a price list named `Bảng giá menu tiệm Dung`. Set `APP_DEMO_SEED_PUBLISH=true` only when the seeded prices should become immediately available to order intake; otherwise the list remains a safe draft. The seed is idempotent, does not truncate or overwrite existing records, and refuses to run with the `prod` or `production` profile. To reset a disposable demo database, stop the stack and remove its Compose volumes explicitly; never use that reset procedure for a database containing user data.
 
 ## Routine commands
 

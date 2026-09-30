@@ -1,6 +1,7 @@
 package com.laundry.management.washbatch.infrastructure;
 
 import com.laundry.management.washbatch.domain.*;
+import com.laundry.management.auth.domain.UserAccount;
 import jakarta.persistence.LockModeType;
 import java.util.*;
 import org.springframework.data.domain.*;
@@ -13,8 +14,25 @@ public interface WashBatchRepository extends JpaRepository<WashBatch,Long> {
         select b from WashBatch b where b.branch.id=:branchId
           and (:status is null or b.status=:status)
           and (:search is null or lower(b.batchCode) like :search escape '!')
+          and (:serviceId is null or b.service.id=:serviceId)
+          and (:createdBy is null or b.createdBy.id=:createdBy)
+          and (:createdFrom is null or b.createdAt>=:createdFrom)
+          and (:createdTo is null or b.createdAt<:createdTo)
+          and (:privateOnly=false or exists (select pi.id from WashBatchItem pi where pi.batch=b and (pi.removedAt is null or b.status=com.laundry.management.washbatch.domain.WashBatchStatus.CANCELLED) and pi.orderItem.sharingModeSnapshot=com.laundry.management.servicecatalog.domain.SharingMode.PRIVATE_LOAD))
+          and (:sharedOnly=false or not exists (select si.id from WashBatchItem si where si.batch=b and (si.removedAt is null or b.status=com.laundry.management.washbatch.domain.WashBatchStatus.CANCELLED) and si.orderItem.sharingModeSnapshot=com.laundry.management.servicecatalog.domain.SharingMode.PRIVATE_LOAD))
+          and (:notesOnly=false or exists (select ni.id from WashBatchItem ni where ni.batch=b and (ni.removedAt is null or b.status=com.laundry.management.washbatch.domain.WashBatchStatus.CANCELLED) and ni.orderItem.note is not null and trim(ni.orderItem.note)<>''))
+          and (:mixedOnly=false or (select count(distinct mi.orderItem.itemType.id) from WashBatchItem mi where mi.batch=b and (mi.removedAt is null or b.status=com.laundry.management.washbatch.domain.WashBatchStatus.CANCELLED))>1)
+          and (:priorityOnly=false or exists (select pri.id from WashBatchItem pri where pri.batch=b and (pri.removedAt is null or b.status=com.laundry.management.washbatch.domain.WashBatchStatus.CANCELLED) and pri.orderItem.sharingModeSnapshot=com.laundry.management.servicecatalog.domain.SharingMode.SHARED_PRIORITY))
+          and (:dueSoonOnly=false or exists (select di.id from WashBatchItem di where di.batch=b and (di.removedAt is null or b.status=com.laundry.management.washbatch.domain.WashBatchStatus.CANCELLED) and di.orderItem.order.promisedAt is not null and di.orderItem.order.promisedAt<=:dueSoon))
         """)
-    Page<WashBatch> search(@Param("branchId") Long branchId,@Param("status") WashBatchStatus status,@Param("search") String search,Pageable pageable);
+    Page<WashBatch> search(@Param("branchId") Long branchId,@Param("status") WashBatchStatus status,@Param("search") String search,
+        @Param("serviceId") Long serviceId,@Param("createdBy") Long createdBy,@Param("createdFrom") java.time.Instant createdFrom,@Param("createdTo") java.time.Instant createdTo,
+        @Param("privateOnly") boolean privateOnly,@Param("sharedOnly") boolean sharedOnly,@Param("notesOnly") boolean notesOnly,
+        @Param("mixedOnly") boolean mixedOnly,@Param("priorityOnly") boolean priorityOnly,@Param("dueSoonOnly") boolean dueSoonOnly,
+        @Param("dueSoon") java.time.Instant dueSoon,Pageable pageable);
+
+    @Query("select distinct b.createdBy from WashBatch b where b.branch.id=:branchId order by b.createdBy.displayName,b.createdBy.id")
+    List<UserAccount> findCreators(@Param("branchId") Long branchId);
 
     @EntityGraph(attributePaths={"branch","service","createdBy","items","items.orderItem","items.orderItem.order"})
     @Query("select distinct b from WashBatch b where b.id in :ids")

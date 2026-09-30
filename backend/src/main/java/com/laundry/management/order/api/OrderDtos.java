@@ -65,6 +65,8 @@ public final class OrderDtos {
         String serviceSummary, BigDecimal totalAmount, String currency, OrderStatus status,
         Instant promisedAt, Instant createdAt, long version) {}
     public record PageResponse(List<ListItemResponse> items, int page, int size, long totalElements, int totalPages) {}
+    public record FilterOption(Long id, String label) {}
+    public record FilterOptions(List<FilterOption> services) {}
     public record HistoryResponse(Long id, OrderHistoryAction action, OrderStatus fromStatus, OrderStatus toStatus,
         String reason, JsonNode changedFields, OrderStatusSource source, ActorResponse actor, Instant createdAt) {}
 

@@ -58,7 +58,6 @@ export function AppShell() {
 
   const focused = location.pathname === '/customers/new'
     || location.pathname === '/orders/new'
-    || location.pathname === '/wash-batches/new'
     || /\/customers\/\d+\/edit$/.test(location.pathname)
     || location.pathname === '/employees/new'
     || /\/employees\/\d+\/edit$/.test(location.pathname)

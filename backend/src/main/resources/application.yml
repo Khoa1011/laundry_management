@@ -30,6 +30,7 @@ app:
     enabled: ${APP_DEMO_SEED_ENABLED:false}
     actor-username: ${APP_DEMO_SEED_ACTOR_USERNAME:${APP_BOOTSTRAP_USERNAME:}}
     branch-code: ${APP_DEMO_SEED_BRANCH_CODE:${APP_BOOTSTRAP_BRANCH_CODE:MAIN}}
+    publish: ${APP_DEMO_SEED_PUBLISH:false}
   employee-sensitive:
     identity-key: ${APP_EMPLOYEE_IDENTITY_KEY:}
     storage-root: ${APP_EMPLOYEE_DOCUMENT_STORAGE_ROOT:./private-data/employee-documents}

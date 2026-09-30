@@ -17,11 +17,11 @@ This is the initial business-rule template for the laundry shop management syste
 - An order belongs to exactly one branch. Its code is generated only by the backend from an independent, concurrency-safe branch sequence in the form `<branch-code>-DH-000001`; clients cannot supply or edit it.
 - An order may reference an active customer in the same branch or store a guest name/phone snapshot without creating a customer. Existing-customer name and phone are also snapshotted at intake.
 - Every order contains at least one eligible service item. Each item requires a concrete, active, eligible leaf ItemType; parent ItemTypes are organizational only and can never identify an OrderItem. Quantity, unit, item type, sharing context, notes, authoritative pricing breakdown, price-list/rule references, and quoted time are retained with the item. The client never supplies the final price.
-- The order total is the sum of immutable item pricing snapshots in V1. Promised return time is optional. Payment, debt, discount, promotion, manual price override, tax, printing, delivery, inventory, machine assignment, barcode, and QR behavior are outside Order Core V1.
+- The order total is the sum of immutable item pricing snapshots in V1. The promised return date is optional and staff select a calendar date without entering a time of day. Until the API is migrated to a date-only field, the client stores the selected local date as the end-of-day compatibility timestamp and all user-facing order screens show only the date. Payment, debt, discount, promotion, manual price override, tax, printing, delivery, inventory, machine assignment, barcode, and QR behavior are outside Order Core V1.
 - Order currency is taken from the authoritative Pricing result. Every item in an order must use that currency; this phase performs no currency conversion.
 - One effective pricing time is captured per create or structural repricing operation and is used for every item in that operation.
-- Structural edits to services and quantities are allowed only in `RECEIVED`. Safe note and promised-time updates may continue in `PROCESSING` and `READY`. `COMPLETED` and `CANCELLED` orders are immutable; reopening a completed order is the only exception.
-- PATCH updates are presence-aware: omitted fields preserve their current value, while an explicit `null` clears a nullable field such as promised return time or note. Omitted item collections never erase order lines.
+- Structural edits to services and quantities are allowed only in `RECEIVED`. Safe note and promised-date updates may continue in `PROCESSING` and `READY`. `COMPLETED` and `CANCELLED` orders are immutable; reopening a completed order is the only exception.
+- PATCH updates are presence-aware: omitted fields preserve their current value, while an explicit `null` clears a nullable field such as promised return date or note. Omitted item collections never erase order lines.
 - Orders, pricing snapshots, and status/audit history are retained and are not hard deleted.
 
 ## Order status transitions
@@ -109,6 +109,7 @@ This is the initial business-rule template for the laundry shop management syste
 
 ## Wash batches
 
+- Operators compose new batches from the Orders workflow; the Wash Batches module is the monitoring and management surface for batches that already exist. A dedicated-load order may request a separate draft batch immediately after the order is saved. Batch creation is a secondary operation: if it fails, the saved order remains valid and its items remain available in the Orders composition queue.
 - A wash batch belongs to exactly one branch and one service. Its code is generated only by the backend from an independent, pessimistically locked branch sequence in the form `<branch-code>-MG-000001`.
 - Only items whose order is still `RECEIVED` are candidates. Creating or preparing a batch does not change the order status; future machine-cycle work owns the transition to processing.
 - A batch may combine items from several orders only when every item uses the same service. A `PRIVATE_LOAD` item may never share a batch with another order. Different item types are allowed but produce a visible warning.

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Plus, Search } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useBeforeUnload, useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Clock3, Cog, FileText, Search, ShoppingBasket, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
@@ -9,65 +9,65 @@ import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, StatePanel } from '../../components/States'
 import { Field } from '../../components/Field'
 import { Button, ButtonLink } from '../../components/ui/Button'
+import { CollapsibleFilterPanel } from '../../components/ui/CollapsibleFilterPanel'
 import { StatCard } from '../../components/ui/StatCard'
 import { Surface } from '../../components/ui/Surface'
 import { useRealtime } from '../../realtime/context'
 import { useToast } from '../../providers/ToastProvider'
 import { batchKeys, washBatchApi } from './api'
-import { BatchCandidateCard, BatchItemGroups, BatchStatusChip, BatchSummary } from './BatchComponents'
-import { candidateCompatibility, quantitiesText, quantityText, sharingText, warningText } from './presentation'
-import type { BatchCandidate, BatchHistory, BatchItem } from './types'
+import { BatchCandidateCard, BatchItemGroups, BatchStatusChip } from './BatchComponents'
+import { candidateCompatibility, quantitiesText, warningText } from './presentation'
+import type { BatchHistory, BatchItem } from './types'
 
 const when=(value:string)=>new Date(value).toLocaleString('vi-VN',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
 const historyText:Record<string,string>={CREATED:'Tạo mẻ',ITEMS_ADDED:'Thêm đồ vào mẻ',ITEMS_REMOVED:'Xóa đồ khỏi mẻ',NOTE_UPDATED:'Cập nhật ghi chú mẻ',MARKED_READY:'Đánh dấu sẵn sàng',CANCELLED:'Hủy mẻ'}
+const localDayBoundary=(value:string,offset:number)=>{const [year,month,day]=value.split('-').map(Number);return year&&month&&day?new Date(year,month-1,day+offset).toISOString():undefined}
 function apiMessage(error:unknown){if(!(error instanceof ApiError))return 'Không thể hoàn tất thao tác.';return ({BATCH_VERSION_CONFLICT:'Mẻ giặt vừa được người khác cập nhật.',BATCH_ITEM_ALREADY_ASSIGNED:'Một món vừa được xếp vào mẻ khác.',BATCH_INCOMPATIBLE:'Không thể ghép các món đã chọn.',BATCH_IMMUTABLE:'Mẻ đã sẵn sàng nên không thể thay đổi thành phần.'} as Record<string,string>)[error.problem.errorCode??'']??error.message}
 
-type MainTab='candidates'|'DRAFT'|'READY'|'CANCELLED'
+type MainTab='DRAFT'|'READY'|'PROCESSING'|'COMPLETED'|'CANCELLED'
+const mainTabs = [
+  ['DRAFT', 'Mẻ nháp', FileText],
+  ['READY', 'Sẵn sàng', CheckCircle2],
+  ['PROCESSING', 'Đang xử lý', Cog],
+  ['COMPLETED', 'Hoàn tất', CircleCheck],
+  ['CANCELLED', 'Đã hủy', XCircle],
+] as const
+
 export function WashBatchListPage(){
-  const {branchId,hasPermission}=useAuth();const navigate=useNavigate();const queryClient=useQueryClient();const {subscribe}=useRealtime()
-  const [tab,setTab]=useState<MainTab>('candidates');const [search,setSearch]=useState('');const [serviceFilter,setServiceFilter]=useState('');const [sharingFilter,setSharingFilter]=useState('');const [dueFilter,setDueFilter]=useState('')
+  const {branchId}=useAuth();const queryClient=useQueryClient();const {subscribe}=useRealtime()
+  const [tab,setTab]=useState<MainTab>('DRAFT');const [search,setSearch]=useState('');const [page,setPage]=useState(0)
+  const [serviceId,setServiceId]=useState('');const [createdBy,setCreatedBy]=useState('');const [from,setFrom]=useState('');const [to,setTo]=useState('');const [loadType,setLoadType]=useState('');const [warning,setWarning]=useState('')
   const stats=useQuery({queryKey:batchKeys.stats(branchId),queryFn:()=>washBatchApi.stats(branchId!),enabled:Boolean(branchId)})
-  const candidates=useQuery({queryKey:batchKeys.candidates(branchId,search),queryFn:()=>washBatchApi.candidates({branchId:branchId!,search,page:0,size:100}),enabled:Boolean(branchId)&&tab==='candidates'})
-  const batches=useQuery({queryKey:batchKeys.list(branchId,tab==='candidates'?undefined:tab,search),queryFn:()=>washBatchApi.list({branchId:branchId!,status:tab==='candidates'?undefined:tab,search,page:0,size:50}),enabled:Boolean(branchId)&&tab!=='candidates'})
+  const filterOptions=useQuery({queryKey:batchKeys.filterOptions(branchId),queryFn:()=>washBatchApi.filterOptions(branchId!),enabled:Boolean(branchId)})
+  const batches=useQuery({queryKey:batchKeys.list(branchId,tab,search,page,serviceId?Number(serviceId):undefined,createdBy?Number(createdBy):undefined,from,to,loadType,warning),queryFn:()=>washBatchApi.list({branchId:branchId!,status:tab,search:search||undefined,page,size:20,serviceId:serviceId?Number(serviceId):undefined,createdBy:createdBy?Number(createdBy):undefined,createdFrom:from?localDayBoundary(from,0):undefined,createdTo:to?localDayBoundary(to,1):undefined,loadType:loadType||undefined,warning:warning||undefined}),enabled:Boolean(branchId)})
+  const tabCount=(value:MainTab)=>{if(tab===value)return batches.data?.totalElements;if(value==='DRAFT')return stats.data?.draftCount;if(value==='READY')return stats.data?.readyCount;return undefined}
+  const activeFilterCount=[serviceId,createdBy,from,to,loadType,warning].filter(Boolean).length
+  const clearFilters=()=>{setServiceId('');setCreatedBy('');setFrom('');setTo('');setLoadType('');setWarning('');setPage(0)}
   useEffect(()=>subscribe('batch.',()=>{void queryClient.invalidateQueries({queryKey:batchKeys.all})}),[queryClient,subscribe])
-  const serviceOptions=useMemo(()=>[...new Map((candidates.data?.items??[]).map(item=>[item.serviceId,item.serviceName])).entries()],[candidates.data])
-  const filteredCandidates=useMemo(()=>{const soon=Date.now()+24*60*60*1000;return (candidates.data?.items??[]).filter(item=>(!serviceFilter||String(item.serviceId)===serviceFilter)&&(!sharingFilter||item.sharingMode===sharingFilter)&&(!dueFilter||(dueFilter==='SOON'&&Boolean(item.promisedAt)&&new Date(item.promisedAt!).getTime()<=soon)||(dueFilter==='NONE'&&!item.promisedAt)))},[candidates.data,dueFilter,serviceFilter,sharingFilter])
-  const canCreate=hasPermission(PERMISSION_CODES.BATCH_CREATE)
-  return <div className="page-container wash-batch-page"><header className="page-header"><div><p className="page-kicker">Điều phối xử lý</p><h1>Mẻ giặt</h1><p>Ghép đồ đang chờ thành các mẻ xử lý phù hợp.</p></div>{canCreate&&<ButtonLink to="/wash-batches/new" variant="create"><Plus size={18}/>Tạo mẻ</ButtonLink>}</header>
-    <div className="batch-stats"><StatCard label="Đồ chờ ghép" value={stats.data?.candidateCount??'—'} tone="operational"/><StatCard label="Mẻ nháp" value={stats.data?.draftCount??'—'} tone="neutral"/><StatCard label="Mẻ sẵn sàng" value={stats.data?.readyCount??'—'} tone="success"/></div>
-    <div className="batch-tabs" role="tablist" aria-label="Trạng thái mẻ">{([['candidates','Đồ chờ ghép'],['DRAFT','Mẻ nháp'],['READY','Sẵn sàng'],['CANCELLED','Đã hủy']] as const).map(([value,label])=><button key={value} role="tab" aria-selected={tab===value} onClick={()=>setTab(value)}>{label}</button>)}</div>
-    <Surface className="batch-board"><label className="batch-search"><Search size={19}/><span className="sr-only">Tìm kiếm</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder={tab==='candidates'?'Mã đơn, tên khách, số điện thoại':'Tìm theo mã mẻ'}/></label>
-      {tab==='candidates'&&<details className="batch-filters" open><summary>Bộ lọc nâng cao</summary><div><label>Dịch vụ<select aria-label="Lọc theo dịch vụ" value={serviceFilter} onChange={event=>setServiceFilter(event.target.value)}><option value="">Tất cả dịch vụ</option>{serviceOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label>Hình thức xử lý<select aria-label="Lọc theo hình thức xử lý" value={sharingFilter} onChange={event=>setSharingFilter(event.target.value)}><option value="">Tất cả hình thức</option><option value="SHARED_STANDARD">Giặt chung</option><option value="SHARED_PRIORITY">Ưu tiên ghép</option><option value="PRIVATE_LOAD">Giặt riêng</option></select></label><label>Hạn trả<select aria-label="Lọc theo hạn trả" value={dueFilter} onChange={event=>setDueFilter(event.target.value)}><option value="">Tất cả hạn trả</option><option value="SOON">Trong 24 giờ</option><option value="NONE">Chưa hẹn</option></select></label></div></details>}
-      {tab==='candidates'?<CandidateQueue query={candidates} items={filteredCandidates} onPick={item=>navigate(`/wash-batches/new?item=${item.orderItemId}`)}/>:<BatchList query={batches}/>}</Surface>
+  return <div className="page-container wash-batch-page"><header className="page-header batch-page-hero"><div><p className="page-kicker">Điều phối xử lý</p><h1>Mẻ giặt</h1><p>Theo dõi và quản lý các mẻ đã được ghép từ trang Đơn hàng.</p></div></header>
+    <div className="batch-stats" aria-label="Tổng quan mẻ giặt"><StatCard icon={<ShoppingBasket/>} label="Đồ chờ ghép" value={stats.data?.candidateCount??'—'} tone="operational"/><StatCard icon={<FileText/>} label="Mẻ nháp" value={stats.data?.draftCount??'—'} tone="primary"/><StatCard icon={<CheckCircle2/>} label="Mẻ sẵn sàng" value={stats.data?.readyCount??'—'} tone="success"/></div>
+    <div className="batch-tabs" role="tablist" aria-label="Trạng thái mẻ">{mainTabs.map(([value,label,Icon])=>{const count=tabCount(value);return <button id={`batch-tab-${value.toLowerCase()}`} data-status={value.toLowerCase()} key={value} type="button" role="tab" aria-controls="batch-panel" aria-selected={tab===value} onClick={()=>{setTab(value);setPage(0)}}><span className="batch-tabs__icon"><Icon size={18} aria-hidden="true"/></span><span>{label}</span><span className={`batch-tabs__count${count===undefined?' batch-tabs__count--placeholder':''}`} aria-hidden="true">{count??0}</span></button>})}</div>
+    <Surface id="batch-panel" className="batch-board" role="tabpanel" aria-labelledby={`batch-tab-${tab.toLowerCase()}`}><div className="batch-toolbar"><label className="batch-search"><Search size={19} aria-hidden="true"/><span className="sr-only">Tìm kiếm</span><input value={search} onChange={event=>{setSearch(event.target.value);setPage(0)}} placeholder="Tìm theo mã mẻ"/></label><span className="batch-count" aria-live="polite">{batches.isLoading?'Đang tải':`${batches.data?.totalElements??0} mẻ`}</span></div>
+      <CollapsibleFilterPanel className="batch-advanced-filters" label="Bộ lọc nâng cao" activeCount={activeFilterCount} fieldsClassName="batch-filter-fields">
+        <Field label="Dịch vụ"><select value={serviceId} onChange={event=>{setServiceId(event.target.value);setPage(0)}}><option value="">Tất cả dịch vụ</option>{filterOptions.data?.services.map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></Field>
+        <Field label="Người tạo"><select value={createdBy} onChange={event=>{setCreatedBy(event.target.value);setPage(0)}}><option value="">Tất cả nhân viên</option>{filterOptions.data?.creators.map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></Field>
+        <Field label="Loại tải"><select value={loadType} onChange={event=>{setLoadType(event.target.value);setPage(0)}}><option value="">Tất cả loại tải</option><option value="PRIVATE">Giặt riêng</option><option value="SHARED">Ghép chung</option></select></Field>
+        <Field label="Cần kiểm tra"><select value={warning} onChange={event=>{setWarning(event.target.value);setPage(0)}}><option value="">Tất cả</option><option value="ITEM_NOTE_PRESENT">Có ghi chú xử lý</option><option value="DIFFERENT_ITEM_TYPES">Trộn loại đồ</option><option value="PRIORITY_ITEM">Có món ưu tiên</option><option value="PROMISED_TIME_SOON">Hẹn trả trong 24 giờ</option></select></Field>
+        <Field label="Từ ngày tạo"><input type="date" value={from} onChange={event=>{setFrom(event.target.value);setPage(0)}}/></Field>
+        <Field label="Đến ngày tạo"><input type="date" min={from||undefined} value={to} onChange={event=>{setTo(event.target.value);setPage(0)}}/></Field>
+        {activeFilterCount>0&&<Button type="button" variant="ghost" onClick={clearFilters}>Xóa lọc</Button>}
+      </CollapsibleFilterPanel>
+      <BatchList query={batches} page={page} onPage={setPage} hasActiveFilters={Boolean(search||activeFilterCount)}/></Surface>
   </div>
 }
 
-function CandidateQueue({query,items,onPick}:{query:ReturnType<typeof useQuery<Awaited<ReturnType<typeof washBatchApi.candidates>>>>;items:BatchCandidate[];onPick:(item:BatchCandidate)=>void}){
-  if(query.isLoading)return <LoadingState rows={6}/>;if(query.isError)return <ErrorState title="Không tải được danh sách chờ" body="Kiểm tra kết nối rồi thử lại." onRetry={()=>void query.refetch()}/>;if(!items.length)return <StatePanel title="Không có đồ đang chờ ghép" body="Thử thay đổi bộ lọc hoặc tạo đơn mới ở trạng thái Đã nhận."/>
-  return <><div className="batch-candidate-table"><table><thead><tr><th aria-label="Chọn"></th><th>Đơn</th><th>Khách hàng</th><th>Dịch vụ / Loại đồ</th><th>SL / KL</th><th>Hình thức</th><th>Hẹn trả</th><th>Trạng thái</th></tr></thead><tbody>{items.map(item=><tr key={item.orderItemId}><td><input type="checkbox" aria-label={`Chọn ${item.orderCode}`} onChange={()=>onPick(item)}/></td><td><strong>{item.orderCode}</strong></td><td>{item.customerName}<small>{item.customerPhone}</small></td><td>{item.serviceName}<small>{item.itemTypeName}</small></td><td>{quantityText(item.quantity,item.unitType)}</td><td>{sharingText(item.sharingMode)}</td><td>{item.promisedAt?when(item.promisedAt):'Chưa hẹn'}</td><td><span className="queue-status">Chờ ghép</span></td></tr>)}</tbody></table></div><div className="batch-candidate-mobile">{items.map(item=><BatchCandidateCard key={item.orderItemId} candidate={item} selected={false} onChange={()=>onPick(item)} compatibility={candidateCompatibility(item,[])}/>)}</div></>
+function BatchFlags({privateLoad,warnings}:{privateLoad:boolean;warnings:string[]}){return <span className="batch-list-flags">{privateLoad&&<span>Giặt riêng</span>}{warnings.map(code=><span key={code}>{warningText[code]??code}</span>)}</span>}
+
+function BatchList({query,page,onPage,hasActiveFilters}:{query:ReturnType<typeof useQuery<Awaited<ReturnType<typeof washBatchApi.list>>>>;page:number;onPage:(page:number)=>void;hasActiveFilters:boolean}){
+  if(query.isLoading)return <LoadingState rows={5}/>;if(query.isError)return <ErrorState title="Không tải được danh sách mẻ" body="Kiểm tra kết nối rồi thử lại." onRetry={()=>void query.refetch()}/>;if(!query.data?.items.length)return <StatePanel className="batch-empty-state" icon={<img className="batch-empty-illustration" src="/images/wash-batches/wash-batches-empty.png" alt=""/>} title={hasActiveFilters?'Không tìm thấy mẻ phù hợp':'Chưa có mẻ ở trạng thái này'} body={hasActiveFilters?'Thử đổi từ khóa hoặc bộ lọc nâng cao.':'Các mẻ phù hợp sẽ xuất hiện tại đây.'}/>
+  return <><div className="batch-list-table"><table aria-label="Danh sách mẻ giặt"><thead><tr><th scope="col">Mã mẻ</th><th scope="col">Dịch vụ</th><th scope="col">Số đơn</th><th scope="col">Số món</th><th scope="col">Khối lượng / số lượng</th><th scope="col">Tạo lúc</th><th scope="col">Người tạo</th><th scope="col">Trạng thái</th><th scope="col">Thao tác</th></tr></thead><tbody>{query.data.items.map(item=><tr key={item.id}><td><Link to={`/wash-batches/${item.id}`}>{item.batchCode}</Link></td><td><span className="batch-list-service"><strong>{item.serviceName}</strong><BatchFlags privateLoad={item.privateLoad} warnings={item.warnings}/></span></td><td>{item.orderCount}</td><td>{item.itemCount}</td><td>{quantitiesText(item.quantities)}</td><td>{when(item.createdAt)}</td><td>{item.createdBy.displayName}</td><td><BatchStatusChip status={item.status}/></td><td><ButtonLink className="batch-list-table__view-button" size="sm" variant="ghost" to={`/wash-batches/${item.id}`}>Xem</ButtonLink></td></tr>)}</tbody></table></div><div className="batch-list-mobile">{query.data.items.map(item=><Link className="batch-list-card" to={`/wash-batches/${item.id}`} key={item.id}><span><strong>{item.batchCode}</strong><BatchStatusChip status={item.status}/></span><b>{item.serviceName}</b><BatchFlags privateLoad={item.privateLoad} warnings={item.warnings}/><p>{item.orderCount} đơn · {item.itemCount} món</p><strong>{quantitiesText(item.quantities)}</strong><small>Tạo {when(item.createdAt)} · {item.createdBy.displayName}</small></Link>)}</div>{query.data.totalPages>1&&<nav className="batch-pagination" aria-label="Phân trang mẻ giặt"><Button variant="secondary" size="sm" disabled={page===0} onClick={()=>onPage(Math.max(0,page-1))}><ChevronLeft size={17}/>Trước</Button><span>Trang {page+1} / {query.data.totalPages}</span><Button variant="secondary" size="sm" disabled={page+1>=query.data.totalPages} onClick={()=>onPage(page+1)}>Sau<ChevronRight size={17}/></Button></nav>}</>
 }
 
-function BatchList({query}:{query:ReturnType<typeof useQuery<Awaited<ReturnType<typeof washBatchApi.list>>>>}){
-  if(query.isLoading)return <LoadingState rows={5}/>;if(query.isError)return <ErrorState title="Không tải được danh sách mẻ" body="Kiểm tra kết nối rồi thử lại." onRetry={()=>void query.refetch()}/>;if(!query.data?.items.length)return <StatePanel title="Chưa có mẻ ở trạng thái này" body="Các mẻ phù hợp sẽ xuất hiện tại đây."/>
-  return <><div className="batch-list-table"><table><thead><tr><th>Mã mẻ</th><th>Dịch vụ</th><th>Số đơn</th><th>Số món</th><th>Khối lượng / số lượng</th><th>Tạo lúc</th><th>Người tạo</th><th>Trạng thái</th></tr></thead><tbody>{query.data.items.map(item=><tr key={item.id}><td><Link to={`/wash-batches/${item.id}`}>{item.batchCode}</Link></td><td>{item.serviceName}</td><td>{item.orderCount}</td><td>{item.itemCount}</td><td>{quantitiesText(item.quantities)}</td><td>{when(item.createdAt)}</td><td>{item.createdBy.displayName}</td><td><BatchStatusChip status={item.status}/></td></tr>)}</tbody></table></div><div className="batch-list-mobile">{query.data.items.map(item=><Link className="batch-list-card" to={`/wash-batches/${item.id}`} key={item.id}><span><strong>{item.batchCode}</strong><BatchStatusChip status={item.status}/></span><b>{item.serviceName}</b><p>{item.orderCount} đơn · {item.itemCount} món</p><strong>{quantitiesText(item.quantities)}</strong><small>Tạo {when(item.createdAt)} · {item.createdBy.displayName}</small></Link>)}</div></>
-}
-
-export function WashBatchCreatePage(){
-  const {branchId,hasPermission}=useAuth();const navigate=useNavigate();const [params]=useSearchParams();const queryClient=useQueryClient();const {notify}=useToast();const [search,setSearch]=useState('');const [selectedIds,setSelectedIds]=useState<number[]>([]);const [note,setNote]=useState('');const allowLeave=useRef(false)
-  const query=useQuery({queryKey:batchKeys.candidates(branchId,search),queryFn:()=>washBatchApi.candidates({branchId:branchId!,search,page:0,size:100}),enabled:Boolean(branchId)})
-  useEffect(()=>{const id=Number(params.get('item'));if(id&&query.data?.items.some(item=>item.orderItemId===id))setSelectedIds(current=>current.includes(id)?current:[...current,id])},[params,query.data])
-  const selected=useMemo(()=>query.data?.items.filter(item=>selectedIds.includes(item.orderItemId))??[],[query.data,selectedIds]);const dirty=selectedIds.length>0||Boolean(note)
-  useBeforeUnload(event=>{if(dirty&&!allowLeave.current)event.preventDefault()});const blocker=useBlocker(()=>dirty&&!allowLeave.current)
-  const create=useMutation({mutationFn:(markReady:boolean)=>washBatchApi.create({branchId:branchId!,orderItemIds:selectedIds,note:note.trim()||null,markReady}),onSuccess:value=>{allowLeave.current=true;void queryClient.invalidateQueries({queryKey:batchKeys.all});notify({message:value.status==='READY'?'Đã tạo và đánh dấu mẻ sẵn sàng.':'Đã lưu mẻ nháp.',tone:'success'});navigate(`/wash-batches/${value.id}`)},onError:error=>notify({message:apiMessage(error),tone:'error'})})
-  const toggle=(candidate:BatchCandidate,checked:boolean)=>setSelectedIds(current=>checked?[...current,candidate.orderItemId]:current.filter(id=>id!==candidate.orderItemId))
-  return <div className="page-container wash-batch-create"><header className="page-header"><div><Link className="back-link" to="/wash-batches"><ArrowLeft size={18}/>Mẻ giặt</Link><h1>Tạo mẻ giặt</h1><p>Chọn đồ có thể xử lý chung. Hệ thống sẽ kiểm tra các điều kiện đã biết trước khi tạo mẻ.</p></div></header>
-    <div className="batch-create-layout"><Surface className="batch-selector"><label className="batch-search"><Search size={19}/><span className="sr-only">Tìm đồ chờ ghép</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Mã đơn, tên khách, số điện thoại"/></label>
-      {query.isLoading?<LoadingState rows={6}/>:query.isError?<ErrorState title="Không tải được đồ chờ ghép" body="Thử tải lại danh sách." onRetry={()=>void query.refetch()}/>:!query.data?.items.length?<StatePanel title="Không có đồ đang chờ ghép" body="Đơn mới ở trạng thái Đã nhận sẽ xuất hiện tại đây."/>:<div className="batch-candidate-grid">{query.data.items.map(candidate=>{const compatibility=candidateCompatibility(candidate,selected.filter(item=>item.orderItemId!==candidate.orderItemId));return <BatchCandidateCard key={candidate.orderItemId} candidate={candidate} selected={selectedIds.includes(candidate.orderItemId)} compatibility={compatibility} onChange={checked=>toggle(candidate,checked)}/>})}</div>}</Surface>
-      <Surface className="batch-create-summary"><h2>Mẻ đang tạo</h2><BatchSummary selected={selected}/><Field label="Ghi chú mẻ"><textarea rows={4} maxLength={2000} value={note} onChange={event=>setNote(event.target.value)} placeholder="Thông tin chung cho mẻ này"/></Field><div className="batch-summary-actions"><Button variant="secondary" loading={create.isPending} disabled={!selected.length} onClick={()=>create.mutate(false)}>Lưu mẻ nháp</Button><Button variant="success" loading={create.isPending} disabled={!selected.length||!hasPermission(PERMISSION_CODES.BATCH_MARK_READY)} onClick={()=>create.mutate(true)}>Đánh dấu sẵn sàng</Button></div></Surface></div>
-    <div className="batch-mobile-action"><span><strong>{selected.length} món</strong><small>{new Set(selected.map(item=>item.orderId)).size} đơn</small></span><Button loading={create.isPending} disabled={!selected.length} onClick={()=>create.mutate(false)}>Tạo mẻ</Button></div>
-    <ConfirmDialog open={blocker.state==='blocked'} onClose={()=>blocker.reset?.()} onConfirm={()=>blocker.proceed?.()} title="Bạn có thay đổi chưa lưu" body="Các món đang chọn sẽ bị bỏ nếu rời khỏi trang." confirmLabel="Rời khỏi trang" tone="danger"/>
-  </div>
-}
 
 export function WashBatchDetailPage(){
   const id=Number(useParams().batchId);const {branchId,hasPermission}=useAuth();const queryClient=useQueryClient();const {subscribe}=useRealtime();const {notify}=useToast()

@@ -21,7 +21,6 @@ const OrderListPage = lazy(() => import('./features/orders/OrderPages').then((mo
 const OrderCreatePage = lazy(() => import('./features/orders/OrderPages').then((module) => ({ default: module.OrderCreatePage })))
 const OrderDetailPage = lazy(() => import('./features/orders/OrderPages').then((module) => ({ default: module.OrderDetailPage })))
 const WashBatchListPage = lazy(() => import('./features/wash-batches/WashBatchPages').then((module) => ({ default: module.WashBatchListPage })))
-const WashBatchCreatePage = lazy(() => import('./features/wash-batches/WashBatchPages').then((module) => ({ default: module.WashBatchCreatePage })))
 const WashBatchDetailPage = lazy(() => import('./features/wash-batches/WashBatchPages').then((module) => ({ default: module.WashBatchDetailPage })))
 const ForbiddenPage = lazy(() => import('./pages/PlaceholderPage').then((module) => ({ default: module.ForbiddenPage })))
 const NotFoundPage = lazy(() => import('./pages/PlaceholderPage').then((module) => ({ default: module.NotFoundPage })))
@@ -100,10 +99,11 @@ const router = createBrowserRouter([
       { path: '/catalog/price-lists/:priceListId', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><PermissionRoute permission={PERMISSION_CODES.PRICE_RULE_READ}><LazyPage><PriceListDetailPage /></LazyPage></PermissionRoute></PermissionRoute> },
       { path: '/overview', element: <LazyPage><OverviewPage /></LazyPage> },
       { path: '/orders', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_READ}><LazyPage><OrderListPage /></LazyPage></PermissionRoute> },
+      { path: '/orders/batching', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_CREATE}><LazyPage><OrderListPage /></LazyPage></PermissionRoute> },
       { path: '/orders/new', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_CREATE}><LazyPage><OrderCreatePage /></LazyPage></PermissionRoute> },
       { path: '/orders/:orderId', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_READ}><LazyPage><OrderDetailPage /></LazyPage></PermissionRoute> },
       { path: '/wash-batches', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_READ}><LazyPage><WashBatchListPage /></LazyPage></PermissionRoute> },
-      { path: '/wash-batches/new', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_CREATE}><LazyPage><WashBatchCreatePage /></LazyPage></PermissionRoute> },
+      { path: '/wash-batches/new', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_CREATE}><Navigate to="/orders/batching" replace /></PermissionRoute> },
       { path: '/wash-batches/:batchId', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_READ}><LazyPage><WashBatchDetailPage /></LazyPage></PermissionRoute> },
       { path: '/more', element: <LazyPage><MorePage /></LazyPage> },
       { path: '/settings/preferences', element: <LazyPage><AppearanceSettingsPage /></LazyPage> },

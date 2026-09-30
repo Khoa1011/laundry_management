@@ -150,6 +150,30 @@ class WashBatchIntegrationTest {
     }
 
     @Test
+    void listSupportsOperationalFiltersAndSafeFilterOptions() throws Exception {
+        LaundryOrder privateOrder = order(branchA, wash, shirt, SharingMode.PRIVATE_LOAD, "Không dùng nước xả", Instant.now().plusSeconds(3600));
+        LaundryOrder sharedOrder = order(branchA, wash, blanket, SharingMode.SHARED_STANDARD, null, null);
+        JsonNode privateBatch = create(privateOrder.getItems().get(0).getId());
+        create(sharedOrder.getItems().get(0).getId());
+
+        mockMvc.perform(get("/api/wash-batches/filter-options").param("branchId", branchA.getId().toString())
+                .header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.services[*].id", hasItem(wash.getId().intValue())))
+            .andExpect(jsonPath("$.creators[0].id").value(actorA.getId()));
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .param("loadType", "PRIVATE").param("warning", "ITEM_NOTE_PRESENT")
+                .header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.items[0].id").value(privateBatch.path("id").asLong()))
+            .andExpect(jsonPath("$.items[0].privateLoad").value(true))
+            .andExpect(jsonPath("$.items[0].warnings", hasItem("ITEM_NOTE_PRESENT")));
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .param("serviceId", wash.getId().toString()).param("createdBy", actorA.getId().toString())
+                .header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
+    }
+
+    @Test
     void rejectsEmptyAndEveryNonReceivedOrderStatus() throws Exception {
         createRequest().andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
         for (OrderStatus state : List.of(OrderStatus.CANCELLED, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.COMPLETED, OrderStatus.REOPENED)) {

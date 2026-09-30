@@ -7,8 +7,8 @@ export function LoadingState({ rows = 4 }: { rows?: number }) {
   return <div className="skeleton-list" aria-label={t('loading')} aria-busy="true">{Array.from({ length: rows }, (_, index) => <div className="skeleton-card" key={index}><span /><span /><span /></div>)}</div>
 }
 
-export function StatePanel({ icon, title, body, action, compact = false }: { icon?: ReactNode; title: string; body: string; action?: ReactNode; compact?: boolean }) {
-  return <section className={`state-panel${compact ? ' state-panel--compact' : ''}`}><div className="state-panel__icon" aria-hidden="true">{icon ?? <Inbox />}</div><h2>{title}</h2><p>{body}</p>{action && <div className="state-panel__action">{action}</div>}</section>
+export function StatePanel({ icon, title, body, action, compact = false, className = '' }: { icon?: ReactNode; title: string; body: string; action?: ReactNode; compact?: boolean; className?: string }) {
+  return <section className={['state-panel', compact && 'state-panel--compact', className].filter(Boolean).join(' ')}><div className="state-panel__icon" aria-hidden="true">{icon ?? <Inbox />}</div><h2>{title}</h2><p>{body}</p>{action && <div className="state-panel__action">{action}</div>}</section>
 }
 
 export function ErrorState({ title, body, onRetry }: { title: string; body: string; onRetry?: () => void }) {

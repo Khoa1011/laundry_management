@@ -7,12 +7,15 @@ import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ApiError } from '../../api/client'
 import type { Order } from './types'
 import { OrderCreatePage, OrderDetailPage, OrderListPage } from './OrderPages'
+import { promisedDateKey } from '../../utils/promisedDate'
+import type { BatchCandidate } from '../wash-batches/types'
 
 const mocks = vi.hoisted(() => ({
   permissions: new Set<string>(),
-  list: vi.fn(), get: vi.fn(), history: vi.fn(), services: vi.fn(),
+  list: vi.fn(), filterOptions: vi.fn(), get: vi.fn(), history: vi.fn(), services: vi.fn(),
   customers: vi.fn(), preview: vi.fn(), eligibility: vi.fn(),
   create: vi.fn(), update: vi.fn(), transition: vi.fn(), reasoned: vi.fn(),
+  batchCandidates: vi.fn(), batchCreate: vi.fn(), batchByOrder: vi.fn(),
   notify: vi.fn(),
   subscribe: vi.fn(),
   subscriptions: [] as Array<{ prefix: string; listener: (event: { entityId?: number; type: string }) => void }>,
@@ -26,6 +29,27 @@ vi.mock('../../realtime/context', () => ({ useRealtime: () => ({ connectionState
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, orderApi: { ...actual.orderApi, ...mocks } }
+})
+vi.mock('../wash-batches/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../wash-batches/api')>()
+  return {
+    ...actual,
+    washBatchApi: {
+      ...actual.washBatchApi,
+      candidates: mocks.batchCandidates,
+      create: mocks.batchCreate,
+      byOrder: mocks.batchByOrder,
+    },
+  }
+})
+
+const batchCandidate = (overrides: Partial<BatchCandidate> = {}): BatchCandidate => ({
+  orderItemId: 11, orderId: 7, orderCode: 'CN01-DH-000007', orderStatus: 'RECEIVED',
+  customerName: 'Trần Thị Mai', customerPhone: '0903 123 456', serviceId: 2,
+  serviceCode: 'WASH', serviceName: 'Giặt thường', itemTypeId: 3, itemTypeCode: 'SHIRT',
+  itemTypeName: 'Áo sơ mi', sharingMode: 'SHARED_STANDARD', quantity: 3.5, unitType: 'KG',
+  itemNote: 'Không dùng nước xả', promisedAt: '2026-09-18T10:00:00Z',
+  orderCreatedAt: '2026-09-17T10:00:00Z', warnings: ['ITEM_NOTE_PRESENT'], ...overrides,
 })
 
 const order: Order = {
@@ -56,11 +80,15 @@ describe('Order pages', () => {
     }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
     mocks.get.mockResolvedValue(order)
     mocks.history.mockResolvedValue([])
+    mocks.filterOptions.mockResolvedValue({ services: [{ id: 2, label: 'Giặt sấy thường' }] })
     mocks.services.mockResolvedValue([{ id: 2, code: 'WASH', nameVi: 'Giặt sấy thường', defaultUnitType: 'KG', sharingAllowed: true }])
     mocks.customers.mockResolvedValue([])
     mocks.eligibility.mockResolvedValue([{ id: 3, code: 'SHIRT', nameVi: 'Áo sơ mi', defaultUnitType: 'KG' }])
     mocks.preview.mockResolvedValue({ currency: 'VND', finalAmount: 50000, explanation: 'Giá hệ thống', billableQuantity: 2, unitType: 'KG' })
     mocks.create.mockResolvedValue(order)
+    mocks.batchCandidates.mockResolvedValue({ items: [batchCandidate()], page: 0, size: 100, totalElements: 1, totalPages: 1 })
+    mocks.batchCreate.mockResolvedValue({ id: 5, batchCode: 'CN01-MG-000005', status: 'DRAFT' })
+    mocks.batchByOrder.mockResolvedValue([])
     mocks.update.mockResolvedValue(order)
     mocks.subscribe.mockImplementation((prefix, listener) => {
       const subscription = { prefix, listener }
@@ -75,7 +103,67 @@ describe('Order pages', () => {
     expect(await screen.findAllByText('CN01-DH-000007')).toHaveLength(2)
     expect(container.querySelector('.orders-page')).toHaveClass('page-container')
     expect(screen.getAllByText('0903 123 456')).toHaveLength(2)
+    expect(screen.getByRole('link', { name: 'Xem' })).toHaveClass('orders-table__view-button')
     expect(screen.queryByRole('link', { name: /Tạo đơn hàng/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the laundry illustration for an empty order list without changing its create action', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    mocks.list.mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+    const { container } = renderAt('/orders', <OrderListPage />)
+
+    expect(await screen.findByRole('heading', { name: 'Chưa có đơn hàng' })).toBeInTheDocument()
+    expect(container.querySelector('.orders-empty-illustration')).toHaveAttribute('src', '/images/wash-batches/wash-batches-empty.png')
+    expect(screen.getAllByRole('link', { name: 'Tạo đơn hàng' })).toHaveLength(2)
+  })
+
+  it('reserves the count slot when a status query cannot provide every tab count', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    const { container } = renderAt('/orders', <OrderListPage />)
+    await screen.findAllByText('CN01-DH-000007')
+
+    await userEvent.click(screen.getByRole('button', { name: /Đã nhận/ }))
+
+    await waitFor(() => expect(container.querySelectorAll('.order-tabs__count--placeholder')).toHaveLength(6))
+    const selectedCount = screen.getByRole('button', { name: /Đã nhận/ }).querySelector('.order-tabs__count')
+    expect(selectedCount).not.toHaveClass('order-tabs__count--placeholder')
+    expect(selectedCount).toHaveTextContent('1')
+  })
+
+  it('exposes batch composition only with the generated batch.create permission', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    const first = renderAt('/orders', <OrderListPage />)
+    expect((await screen.findAllByText('CN01-DH-000007')).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Ghép mẻ' })).not.toBeInTheDocument()
+    first.unmount()
+
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    renderAt('/orders', <OrderListPage />)
+    expect(await screen.findByRole('button', { name: 'Ghép mẻ' })).toBeInTheDocument()
+  })
+
+  it('keeps selected order items while searching and creates the reviewed draft batch', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    mocks.batchCandidates.mockImplementation(({ search }: { search?: string }) => Promise.resolve({
+      items: search ? [batchCandidate({ orderItemId: 12, orderId: 8, orderCode: 'CN01-DH-000008', customerName: 'Lê Hoàng Nam', itemNote: undefined })] : [batchCandidate()],
+      page: 0, size: 100, totalElements: 1, totalPages: 1,
+    }))
+    renderAt('/orders/batching', <OrderListPage />)
+
+    await userEvent.click((await screen.findAllByRole('checkbox', { name: /CN01-DH-000007/ }))[0])
+    await userEvent.type(screen.getByPlaceholderText('Mã đơn, tên khách, số điện thoại'), 'Nam')
+    expect((await screen.findAllByRole('checkbox', { name: /CN01-DH-000008/ })).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/1 món đang chọn/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/CN01-DH-000007 · Trần Thị Mai/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Xem lại và tạo mẻ' }))
+    expect(await screen.findByRole('heading', { name: 'Xác nhận mẻ giặt' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu mẻ nháp' }))
+    await waitFor(() => expect(mocks.batchCreate).toHaveBeenCalledWith({
+      branchId: 1, orderItemIds: [11], note: null, markReady: false,
+    }))
   })
 
   it('invalidates only order queries when an order realtime event arrives', async () => {
@@ -131,6 +219,69 @@ describe('Order pages', () => {
     await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
       items: [expect.objectContaining({ note: 'Không dùng nước xả' })],
     })))
+  })
+
+  it('automatically creates a dedicated draft batch for a private-load order', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    mocks.create.mockResolvedValue({ ...order, status: 'RECEIVED', items: [{ ...order.items[0], id: 41, sharingMode: 'PRIVATE_LOAD' }] })
+    renderAt('/orders/new', <OrderCreatePage />)
+    await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
+    await userEvent.type(screen.getByLabelText('Tên khách'), 'Khách giặt riêng')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.selectOptions(screen.getByRole('option', { name: 'Giặt riêng mẻ' }).parentElement as HTMLSelectElement, 'PRIVATE_LOAD')
+
+    const batchChoice = screen.getByRole('checkbox', { name: /Tự tạo mẻ nháp riêng/ })
+    expect(batchChoice).toBeChecked()
+    expect(batchChoice).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo đơn' }))
+
+    await waitFor(() => expect(mocks.batchCreate).toHaveBeenCalledWith({
+      branchId: 1,
+      orderItemIds: [41],
+      note: 'Tạo trực tiếp từ CN01-DH-000007',
+      markReady: false,
+    }))
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('Đã tạo 1 mẻ nháp riêng') }))
+  })
+
+  it('keeps a successfully saved order when its requested draft batch fails', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    mocks.create.mockResolvedValue({ ...order, status: 'RECEIVED', items: [{ ...order.items[0], id: 51 }] })
+    mocks.batchCreate.mockRejectedValue(new Error('batch unavailable'))
+    renderAt('/orders/new', <OrderCreatePage />)
+    await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
+    await userEvent.type(screen.getByLabelText('Tên khách'), 'Khách kiểm thử')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.click(screen.getByRole('checkbox', { name: /Tạo mẻ nháp riêng sau khi lưu/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo đơn' }))
+
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'info', message: expect.stringContaining('đã lưu; 1 mẻ chưa tạo được'),
+    }))
+  })
+
+  it('creates an order with a promised date and no browser time input', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    const { container } = renderAt('/orders/new', <OrderCreatePage />)
+    expect(container.querySelector('input[type="datetime-local"]')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
+    await userEvent.type(screen.getByLabelText('Tên khách'), 'Khách kiểm thử')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Ngày mai' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo đơn' }))
+
+    await waitFor(() => expect(mocks.create).toHaveBeenCalled())
+    const promisedAt = mocks.create.mock.calls[0][0].promisedAt
+    expect(promisedAt).toBeTruthy()
+    expect(promisedDateKey(promisedAt)).not.toBe(promisedDateKey(new Date().toISOString()))
+    expect(new Date(promisedAt).getHours()).toBe(23)
+    expect(new Date(promisedAt).getMinutes()).toBe(59)
   })
 
   it('does not re-preview when typing an item note on create', async () => {
@@ -311,12 +462,22 @@ describe('Order pages', () => {
 
   it('sends received date filters to the order list API', async () => {
     renderAt('/orders', <OrderListPage />)
-    await userEvent.click(screen.getByText('Lọc theo ngày nhận'))
+    await userEvent.click(screen.getByText('Bộ lọc nâng cao'))
     await userEvent.type(screen.getByLabelText('Từ ngày'), '2026-09-01')
     await userEvent.type(screen.getByLabelText('Đến ngày'), '2026-09-16')
     await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({
       from: new Date(2026, 8, 1).toISOString(),
       to: new Date(2026, 8, 17).toISOString(),
+    })))
+  })
+
+  it('filters orders by service and promised return urgency', async () => {
+    renderAt('/orders', <OrderListPage />)
+    await userEvent.click(screen.getByText('Bộ lọc nâng cao'))
+    await userEvent.selectOptions(await screen.findByLabelText('Dịch vụ'), '2')
+    await userEvent.selectOptions(screen.getByLabelText('Hạn trả'), 'NO_DATE')
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      serviceId: 2, promisedMissing: true,
     })))
   })
 })

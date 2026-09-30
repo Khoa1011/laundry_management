@@ -21,13 +21,21 @@ public interface OrderRepository extends JpaRepository<LaundryOrder, Long> {
           and (:status is null or o.status=:status)
           and (:fromAt is null or o.createdAt>=:fromAt)
           and (:toAt is null or o.createdAt<:toAt)
+          and (:promisedFrom is null or o.promisedAt>=:promisedFrom)
+          and (:promisedTo is null or o.promisedAt<:promisedTo)
+          and (:promisedMissing=false or o.promisedAt is null)
+          and (:overdueOnly=false or o.status not in (com.laundry.management.order.domain.OrderStatus.COMPLETED,com.laundry.management.order.domain.OrderStatus.CANCELLED))
+          and (:serviceId is null or exists (select si.id from OrderItem si where si.order=o and si.service.id=:serviceId))
           and (:search is null or lower(o.orderCode) like :search escape '!'
             or lower(coalesce(o.customerNameSnapshot,'')) like :search escape '!'
             or lower(coalesce(o.customerPhoneSnapshot,'')) like :search escape '!'
             or exists (select i.id from OrderItem i where i.order=o and lower(i.serviceNameSnapshot) like :search escape '!'))
         """)
     Page<LaundryOrder> search(@Param("branchId") Long branchId, @Param("status") OrderStatus status,
-        @Param("search") String search, @Param("fromAt") Instant fromAt, @Param("toAt") Instant toAt, Pageable pageable);
+        @Param("search") String search, @Param("fromAt") Instant fromAt, @Param("toAt") Instant toAt,
+        @Param("promisedFrom") Instant promisedFrom, @Param("promisedTo") Instant promisedTo,
+        @Param("promisedMissing") boolean promisedMissing, @Param("overdueOnly") boolean overdueOnly,
+        @Param("serviceId") Long serviceId, Pageable pageable);
 
     @EntityGraph(attributePaths={"branch","customer","createdBy","updatedBy","items","cancelledBy","reopenedBy"})
     Optional<LaundryOrder> findByIdAndBranchId(Long id, Long branchId);

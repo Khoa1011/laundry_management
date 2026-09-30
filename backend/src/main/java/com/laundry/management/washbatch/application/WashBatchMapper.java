@@ -24,7 +24,8 @@ public class WashBatchMapper {
             summary(shown),shown.stream().map(this::item).toList(),compatibility.warnings(orderItems),b.getCreatedAt(),actor(b.getCreatedBy()),b.getUpdatedAt(),actor(b.getUpdatedBy()),
             b.getReadyAt(),actorNullable(b.getReadyBy()),b.getCancelledAt(),actorNullable(b.getCancelledBy()),b.getCancelReason());}
     public WashBatchDtos.ListItem list(WashBatch b){List<WashBatchItem> shown=shown(b);WashBatchDtos.Summary summary=summary(shown);
-        return new WashBatchDtos.ListItem(b.getId(),b.getBatchCode(),b.getService().getNameVi(),b.getStatus(),summary.orderCount(),summary.itemCount(),summary.quantities(),b.getCreatedAt(),actor(b.getCreatedBy()),b.getVersion());}
+        List<OrderItem> orderItems=shown.stream().map(WashBatchItem::getOrderItem).toList();boolean privateLoad=orderItems.stream().anyMatch(item->item.getSharingModeSnapshot()==com.laundry.management.servicecatalog.domain.SharingMode.PRIVATE_LOAD);
+        return new WashBatchDtos.ListItem(b.getId(),b.getBatchCode(),b.getService().getNameVi(),b.getStatus(),summary.orderCount(),summary.itemCount(),summary.quantities(),privateLoad,compatibility.warnings(orderItems),b.getCreatedAt(),actor(b.getCreatedBy()),b.getVersion());}
     public WashBatchDtos.History history(WashBatchHistory h){return new WashBatchDtos.History(h.getId(),h.getAction(),h.getFromStatus(),h.getToStatus(),h.getReason(),read(h.getChangedFieldsJson()),actor(h.getActor()),h.getCreatedAt());}
     public WashBatchDtos.Reference reference(WashBatch b,boolean active){return new WashBatchDtos.Reference(b.getId(),b.getBatchCode(),b.getStatus(),b.getService().getNameVi(),active,b.getCreatedAt());}
     private List<WashBatchItem> shown(WashBatch b){List<WashBatchItem> active=b.getActiveItems();return active.isEmpty()&&b.getStatus()==WashBatchStatus.CANCELLED?b.getItems():active;}

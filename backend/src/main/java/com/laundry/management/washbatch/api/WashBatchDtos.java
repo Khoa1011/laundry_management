@@ -34,8 +34,10 @@ public final class WashBatchDtos {
         Summary summary,List<BatchItem> items,List<String> warnings,Instant createdAt,Actor createdBy,Instant updatedAt,Actor updatedBy,
         Instant readyAt,Actor readyBy,Instant cancelledAt,Actor cancelledBy,String cancelReason) {}
     public record ListItem(Long id,String batchCode,String serviceName,WashBatchStatus status,long orderCount,long itemCount,
-        List<Quantity> quantities,Instant createdAt,Actor createdBy,long version) {}
+        List<Quantity> quantities,boolean privateLoad,List<String> warnings,Instant createdAt,Actor createdBy,long version) {}
     public record PageResponse(List<ListItem> items,int page,int size,long totalElements,int totalPages) {}
+    public record FilterOption(Long id,String label) {}
+    public record FilterOptions(List<FilterOption> services,List<FilterOption> creators) {}
     public record Stats(long candidateCount,long draftCount,long readyCount) {}
     public record History(Long id,WashBatchHistoryAction action,WashBatchStatus fromStatus,WashBatchStatus toStatus,
         String reason,JsonNode changedFields,Actor actor,Instant createdAt) {}
