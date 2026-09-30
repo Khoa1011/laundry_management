@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.laundry.management.auth.domain.*;
 import com.laundry.management.auth.infrastructure.*;
+import com.laundry.management.auth.security.permission.PermissionCodes;
 import com.laundry.management.order.domain.*;
 import com.laundry.management.order.infrastructure.OrderRepository;
 import com.laundry.management.servicecatalog.domain.*;
@@ -40,6 +41,7 @@ class WashBatchIntegrationTest {
     @Autowired PasswordEncoder passwords;
     @Autowired BranchRepository branches;
     @Autowired RoleRepository roles;
+    @Autowired PermissionRepository permissions;
     @Autowired UserAccountRepository users;
     @Autowired LaundryServiceRepository services;
     @Autowired ItemTypeRepository itemTypes;
@@ -150,6 +152,60 @@ class WashBatchIntegrationTest {
     }
 
     @Test
+    void createOnlyUserCanReadBranchCandidatesAndCreateButCannotReadExistingBatches() throws Exception {
+        LaundryOrder ownOrder = order(branchA, wash, shirt, SharingMode.SHARED_STANDARD, null, null);
+        order(branchB, wash, shirt, SharingMode.SHARED_STANDARD, null, null);
+        UserAccount creator = account("batch.creator." + UUID.randomUUID().toString().substring(0, 6), branchA, "RECEPTIONIST");
+        creator.overridePermission(permissions.findByCode(PermissionCodes.BATCH_READ).orElseThrow(), PermissionOverrideEffect.DENY);
+        users.saveAndFlush(creator);
+        String token = login(creator.getUsername());
+
+        mockMvc.perform(get("/api/wash-batches/candidates").param("branchId", branchA.getId().toString())
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
+            .andExpect(jsonPath("$.items[0].orderItemId").value(ownOrder.getItems().get(0).getId()));
+        mockMvc.perform(get("/api/wash-batches/candidates").param("branchId", branchB.getId().toString())
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isForbidden());
+
+        ObjectNode request = json.createObjectNode();
+        request.put("branchId", branchA.getId());
+        request.put("markReady", false);
+        request.putArray("orderItemIds").add(ownOrder.getItems().get(0).getId());
+        JsonNode created = body(mockMvc.perform(post("/api/wash-batches").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+            .andExpect(status().isCreated()).andReturn());
+
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/wash-batches/{id}", created.path("id").asLong())
+                .header("Authorization", bearer(token)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void candidatesSortPromisedDatesFirstThenUseStableOrderAndItemTieBreakers() throws Exception {
+        Instant sharedPromise = Instant.now().plusSeconds(3600);
+        LaundryOrder noPromise = order(branchA, wash, shirt, SharingMode.SHARED_STANDARD, null, null);
+        LaundryOrder earliestOlder = order(branchA, wash, shirt, SharingMode.SHARED_STANDARD, null, sharedPromise);
+        LaundryOrder earliestNewer = order(branchA, wash, blanket, SharingMode.SHARED_STANDARD, null, sharedPromise);
+        LaundryOrder later = order(branchA, wash, shirt, SharingMode.SHARED_STANDARD, null, sharedPromise.plusSeconds(3600));
+
+        JsonNode result = body(mockMvc.perform(get("/api/wash-batches/candidates")
+                .param("branchId", branchA.getId().toString()).param("size", "10")
+                .header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andReturn());
+
+        org.assertj.core.api.Assertions.assertThat(result.path("items").findValuesAsText("orderItemId"))
+            .containsExactly(
+                earliestOlder.getItems().get(0).getId().toString(),
+                earliestNewer.getItems().get(0).getId().toString(),
+                later.getItems().get(0).getId().toString(),
+                noPromise.getItems().get(0).getId().toString());
+    }
+
+    @Test
     void listSupportsOperationalFiltersAndSafeFilterOptions() throws Exception {
         LaundryOrder privateOrder = order(branchA, wash, shirt, SharingMode.PRIVATE_LOAD, "Không dùng nước xả", Instant.now().plusSeconds(3600));
         LaundryOrder sharedOrder = order(branchA, wash, blanket, SharingMode.SHARED_STANDARD, null, null);
@@ -232,6 +288,51 @@ class WashBatchIntegrationTest {
         mockMvc.perform(get("/api/wash-batches/{id}/history", id).header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
             .andExpect(status().isOk()).andExpect(content().string(containsString("ITEMS_ADDED")))
             .andExpect(content().string(containsString("ITEMS_REMOVED"))).andExpect(content().string(containsString("MARKED_READY")));
+    }
+
+    @Test
+    void cancelledFinalCompositionExcludesItemsRemovedEarlierByOperatorFromDetailAndFilters() throws Exception {
+        LaundryOrder order = order(branchA, wash, shirt, SharingMode.PRIVATE_LOAD, "Không dùng nước xả", null);
+        order.addItem(item(wash, blanket, SharingMode.SHARED_STANDARD, null));
+        orders.saveAndFlush(order);
+        long removedItemId = order.getItems().get(0).getId();
+        long finalItemId = order.getItems().get(1).getId();
+        JsonNode created = create(removedItemId, finalItemId);
+
+        JsonNode afterRemoval = body(mockMvc.perform(post("/api/wash-batches/{id}/remove-items", created.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":" + created.path("version").asLong() + ",\"orderItemIds\":[" + removedItemId + "]}"))
+            .andExpect(status().isOk()).andReturn());
+        JsonNode cancelled = body(mockMvc.perform(post("/api/wash-batches/{id}/cancel", created.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":" + afterRemoval.path("version").asLong() + ",\"reason\":\"Đổi kế hoạch\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.summary.itemCount").value(1))
+            .andExpect(jsonPath("$.items", hasSize(1)))
+            .andExpect(jsonPath("$.items[0].orderItemId").value(finalItemId))
+            .andExpect(jsonPath("$.items[0].removalReason").value("BATCH_CANCELLED"))
+            .andExpect(jsonPath("$.warnings", empty())).andReturn());
+
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .param("status", "CANCELLED").param("loadType", "PRIVATE").header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .param("status", "CANCELLED").param("loadType", "SHARED").header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.items[0].id").value(cancelled.path("id").asLong()))
+            .andExpect(jsonPath("$.items[0].privateLoad").value(false));
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .param("status", "CANCELLED").param("warning", "ITEM_NOTE_PRESENT").header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/wash-batches").param("branchId", branchA.getId().toString())
+                .param("status", "CANCELLED").param("warning", "DIFFERENT_ITEM_TYPES").header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+
+        mockMvc.perform(get("/api/wash-batches/{id}/history", created.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andExpect(content().string(containsString("ITEMS_REMOVED")))
+            .andExpect(content().string(containsString("CANCELLED")));
     }
 
     @Test

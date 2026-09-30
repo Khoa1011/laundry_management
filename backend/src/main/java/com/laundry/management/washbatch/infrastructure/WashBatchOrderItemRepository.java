@@ -21,7 +21,8 @@ public interface WashBatchOrderItemRepository extends org.springframework.data.r
           and (:search is null or lower(i.order.orderCode) like :search escape '!'
             or lower(coalesce(i.order.customerNameSnapshot,'')) like :search escape '!'
             or lower(coalesce(i.order.customerPhoneSnapshot,'')) like :search escape '!')
-        order by i.order.promisedAt asc,i.id asc
+        order by case when i.order.promisedAt is null then 1 else 0 end asc,
+          i.order.promisedAt asc,i.order.createdAt asc,i.id asc
         """)
     Page<OrderItem> findCandidates(@Param("branchId") Long branchId,@Param("status") OrderStatus status,
         @Param("serviceId") Long serviceId,@Param("search") String search,Pageable pageable);

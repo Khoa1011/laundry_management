@@ -39,7 +39,7 @@ public class WashBatchQueryService {
     @Transactional(readOnly=true)
     public WashBatchDtos.Detail detail(Long id,Long requestedBranch){Long branch=users.resolveAuthorizedBranch(requestedBranch);return mapper.detail(batches.findByIdAndBranchId(id,branch).orElseThrow(this::notFound));}
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).BATCH_READ)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).BATCH_READ) or @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).BATCH_CREATE)")
     @Transactional(readOnly=true)
     public WashBatchDtos.CandidatePage candidates(Long requestedBranch,String search,Long serviceId,int page,int size){validateSize(size);Long branch=users.resolveAuthorizedBranch(requestedBranch);
         Page<com.laundry.management.order.domain.OrderItem> result=orderItems.findCandidates(branch,OrderStatus.RECEIVED,serviceId,pattern(search),PageRequest.of(Math.max(0,page),size));

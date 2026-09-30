@@ -41,6 +41,9 @@ public class WashBatch {
     public Long getId(){return id;} public String getBatchCode(){return batchCode;} public Branch getBranch(){return branch;} public LaundryService getService(){return service;}
     public WashBatchStatus getStatus(){return status;} public String getNote(){return note;} public List<WashBatchItem> getItems(){return List.copyOf(items);}
     public List<WashBatchItem> getActiveItems(){return items.stream().filter(WashBatchItem::isActive).toList();}
+    public List<WashBatchItem> getFinalCompositionItems(){return status==WashBatchStatus.CANCELLED
+        ?items.stream().filter(item->item.getRemovalReason()==WashBatchItemRemovalReason.BATCH_CANCELLED).toList()
+        :getActiveItems();}
     public Instant getCreatedAt(){return createdAt;} public UserAccount getCreatedBy(){return createdBy;} public Instant getUpdatedAt(){return updatedAt;} public UserAccount getUpdatedBy(){return updatedBy;}
     public Instant getReadyAt(){return readyAt;} public UserAccount getReadyBy(){return readyBy;} public Instant getCancelledAt(){return cancelledAt;} public UserAccount getCancelledBy(){return cancelledBy;} public String getCancelReason(){return cancelReason;} public long getVersion(){return version;}
 }

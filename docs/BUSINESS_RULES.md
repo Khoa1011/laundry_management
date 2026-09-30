@@ -118,6 +118,11 @@ This is the initial business-rule template for the laundry shop management syste
 - The initial lifecycle is `DRAFT -> READY`, with cancellation allowed from `DRAFT` or `READY`. Only drafts may change composition or note. A batch must retain at least one active item; otherwise the operator cancels it.
 - Marking a batch ready revalidates all compatibility rules inside the command transaction and locks its composition for the future machine-assignment phase.
 - Cancelling requires a reason, releases active item locks, and returns eligible items to the candidate queue without deleting the batch or its history.
+- `batch.create` includes the minimum branch-scoped candidate read required to compose a batch. It does not grant list, detail, or history access to existing batches; those remain protected by `batch.read` and `batch.audit.read`.
+- Candidate items with a promised return time are ordered first by the earliest promise, followed by items without a promise; order creation time and item ID provide stable tie-breakers.
+- Membership history and final composition are distinct. Draft, ready, processing, and completed batches use their active memberships as final composition. A cancelled batch uses only memberships removed by the cancellation itself; items removed earlier by an operator remain available for historical traceability but must not affect final counts, quantities, load type, or operational warnings.
+- The V23 backfill classifies an existing removed membership as cancellation-driven only when its removal timestamp exactly equals its cancelled batch timestamp. Other removed memberships are classified as operator removals; no approximate timestamp inference is allowed.
+- Candidate pagination and progressive loading are presentation and transport concerns only; they do not change candidate eligibility or any wash-batch business rule.
 - Batch audit metadata retains identifiers, service/item-type codes, counts, status changes, and warnings. It must not copy customer names, phone numbers, order notes, or item notes.
 - Batch realtime events are minimal, branch-scoped, permission-filtered invalidation signals. They do not create durable notifications.
 

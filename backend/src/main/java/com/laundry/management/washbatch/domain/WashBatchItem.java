@@ -16,9 +16,10 @@ public class WashBatchItem {
     @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="added_by",updatable=false) private UserAccount addedBy;
     @Column(name="removed_at") private Instant removedAt;
     @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="removed_by") private UserAccount removedBy;
+    @Enumerated(EnumType.STRING) @Column(name="removal_reason",length=40) private WashBatchItemRemovalReason removalReason;
     protected WashBatchItem() {}
     public WashBatchItem(WashBatch batch,OrderItem item,UserAccount actor){this.batch=batch;this.orderItem=item;this.addedBy=actor;}
-    public void remove(UserAccount actor,Instant now){if(removedAt==null){removedAt=now;removedBy=actor;}}
+    public void remove(UserAccount actor,Instant now,WashBatchItemRemovalReason reason){if(removedAt==null){removedAt=now;removedBy=actor;removalReason=reason;}}
     public boolean isActive(){return removedAt==null;} public Long getId(){return id;} public WashBatch getBatch(){return batch;} public OrderItem getOrderItem(){return orderItem;}
-    public Instant getAddedAt(){return addedAt;} public UserAccount getAddedBy(){return addedBy;} public Instant getRemovedAt(){return removedAt;} public UserAccount getRemovedBy(){return removedBy;}
+    public Instant getAddedAt(){return addedAt;} public UserAccount getAddedBy(){return addedBy;} public Instant getRemovedAt(){return removedAt;} public UserAccount getRemovedBy(){return removedBy;} public WashBatchItemRemovalReason getRemovalReason(){return removalReason;}
 }

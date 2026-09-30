@@ -53,7 +53,7 @@ public class WashBatchApplicationService {
     public WashBatchDtos.Detail removeItems(Long id,Long branchId,WashBatchDtos.ItemsRequest request){WashBatch batch=locked(id,branchId);requireVersion(batch,request.version());requireDraft(batch);
         Set<Long> requested=unique(request.orderItemIds());Map<Long,WashBatchItem> memberships=new LinkedHashMap<>();batch.getActiveItems().forEach(m->memberships.put(m.getOrderItem().getId(),m));
         if(!memberships.keySet().containsAll(requested))throw incompatible(List.of("ITEM_NOT_IN_BATCH"));if(memberships.size()-requested.size()<1)throw itemsRequired("A wash batch must retain at least one item; cancel it instead.");
-        UserAccount actor=actor();Instant now=Instant.now(clock);requested.forEach(itemId->memberships.get(itemId).remove(actor,now));active.release(requested);batch.touch(actor,now);
+        UserAccount actor=actor();Instant now=Instant.now(clock);requested.forEach(itemId->memberships.get(itemId).remove(actor,now,WashBatchItemRemovalReason.REMOVED_BY_OPERATOR));active.release(requested);batch.touch(actor,now);
         List<OrderItem> removed=requested.stream().map(idValue->memberships.get(idValue).getOrderItem()).toList();record(batch,WashBatchHistoryAction.ITEMS_REMOVED,batch.getStatus(),batch.getStatus(),null,itemAudit(removed),actor);
         batches.flush();publish(batch,"batch.items-removed");return mapper.detail(batch);}
 
@@ -73,7 +73,7 @@ public class WashBatchApplicationService {
     @Transactional
     public WashBatchDtos.Detail cancel(Long id,Long branchId,WashBatchDtos.CancelRequest request){WashBatch batch=locked(id,branchId);requireVersion(batch,request.version());
         if(batch.getStatus()!=WashBatchStatus.DRAFT&&batch.getStatus()!=WashBatchStatus.READY)throw invalidTransition();UserAccount actor=actor();Instant now=Instant.now(clock);WashBatchStatus from=batch.getStatus();List<WashBatchItem> memberships=batch.getActiveItems();
-        List<Long> ids=memberships.stream().map(m->m.getOrderItem().getId()).toList();memberships.forEach(m->m.remove(actor,now));if(!ids.isEmpty())active.release(ids);String reason=clean(request.reason());batch.cancel(reason,actor,now);
+        List<Long> ids=memberships.stream().map(m->m.getOrderItem().getId()).toList();memberships.forEach(m->m.remove(actor,now,WashBatchItemRemovalReason.BATCH_CANCELLED));if(!ids.isEmpty())active.release(ids);String reason=clean(request.reason());batch.cancel(reason,actor,now);
         record(batch,WashBatchHistoryAction.CANCELLED,from,WashBatchStatus.CANCELLED,reason,safe(Map.of("releasedItemIds",ids)),actor);batches.flush();publish(batch,"batch.cancelled");return mapper.detail(batch);}
 
     private List<OrderItem> validatedItems(Long branchId,List<Long> ids,Long allowedBatchId){List<OrderItem> items=loadItems(branchId,ids);validateCompatibility(branchId,items,allowedBatchId);return items;}

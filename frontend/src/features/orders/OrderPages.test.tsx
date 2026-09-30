@@ -86,7 +86,7 @@ describe('Order pages', () => {
     mocks.eligibility.mockResolvedValue([{ id: 3, code: 'SHIRT', nameVi: 'Áo sơ mi', defaultUnitType: 'KG' }])
     mocks.preview.mockResolvedValue({ currency: 'VND', finalAmount: 50000, explanation: 'Giá hệ thống', billableQuantity: 2, unitType: 'KG' })
     mocks.create.mockResolvedValue(order)
-    mocks.batchCandidates.mockResolvedValue({ items: [batchCandidate()], page: 0, size: 100, totalElements: 1, totalPages: 1 })
+    mocks.batchCandidates.mockResolvedValue({ items: [batchCandidate()], page: 0, size: 50, totalElements: 1, totalPages: 1 })
     mocks.batchCreate.mockResolvedValue({ id: 5, batchCode: 'CN01-MG-000005', status: 'DRAFT' })
     mocks.batchByOrder.mockResolvedValue([])
     mocks.update.mockResolvedValue(order)
@@ -148,7 +148,7 @@ describe('Order pages', () => {
     mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
     mocks.batchCandidates.mockImplementation(({ search }: { search?: string }) => Promise.resolve({
       items: search ? [batchCandidate({ orderItemId: 12, orderId: 8, orderCode: 'CN01-DH-000008', customerName: 'Lê Hoàng Nam', itemNote: undefined })] : [batchCandidate()],
-      page: 0, size: 100, totalElements: 1, totalPages: 1,
+      page: 0, size: 50, totalElements: 1, totalPages: 1,
     }))
     renderAt('/orders/batching', <OrderListPage />)
 
@@ -164,6 +164,24 @@ describe('Order pages', () => {
     await waitFor(() => expect(mocks.batchCreate).toHaveBeenCalledWith({
       branchId: 1, orderItemIds: [11], note: null, markReady: false,
     }))
+    expect(mocks.notify).toHaveBeenCalledWith(expect.not.objectContaining({ actionLabel: 'Xem mẻ' }))
+  })
+
+  it('loads additional candidate pages without losing the current selection', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    mocks.batchCandidates.mockImplementation(({ page = 0 }: { page?: number }) => Promise.resolve(page === 0
+      ? { items: [batchCandidate()], page: 0, size: 50, totalElements: 2, totalPages: 2 }
+      : { items: [batchCandidate({ orderItemId: 12, orderId: 8, orderCode: 'CN01-DH-000008' })], page: 1, size: 50, totalElements: 2, totalPages: 2 }))
+    renderAt('/orders/batching', <OrderListPage />)
+
+    await userEvent.click((await screen.findAllByRole('checkbox', { name: /CN01-DH-000007/ }))[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Tải thêm đồ chờ ghép' }))
+
+    expect((await screen.findAllByRole('checkbox', { name: /CN01-DH-000008/ })).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/1 món đang chọn/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/CN01-DH-000007 · Trần Thị Mai/)).toBeInTheDocument()
+    expect(mocks.batchCandidates).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 50 }))
   })
 
   it('invalidates only order queries when an order realtime event arrives', async () => {

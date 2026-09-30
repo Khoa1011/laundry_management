@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, CheckCircle2, Layers3, Search, StickyNote } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -37,13 +37,18 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('')
   const [reviewOpen, setReviewOpen] = useState(false)
   const canCreate = hasPermission(PERMISSION_CODES.BATCH_CREATE)
+  const canRead = hasPermission(PERMISSION_CODES.BATCH_READ)
   const canMarkReady = hasPermission(PERMISSION_CODES.BATCH_MARK_READY)
-  const candidates = useQuery({
+  const candidates = useInfiniteQuery({
     queryKey: batchKeys.candidates(branchId, search),
-    queryFn: () => washBatchApi.candidates({ branchId: branchId!, search: search || undefined, page: 0, size: 100 }),
+    queryFn: ({ pageParam }) => washBatchApi.candidates({ branchId: branchId!, search: search || undefined, page: pageParam, size: 50 }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.page + 1 < lastPage.totalPages ? lastPage.page + 1 : undefined,
     enabled: Boolean(branchId && canCreate),
   })
   const selected = useMemo(() => [...selectedById.values()], [selectedById])
+  const visible = useMemo(() => candidates.data?.pages.flatMap((page) => page.items) ?? [], [candidates.data])
+  const totalElements = candidates.data?.pages[0]?.totalElements ?? 0
   const warnings = useMemo(() => [...new Set(selected.flatMap((candidate) =>
     candidateCompatibility(candidate, selected.filter((item) => item.orderItemId !== candidate.orderItemId)).reasons,
   ))], [selected])
@@ -65,8 +70,7 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
         title: 'Đã tạo mẻ giặt',
         message: `${batch.batchCode} · ${batch.status === 'READY' ? 'Sẵn sàng' : 'Mẻ nháp'}`,
         tone: 'success',
-        actionLabel: 'Xem mẻ',
-        onAction: () => navigate(`/wash-batches/${batch.id}`),
+        ...(canRead ? { actionLabel: 'Xem mẻ', onAction: () => navigate(`/wash-batches/${batch.id}`) } : {}),
       })
     },
     onError: (error) => {
@@ -88,7 +92,6 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
     return <StatePanel title="Bạn không có quyền ghép mẻ" body="Cần quyền Tạo mẻ giặt để sử dụng chế độ này." action={<Button variant="secondary" onClick={onClose}>Quay lại đơn hàng</Button>} />
   }
 
-  const visible = candidates.data?.items ?? []
   return <section className="order-batch-composer" aria-labelledby="order-batch-composer-title">
     <header className="order-batch-composer__header">
       <div><h2 id="order-batch-composer-title">Chọn đồ để ghép mẻ</h2><p>Chọn nhiều món cùng dịch vụ. Lựa chọn được giữ nguyên khi bạn tiếp tục tìm đơn khác.</p></div>
@@ -98,7 +101,7 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
       <Surface className="order-batch-selector">
         <label className="batch-search"><Search size={19} /><span className="sr-only">Tìm đồ chờ ghép</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã đơn, tên khách, số điện thoại" /></label>
         <div className="order-batch-selector__status" aria-live="polite">
-          <span>{candidates.isFetching ? 'Đang cập nhật…' : `${candidates.data?.totalElements ?? 0} món phù hợp`}</span>
+          <span>{candidates.isFetching && !candidates.isFetchingNextPage ? 'Đang cập nhật…' : `${totalElements} món phù hợp`}</span>
           {selected.length > 0 && <strong>{selected.length} món đang chọn</strong>}
         </div>
         {candidates.isLoading ? <LoadingState rows={6} /> : candidates.isError
@@ -126,7 +129,10 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
                 const checked = selectedById.has(candidate.orderItemId)
                 return <BatchCandidateCard key={candidate.orderItemId} candidate={candidate} selected={checked} onChange={(value) => toggle(candidate, value)} compatibility={candidateCompatibility(candidate, selected.filter((item) => item.orderItemId !== candidate.orderItemId))} />
               })}</div>
-              {candidates.data && candidates.data.totalElements > visible.length && <p className="order-batch-selector__hint">Đang hiển thị {visible.length}/{candidates.data.totalElements} món. Dùng ô tìm kiếm để tìm các đơn khác; lựa chọn hiện tại vẫn được giữ.</p>}
+              <div className="order-batch-selector__hint">
+                <span>Đã hiển thị {visible.length}/{totalElements} món. Lựa chọn hiện tại vẫn được giữ khi tìm kiếm hoặc tải thêm.</span>
+                {candidates.hasNextPage && <Button variant="secondary" loading={candidates.isFetchingNextPage} onClick={() => void candidates.fetchNextPage()}>Tải thêm đồ chờ ghép</Button>}
+              </div>
             </>}
       </Surface>
       <Surface as="aside" className="order-batch-composer__summary">

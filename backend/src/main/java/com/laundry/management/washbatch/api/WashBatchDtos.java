@@ -28,7 +28,7 @@ public final class WashBatchDtos {
     public record BatchItem(Long batchItemId,Long orderItemId,boolean active,Long orderId,String orderCode,OrderStatus orderStatus,
         String customerName,String customerPhone,Long serviceId,String serviceCode,String serviceName,Long itemTypeId,String itemTypeCode,
         String itemTypeName,SharingMode sharingMode,BigDecimal quantity,UnitType unitType,String itemNote,Instant promisedAt,Instant orderCreatedAt,
-        Instant addedAt,Actor addedBy,Instant removedAt,Actor removedBy) {}
+        Instant addedAt,Actor addedBy,Instant removedAt,Actor removedBy,WashBatchItemRemovalReason removalReason) {}
     public record Summary(long orderCount,long itemCount,List<Quantity> quantities) {}
     public record Detail(Long id,String batchCode,Branch branch,Service service,WashBatchStatus status,String note,long version,
         Summary summary,List<BatchItem> items,List<String> warnings,Instant createdAt,Actor createdBy,Instant updatedAt,Actor updatedBy,

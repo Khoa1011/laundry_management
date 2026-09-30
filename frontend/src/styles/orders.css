@@ -832,7 +832,15 @@
 }
 
 .order-batch-selector__status strong { color: var(--primary); }
-.order-batch-selector__hint { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); }
+.order-batch-selector__hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
 
 .order-batch-candidate-table tr[data-selected="true"] { background: var(--surface-selected); }
 .order-batch-candidate-table td { vertical-align: top; }
