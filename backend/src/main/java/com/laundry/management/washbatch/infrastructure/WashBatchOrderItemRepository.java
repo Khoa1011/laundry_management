@@ -27,6 +27,22 @@ public interface WashBatchOrderItemRepository extends org.springframework.data.r
     Page<OrderItem> findCandidates(@Param("branchId") Long branchId,@Param("status") OrderStatus status,
         @Param("serviceId") Long serviceId,@Param("search") String search,Pageable pageable);
 
+    @EntityGraph(attributePaths={"order","order.branch","order.customer","service","itemType"})
+    @Query("""
+        select i from OrderItem i where i.order.branch.id=:branchId and i.order.status=:status
+          and i.order.id in :orderIds
+          and not exists (select a.orderItemId from WashBatchActiveItem a where a.orderItem=i)
+          and (:serviceId is null or i.service.id=:serviceId)
+          and (:search is null or lower(i.order.orderCode) like :search escape '!'
+            or lower(coalesce(i.order.customerNameSnapshot,'')) like :search escape '!'
+            or lower(coalesce(i.order.customerPhoneSnapshot,'')) like :search escape '!')
+        order by case when i.order.promisedAt is null then 1 else 0 end asc,
+          i.order.promisedAt asc,i.order.createdAt asc,i.id asc
+        """)
+    Page<OrderItem> findCandidatesForOrders(@Param("branchId") Long branchId,@Param("status") OrderStatus status,
+        @Param("serviceId") Long serviceId,@Param("search") String search,
+        @Param("orderIds") Collection<Long> orderIds,Pageable pageable);
+
     @Query("""
         select count(i) from OrderItem i where i.order.branch.id=:branchId and i.order.status=:status
           and not exists (select a.orderItemId from WashBatchActiveItem a where a.orderItem=i)

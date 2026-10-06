@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { Button } from '../../components/ui/Button'
+import { DateTimeText } from '../../components/ui/DateTimeText'
 import { useToast } from '../../providers/ToastProvider'
 import { useAccessAudit, useAccessMutations, usePermissionModules, useRoleMatrix, useRoles, useUserAccess, useUsers } from './api'
 import type { OverrideEffect, PermissionModule, RiskLevel } from './types'
@@ -196,5 +197,5 @@ export function PermissionCatalogPage() {
 export function AccessAuditPage() {
   const c = useCopy()
   const query = useAccessAudit()
-  return <div className="page-container access-page"><AccessHeader title={c.audit} subtitle={c.auditBody} back="/settings/access" />{query.isPending ? <LoadingState /> : query.isError ? <QueryFailure error={query.error} retry={() => void query.refetch()} /> : query.data.items.length === 0 ? <StatePanel icon={<ClipboardClock />} title={c.auditEmpty} body={c.auditBody} /> : <div className="audit-list">{query.data.items.map((item) => <article key={item.id}><span className="section-icon"><ClipboardClock size={18} /></span><div><strong>{item.action}</strong><p>{c.actor}: {item.actorDisplayName} · {c.target}: {item.targetType} #{item.targetId}</p>{item.reason && <small>{item.reason}</small>}<time>{new Date(item.createdAt).toLocaleString()}</time></div></article>)}</div>}</div>
+  return <div className="page-container access-page"><AccessHeader title={c.audit} subtitle={c.auditBody} back="/settings/access" />{query.isPending ? <LoadingState /> : query.isError ? <QueryFailure error={query.error} retry={() => void query.refetch()} /> : query.data.items.length === 0 ? <StatePanel icon={<ClipboardClock />} title={c.auditEmpty} body={c.auditBody} /> : <div className="audit-list">{query.data.items.map((item) => <article key={item.id}><span className="section-icon"><ClipboardClock size={18} /></span><div><strong>{item.action}</strong><p>{c.actor}: {item.actorDisplayName} · {c.target}: {item.targetType} #{item.targetId}</p>{item.reason && <small>{item.reason}</small>}<DateTimeText value={item.createdAt} /></div></article>)}</div>}</div>
 }

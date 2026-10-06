@@ -3,7 +3,7 @@ import type { PricingPreview } from '../service-catalog/types'
 import type { IntakeCustomer, IntakeItemType, IntakeService, Order, OrderFilterOptions, OrderHistory, OrderItemNoteUpdate, OrderItemPayload, OrderPage, OrderStatus } from './types'
 
 const qs=(values:Record<string,string|number|boolean|undefined>)=>{const p=new URLSearchParams();Object.entries(values).forEach(([k,v])=>{if(v!==undefined&&v!=='')p.set(k,String(v))});return p.toString()?`?${p}`:''}
-export const orderKeys={all:['orders'] as const,list:(branchId:number|null,status?:OrderStatus,search?:string,page=0,from?:string,to?:string,serviceId?:number,due?:string)=>['orders','list',branchId,status,search,page,from,to,serviceId,due] as const,filterOptions:(branchId:number|null)=>['orders','filter-options',branchId] as const,detail:(id:number)=>['orders','detail',id] as const,history:(id:number)=>['orders','history',id] as const}
+export const orderKeys={all:['orders'] as const,list:(branchId:number|null,status?:OrderStatus,search?:string,page=0,size=20,from?:string,to?:string,serviceId?:number,due?:string)=>['orders','list',branchId,status,search,page,size,from,to,serviceId,due] as const,filterOptions:(branchId:number|null)=>['orders','filter-options',branchId] as const,detail:(id:number)=>['orders','detail',id] as const,history:(id:number)=>['orders','history',id] as const}
 export const orderApi={
   list:(p:{branchId:number;page?:number;size?:number;status?:OrderStatus;search?:string;from?:string;to?:string;serviceId?:number;promisedFrom?:string;promisedTo?:string;promisedMissing?:boolean;overdueOnly?:boolean})=>apiRequest<OrderPage>(`/api/orders${qs(p)}`),
   filterOptions:(branchId:number)=>apiRequest<OrderFilterOptions>(`/api/orders/filter-options${qs({branchId})}`),

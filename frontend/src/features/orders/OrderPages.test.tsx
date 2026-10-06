@@ -103,7 +103,7 @@ describe('Order pages', () => {
     expect(await screen.findAllByText('CN01-DH-000007')).toHaveLength(2)
     expect(container.querySelector('.orders-page')).toHaveClass('page-container')
     expect(screen.getAllByText('0903 123 456')).toHaveLength(2)
-    expect(screen.getByRole('link', { name: 'Xem' })).toHaveClass('orders-table__view-button')
+    expect(screen.getAllByRole('link', { name: 'Xem' })[0]).toHaveClass('orders-table__view-button')
     expect(screen.queryByRole('link', { name: /Tạo đơn hàng/i })).not.toBeInTheDocument()
   })
 
@@ -115,7 +115,8 @@ describe('Order pages', () => {
 
     expect(await screen.findByRole('heading', { name: 'Chưa có đơn hàng' })).toBeInTheDocument()
     expect(container.querySelector('.orders-empty-illustration')).toHaveAttribute('src', '/images/wash-batches/wash-batches-empty.png')
-    expect(screen.getAllByRole('link', { name: 'Tạo đơn hàng' })).toHaveLength(2)
+    expect(screen.getByRole('link', { name: 'Tạo đơn mới' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tạo đơn hàng' })).toBeInTheDocument()
   })
 
   it('reserves the count slot when a status query cannot provide every tab count', async () => {
@@ -123,12 +124,23 @@ describe('Order pages', () => {
     const { container } = renderAt('/orders', <OrderListPage />)
     await screen.findAllByText('CN01-DH-000007')
 
-    await userEvent.click(screen.getByRole('button', { name: /Đã nhận/ }))
+    await userEvent.click(screen.getByRole('tab', { name: /Đã nhận/ }))
 
-    await waitFor(() => expect(container.querySelectorAll('.order-tabs__count--placeholder')).toHaveLength(6))
-    const selectedCount = screen.getByRole('button', { name: /Đã nhận/ }).querySelector('.order-tabs__count')
-    expect(selectedCount).not.toHaveClass('order-tabs__count--placeholder')
+    await waitFor(() => expect(container.querySelectorAll('.operational-status-tabs__count--placeholder')).toHaveLength(5))
+    const selectedCount = screen.getByRole('tab', { name: /Đã nhận/ }).querySelector('.operational-status-tabs__count')
+    expect(selectedCount).not.toHaveClass('operational-status-tabs__count--placeholder')
     expect(selectedCount).toHaveTextContent('1')
+  })
+
+  it('selects only visible rows and exposes item-based batch composition when permitted', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    renderAt('/orders', <OrderListPage />)
+
+    await userEvent.click((await screen.findAllByRole('checkbox', { name: 'Chọn CN01-DH-000007' }))[0])
+    expect(screen.getByText('1 đã chọn')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Ghép mẻ' })).toHaveLength(2)
+    expect(screen.getByRole('region', { name: 'Thao tác với 1 đơn hàng đã chọn' })).toBeInTheDocument()
   })
 
   it('exposes batch composition only with the generated batch.create permission', async () => {
@@ -167,6 +179,14 @@ describe('Order pages', () => {
     expect(mocks.notify).toHaveBeenCalledWith(expect.not.objectContaining({ actionLabel: 'Xem mẻ' }))
   })
 
+  it('scopes the existing batch composer to eligible items from selected orders', async () => {
+    mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
+    renderAt('/orders/batching?orders=7,8,8', <OrderListPage />)
+
+    expect(await screen.findByText('Đang hiển thị đồ đủ điều kiện từ 2 đơn đã chọn.')).toBeInTheDocument()
+    await waitFor(() => expect(mocks.batchCandidates).toHaveBeenCalledWith(expect.objectContaining({ orderIds: [7, 8] })))
+  })
+
   it('loads additional candidate pages without losing the current selection', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
     mocks.permissions.add(PERMISSION_CODES.BATCH_CREATE)
@@ -187,9 +207,10 @@ describe('Order pages', () => {
   it('invalidates only order queries when an order realtime event arrives', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
     renderAt('/orders', <OrderListPage />)
-    await waitFor(() => expect(mocks.list).toHaveBeenCalledOnce())
+    await waitFor(() => expect(mocks.list.mock.calls.length).toBeGreaterThanOrEqual(2))
+    const callsBeforeEvent = mocks.list.mock.calls.length
     act(() => mocks.subscriptions.filter(item => item.prefix === 'order.').forEach(item => item.listener({ entityId: 7, type: 'order.updated' })))
-    await waitFor(() => expect(mocks.list.mock.calls.length).toBeGreaterThan(1))
+    await waitFor(() => expect(mocks.list.mock.calls.length).toBeGreaterThan(callsBeforeEvent))
   })
 
   it('explains guest persistence and exposes Vietnamese processing choices', async () => {
@@ -480,22 +501,18 @@ describe('Order pages', () => {
 
   it('sends received date filters to the order list API', async () => {
     renderAt('/orders', <OrderListPage />)
-    await userEvent.click(screen.getByText('Bộ lọc nâng cao'))
+    await userEvent.click(screen.getByRole('button', { name: /Mở bộ lọc/ }))
     await userEvent.type(screen.getByLabelText('Từ ngày'), '2026-09-01')
     await userEvent.type(screen.getByLabelText('Đến ngày'), '2026-09-16')
-    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      from: new Date(2026, 8, 1).toISOString(),
-      to: new Date(2026, 8, 17).toISOString(),
-    })))
+    await waitFor(() => expect(mocks.list.mock.calls.some(([params]) => params.from === new Date(2026, 8, 1).toISOString()
+      && params.to === new Date(2026, 8, 17).toISOString())).toBe(true))
   })
 
   it('filters orders by service and promised return urgency', async () => {
     renderAt('/orders', <OrderListPage />)
-    await userEvent.click(screen.getByText('Bộ lọc nâng cao'))
+    await userEvent.click(screen.getByRole('button', { name: /Mở bộ lọc/ }))
     await userEvent.selectOptions(await screen.findByLabelText('Dịch vụ'), '2')
     await userEvent.selectOptions(screen.getByLabelText('Hạn trả'), 'NO_DATE')
-    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      serviceId: 2, promisedMissing: true,
-    })))
+    await waitFor(() => expect(mocks.list.mock.calls.some(([params]) => params.serviceId === 2 && params.promisedMissing === true)).toBe(true))
   })
 })

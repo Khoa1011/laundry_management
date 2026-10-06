@@ -41,8 +41,11 @@ public class WashBatchQueryService {
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).BATCH_READ) or @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).BATCH_CREATE)")
     @Transactional(readOnly=true)
-    public WashBatchDtos.CandidatePage candidates(Long requestedBranch,String search,Long serviceId,int page,int size){validateSize(size);Long branch=users.resolveAuthorizedBranch(requestedBranch);
-        Page<com.laundry.management.order.domain.OrderItem> result=orderItems.findCandidates(branch,OrderStatus.RECEIVED,serviceId,pattern(search),PageRequest.of(Math.max(0,page),size));
+    public WashBatchDtos.CandidatePage candidates(Long requestedBranch,String search,Long serviceId,List<Long> requestedOrderIds,int page,int size){validateSize(size);Long branch=users.resolveAuthorizedBranch(requestedBranch);
+        List<Long> orderIds=validatedOrderIds(requestedOrderIds);Pageable pageable=PageRequest.of(Math.max(0,page),size);
+        Page<com.laundry.management.order.domain.OrderItem> result=orderIds.isEmpty()
+            ? orderItems.findCandidates(branch,OrderStatus.RECEIVED,serviceId,pattern(search),pageable)
+            : orderItems.findCandidatesForOrders(branch,OrderStatus.RECEIVED,serviceId,pattern(search),orderIds,pageable);
         return new WashBatchDtos.CandidatePage(result.stream().map(mapper::candidate).toList(),result.getNumber(),result.getSize(),result.getTotalElements(),result.getTotalPages());}
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).BATCH_READ)")
@@ -59,6 +62,7 @@ public class WashBatchQueryService {
         return batches.findByOrder(branch,orderId).stream().map(batch->mapper.reference(batch,batch.getActiveItems().stream().anyMatch(m->Objects.equals(m.getOrderItem().getOrder().getId(),orderId)))).toList();}
 
     private void validateSize(int size){if(size<1||size>100)throw new ApiException(HttpStatus.BAD_REQUEST,ErrorCode.PAGE_SIZE_EXCEEDED,"Invalid page size","Use a page size between 1 and 100.");}
+    private List<Long> validatedOrderIds(List<Long> values){if(values==null||values.isEmpty())return List.of();if(values.size()>100||values.stream().anyMatch(Objects::isNull))throw new ApiException(HttpStatus.BAD_REQUEST,ErrorCode.VALIDATION_ERROR,"Invalid order filter","Provide at most 100 valid order IDs.");LinkedHashSet<Long> unique=new LinkedHashSet<>(values);if(unique.size()!=values.size()||unique.stream().anyMatch(value->value<1))throw new ApiException(HttpStatus.BAD_REQUEST,ErrorCode.VALIDATION_ERROR,"Invalid order filter","Order IDs must be positive and unique.");return List.copyOf(unique);}
     private void validateFilter(String value,Set<String> allowed,String name){if(value!=null&&!value.isBlank()&&!allowed.contains(value))throw new ApiException(HttpStatus.BAD_REQUEST,ErrorCode.VALIDATION_ERROR,"Invalid filter","Unsupported "+name+" filter.");}
     private String pattern(String value){return value==null||value.isBlank()?null:"%"+value.trim().toLowerCase().replace("!","!!").replace("%","!%").replace("_","!_")+"%";}
     private ApiException notFound(){return new ApiException(HttpStatus.NOT_FOUND,ErrorCode.BATCH_NOT_FOUND,"Wash batch unavailable","The requested resource was not found in your branch.");}

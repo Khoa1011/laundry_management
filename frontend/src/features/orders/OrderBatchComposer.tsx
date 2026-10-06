@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, CheckCircle2, Layers3, Search, StickyNote } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
@@ -31,6 +31,7 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
   const { branchId, hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { notify } = useToast()
   const [search, setSearch] = useState('')
   const [selectedById, setSelectedById] = useState<Map<number, BatchCandidate>>(() => new Map())
@@ -39,9 +40,11 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
   const canCreate = hasPermission(PERMISSION_CODES.BATCH_CREATE)
   const canRead = hasPermission(PERMISSION_CODES.BATCH_READ)
   const canMarkReady = hasPermission(PERMISSION_CODES.BATCH_MARK_READY)
+  const orderIds = useMemo(() => [...new Set((searchParams.get('orders') ?? '').split(',')
+    .map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))].slice(0, 100), [searchParams])
   const candidates = useInfiniteQuery({
-    queryKey: batchKeys.candidates(branchId, search),
-    queryFn: ({ pageParam }) => washBatchApi.candidates({ branchId: branchId!, search: search || undefined, page: pageParam, size: 50 }),
+    queryKey: batchKeys.candidates(branchId, search, undefined, orderIds),
+    queryFn: ({ pageParam }) => washBatchApi.candidates({ branchId: branchId!, search: search || undefined, orderIds, page: pageParam, size: 50 }),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.page + 1 < lastPage.totalPages ? lastPage.page + 1 : undefined,
     enabled: Boolean(branchId && canCreate),
@@ -100,6 +103,7 @@ export function OrderBatchComposer({ onClose }: { onClose: () => void }) {
     <div className="order-batch-composer__layout">
       <Surface className="order-batch-selector">
         <label className="batch-search"><Search size={19} /><span className="sr-only">Tìm đồ chờ ghép</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã đơn, tên khách, số điện thoại" /></label>
+        {orderIds.length > 0 && <div className="order-batch-selector__scope"><span>Đang hiển thị đồ đủ điều kiện từ {orderIds.length} đơn đã chọn.</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>Hiển thị tất cả đơn</Button></div>}
         <div className="order-batch-selector__status" aria-live="polite">
           <span>{candidates.isFetching && !candidates.isFetchingNextPage ? 'Đang cập nhật…' : `${totalElements} món phù hợp`}</span>
           {selected.length > 0 && <strong>{selected.length} món đang chọn</strong>}

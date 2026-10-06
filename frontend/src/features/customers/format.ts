@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { CustomerSource, CustomerStatus, CustomerType } from '../../api/types'
+import { formatDateTime } from '../../utils/dateTime'
 
 export function initials(name: string) {
   return name.trim().split(/\s+/).slice(-2).map((part) => part.charAt(0).toLocaleUpperCase()).join('') || '—'
@@ -7,9 +8,8 @@ export function initials(name: string) {
 
 export function formatDate(value: string | null | undefined, language: string, withTime = false) {
   if (!value) return '—'
-  return new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'vi-VN', withTime
-    ? { dateStyle: 'medium', timeStyle: 'short' }
-    : { dateStyle: 'medium' }).format(new Date(value))
+  if (withTime) return formatDateTime(value)
+  return new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'vi-VN', { dateStyle: 'medium' }).format(new Date(value))
 }
 
 export function sourceLabel(source: CustomerSource | null | undefined, t: TFunction) {

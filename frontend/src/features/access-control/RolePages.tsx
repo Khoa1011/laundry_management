@@ -17,6 +17,7 @@ import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../
 import { StatCard } from '../../components/ui/StatCard'
 import { ActionMenu } from '../../components/ui/ActionMenu'
 import { useToast } from '../../providers/ToastProvider'
+import { formatDateTime } from '../../utils/dateTime'
 import {
   useAccessMutations, useRole, useRoleAudit, useRoleMatrix, useRoles, useRoleUsers,
 } from './api'
@@ -36,13 +37,6 @@ function localizedRoleDescription(role: Role, language: string) {
   return language.startsWith('en')
     ? role.descriptionEn || role.description
     : role.descriptionVi || role.description
-}
-
-function dateTime(value: string, language: string) {
-  return new Intl.DateTimeFormat(language.startsWith('en') ? 'en-US' : 'vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
 }
 
 function PageHeader({ title, subtitle, back, actions }: {
@@ -328,7 +322,7 @@ export function RoleFormPage() {
             </Field>}
           </div>
         </section>
-        {editing && role && <SystemInformation role={role} language={i18n.language} />}
+        {editing && role && <SystemInformation role={role} />}
       </form>
       <div className="sticky-action-bar role-form-actions">
         {isDirty && <span className="unsaved-indicator" role="status">{t('access:unsaved')}</span>}
@@ -342,7 +336,7 @@ export function RoleFormPage() {
   )
 }
 
-function SystemInformation({ role, language }: { role: Role; language: string }) {
+function SystemInformation({ role }: { role: Role }) {
   const { t } = useTranslation()
   return (
     <details className="form-section system-information">
@@ -350,9 +344,9 @@ function SystemInformation({ role, language }: { role: Role; language: string })
       <dl className="role-definition-list">
         <div><dt>{t('access:systemCode')}</dt><dd><code>{role.code}</code><small>{t('access:systemCodeHelp')}</small></dd></div>
         <div><dt>{t('access:roleType')}</dt><dd>{t(role.system ? 'access:systemRole' : 'access:customRole')}</dd></div>
-        <div><dt>{t('access:createdAt')}</dt><dd>{dateTime(role.createdAt, language)}</dd></div>
+        <div><dt>{t('access:createdAt')}</dt><dd>{formatDateTime(role.createdAt)}</dd></div>
         <div><dt>{t('access:createdBy')}</dt><dd>{role.createdBy?.displayName ?? t('notAvailable')}</dd></div>
-        <div><dt>{t('access:updatedAt')}</dt><dd>{dateTime(role.updatedAt, language)}</dd></div>
+        <div><dt>{t('access:updatedAt')}</dt><dd>{formatDateTime(role.updatedAt)}</dd></div>
         <div><dt>{t('access:updatedBy')}</dt><dd>{role.updatedBy?.displayName ?? t('notAvailable')}</dd></div>
         <div><dt>{t('access:version')}</dt><dd>{role.version}</dd></div>
       </dl>
@@ -503,8 +497,8 @@ function RoleOverview({ role, description, language }: { role: Role; description
           <div><dt>{t('access:description')}</dt><dd>{description || t('access:noDescription')}</dd></div>
           <div><dt>{t('access:roleType')}</dt><dd>{t(role.system ? 'access:systemRole' : 'access:customRole')}</dd></div>
           <div><dt>{t('access:status')}</dt><dd><StatusBadge status={role.status} /></dd></div>
-          <div><dt>{t('access:createdAt')}</dt><dd>{dateTime(role.createdAt, language)}</dd></div>
-          <div><dt>{t('access:updatedAt')}</dt><dd>{dateTime(role.updatedAt, language)}</dd></div>
+          <div><dt>{t('access:createdAt')}</dt><dd>{formatDateTime(role.createdAt)}</dd></div>
+          <div><dt>{t('access:updatedAt')}</dt><dd>{formatDateTime(role.updatedAt)}</dd></div>
         </dl>
         {role.system && <div className="inline-alert inline-alert--info"><ShieldCheck size={18} aria-hidden="true" />{t('access:systemRoleInfo')}</div>}
       </section>
@@ -536,7 +530,7 @@ function RolePermissionSummary({ role, modules, selected, highRisk, language, ca
   return (
     <section className="content-card role-permission-panel">
       <div className="section-header">
-        <div><h2>{t('access:permissionSummary')}</h2><p>{t('access:matrixUpdated')} {dateTime(role.updatedAt, language)} · {t('access:updatedBy')}: {role.updatedBy?.displayName ?? t('notAvailable')}</p></div>
+        <div><h2>{t('access:permissionSummary')}</h2><p>{t('access:matrixUpdated')} {formatDateTime(role.updatedAt)} · {t('access:updatedBy')}: {role.updatedBy?.displayName ?? t('notAvailable')}</p></div>
         {canEdit && <Link className="button button--primary" to={`/settings/access/roles/${role.id}/permissions`}><KeyRound size={18} aria-hidden="true" />{t('access:editMatrix')}</Link>}
       </div>
       <div className="stat-card-grid stat-card-grid--two permission-summary-totals">
@@ -583,17 +577,17 @@ function RoleHistoryPanel({ query, page, onPage }: {
   page: number
   onPage: (page: number) => void
 }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   if (query.isPending) return <LoadingState rows={4} />
   if (query.isError) return <RoleQueryFailure error={query.error} retry={() => void query.refetch()} />
   if (query.data.items.length === 0) return <StatePanel icon={<ClipboardClock />} title={t('access:noHistory')} body={t('access:rolesSubtitle')} />
   return <>
-    <div className="role-history-timeline">{query.data.items.map((item) => <RoleHistoryItem key={item.id} item={item} language={i18n.language} />)}</div>
+    <div className="role-history-timeline">{query.data.items.map((item) => <RoleHistoryItem key={item.id} item={item} />)}</div>
     <Pagination page={page} totalPages={query.data.totalPages} onPage={onPage} />
   </>
 }
 
-function RoleHistoryItem({ item, language }: { item: AccessAudit; language: string }) {
+function RoleHistoryItem({ item }: { item: AccessAudit }) {
   const { t } = useTranslation()
   const actionKeys: Record<string, string> = {
     ROLE_CREATED: 'access:auditRoleCreated',
@@ -602,7 +596,7 @@ function RoleHistoryItem({ item, language }: { item: AccessAudit; language: stri
     ROLE_PERMISSIONS_CHANGED: 'access:auditRolePermissionsChanged',
     ROLE_CLONED: 'access:auditRoleCloned',
   }
-  return <article className="role-history-item"><span className="role-history-dot" aria-hidden="true" /><div><div className="role-history-heading"><strong>{t(actionKeys[item.action] ?? 'access:changedValues')}</strong><time>{dateTime(item.createdAt, language)}</time></div><p>{t('access:actor')}: {item.actorDisplayName}</p>{item.reason && <p>{t('access:reason')}: {item.reason}</p>}{(item.oldValue || item.newValue) && <details><summary>{t('access:changedValues')}</summary><pre>{item.oldValue || '—'}{'\n→\n'}{item.newValue || '—'}</pre></details>}</div></article>
+  return <article className="role-history-item"><span className="role-history-dot" aria-hidden="true" /><div><div className="role-history-heading"><strong>{t(actionKeys[item.action] ?? 'access:changedValues')}</strong><time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time></div><p>{t('access:actor')}: {item.actorDisplayName}</p>{item.reason && <p>{t('access:reason')}: {item.reason}</p>}{(item.oldValue || item.newValue) && <details><summary>{t('access:changedValues')}</summary><pre>{item.oldValue || '—'}{'\n→\n'}{item.newValue || '—'}</pre></details>}</div></article>
 }
 
 function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (page: number) => void }) {

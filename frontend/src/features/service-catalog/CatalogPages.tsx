@@ -19,6 +19,7 @@ import { Button, ButtonLink } from '../../components/ui/Button'
 import { ActionMenu as FloatingActionMenu } from '../../components/ui/ActionMenu'
 import { StatCard, type StatCardTone } from '../../components/ui/StatCard'
 import { useToast } from '../../providers/ToastProvider'
+import { formatDateTime } from '../../utils/dateTime'
 import { CatalogAuditHistory } from './CatalogAuditHistory'
 import { catalogApi } from './api'
 import type {
@@ -50,9 +51,7 @@ function useCatalogFormat() {
   const { i18n } = useTranslation()
   const locale = i18n.language.startsWith('en') ? 'en-US' : 'vi-VN'
   return {
-    date: (value?: string) => value ? new Intl.DateTimeFormat(locale, {
-      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
-    }).format(new Date(value)) : '—',
+    date: (value?: string) => value ? formatDateTime(value) : '—',
     money: (value?: number) => new Intl.NumberFormat(locale, {
       style: 'currency', currency: 'VND', maximumFractionDigits: 0,
     }).format(value ?? 0),

@@ -113,6 +113,8 @@ Shared primitives own interaction styling. Feature modules must not recreate but
 
 Inputs have visible labels, appropriate input modes, nearby validation, and visible focus. On invalid submit, focus or scroll to the first invalid field. Important forms warn before leaving only after actual changes.
 
+Operational timestamps use the fixed Vietnamese pattern `HH:mm dd/MM/yyyy` across every module. Records created within the last hour may use `Vừa xong` or `N phút trước` when recency helps the workflow; the absolute timestamp remains available through semantic `<time>` markup and supporting text. Business fields explicitly modeled as date-only, such as birth date, hire date, and promised-return date, remain date-only.
+
 Operational promised-return fields use a date-only picker with quick choices and an accessible calendar. Do not expose browser-specific date-time wheels when the workflow does not require a time of day.
 
 Desktop may use tables for comparison and bulk work. Mobile uses cards for primary business lists unless the data is inherently tabular. Mobile and desktop presentations share the same query, filters, permissions, mutations, and business state.

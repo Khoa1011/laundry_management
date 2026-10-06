@@ -1,4 +1,5 @@
 import { Clock3 } from 'lucide-react'
+import { formatDateTime } from '../../utils/dateTime'
 import type { AuditEntry } from './types'
 
 const ACTION_LABELS: Record<string, string> = {
@@ -125,13 +126,7 @@ function formatAuditValue(field: string, value: unknown) {
   }
   if (DATE_FIELDS.has(field) && typeof value === 'string') {
     const date = new Date(value)
-    if (!Number.isNaN(date.getTime())) {
-      return new Intl.DateTimeFormat('en-GB', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Asia/Ho_Chi_Minh',
-      }).format(date)
-    }
+    if (!Number.isNaN(date.getTime())) return formatDateTime(date)
   }
   if (typeof value === 'string' && VALUE_LABELS[value]) return VALUE_LABELS[value]
   if (typeof value === 'object') return JSON.stringify(value, null, 2)

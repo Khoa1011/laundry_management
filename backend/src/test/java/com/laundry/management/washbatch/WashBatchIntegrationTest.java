@@ -206,6 +206,28 @@ class WashBatchIntegrationTest {
     }
 
     @Test
+    void candidatesCanBeScopedToSelectedOrdersWithoutLeakingAnotherBranch() throws Exception {
+        LaundryOrder first = order(branchA, wash, shirt, SharingMode.SHARED_STANDARD, null, null);
+        LaundryOrder second = order(branchA, wash, blanket, SharingMode.SHARED_STANDARD, null, null);
+        LaundryOrder otherBranch = order(branchB, wash, shirt, SharingMode.SHARED_STANDARD, null, null);
+
+        mockMvc.perform(get("/api/wash-batches/candidates")
+                .param("branchId", branchA.getId().toString())
+                .param("orderIds", first.getId().toString(), second.getId().toString())
+                .header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalElements").value(2))
+            .andExpect(jsonPath("$.items[*].orderId", containsInAnyOrder(first.getId().intValue(), second.getId().intValue())));
+
+        mockMvc.perform(get("/api/wash-batches/candidates")
+                .param("branchId", branchA.getId().toString())
+                .param("orderIds", otherBranch.getId().toString())
+                .header("Authorization", bearer(managerA)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
     void listSupportsOperationalFiltersAndSafeFilterOptions() throws Exception {
         LaundryOrder privateOrder = order(branchA, wash, shirt, SharingMode.PRIVATE_LOAD, "Không dùng nước xả", Instant.now().plusSeconds(3600));
         LaundryOrder sharedOrder = order(branchA, wash, blanket, SharingMode.SHARED_STANDARD, null, null);

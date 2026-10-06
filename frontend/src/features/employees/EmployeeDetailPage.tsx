@@ -9,6 +9,7 @@ import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, PermissionDeniedState, StatePanel } from '../../components/States'
 import { useToast } from '../../providers/ToastProvider'
+import { formatDateTime } from '../../utils/dateTime'
 import { formatVietnamAddress } from '../locations/format'
 import {
   useAssignEmployeeBranch, useAssignEmployeePosition, useChangeEmployeeStatus, useEmployee,
@@ -90,7 +91,7 @@ function EmployeeProfile({ employee }: { employee: EmployeeDetail }) {
       {canAudit && <EmployeeAuditSection employeeId={employee.id} />}
     </div><aside className="employee-detail-aside">
       <ProfileSection title={t('employee:accountAccess')} icon={<KeyRound size={19} />}>{employee.account ? <div className="employee-account-panel"><div><strong>{employee.account.displayName}</strong><small>@{employee.account.username}</small></div><EmployeeAccountBadge status={employee.account.status} t={t} /><div className="employee-account-branches">{employee.account.branchAccess.map((branch) => <span key={branch.id}>{branch.name}</span>)}</div>{canUnlink && <button className="button button--secondary" onClick={() => setUnlinkOpen(true)}><Unlink size={17} />{t('employee:unlinkAccount')}</button>}</div> : <div className="employee-empty-inline"><CircleUserRound size={28} /><p>{t('employee:noAccount')}</p>{canLink && <button className="button button--secondary" onClick={() => setDialog('account')}><KeyRound size={17} />{t('employee:linkAccount')}</button>}</div>}</ProfileSection>
-      <ProfileSection title={t('employee:code')} icon={<Clock3 size={19} />}><dl className="employee-metadata"><div><dt>{t('employee:code')}</dt><dd>{employee.employeeCode}</dd></div><div><dt>{t('employee:updatedOn', { date: '' }).trim()}</dt><dd>{formatDateTime(employee.updatedAt, i18n.language)}</dd></div></dl></ProfileSection>
+      <ProfileSection title={t('employee:code')} icon={<Clock3 size={19} />}><dl className="employee-metadata"><div><dt>{t('employee:code')}</dt><dd>{employee.employeeCode}</dd></div><div><dt>{t('employee:updatedOn', { date: '' }).trim()}</dt><dd>{formatDateTime(employee.updatedAt)}</dd></div></dl></ProfileSection>
     </aside></div>
     <StatusDialog open={dialog === 'status'} onClose={() => setDialog(null)} employee={employee} />
     <PositionDialog open={dialog === 'position'} onClose={() => setDialog(null)} employee={employee} />
@@ -136,12 +137,11 @@ function AccountDialog({ open, onClose, employee }: { open: boolean; onClose: ()
 }
 
 function EmployeeAuditSection({ employeeId }: { employeeId: number }) {
-  const { t, i18n } = useTranslation(); const query = useEmployeeAudit(employeeId, true)
-  return <ProfileSection title={t('employee:audit')} icon={<History size={19} />}>{query.isPending ? <LoadingState rows={3} /> : query.isError ? <ErrorState title={t('employee:detailErrorTitle')} body={t('employee:detailErrorBody')} onRetry={() => void query.refetch()} /> : query.data?.items.length ? <ol className="employee-audit-list">{query.data.items.map((item) => <li key={item.id}><span className="employee-audit-list__marker" /><div><strong>{t(`employee:auditActions.${item.action}`, { defaultValue: item.action })}</strong><p>{item.actor.displayName}{item.branch ? ` · ${item.branch.name}` : ''}</p>{item.reason && <p className="employee-audit-reason">{item.reason}</p>}<time>{formatDateTime(item.createdAt, i18n.language)}</time></div></li>)}</ol> : <p className="employee-empty-copy">{t('employee:noAudit')}</p>}</ProfileSection>
+  const { t } = useTranslation(); const query = useEmployeeAudit(employeeId, true)
+  return <ProfileSection title={t('employee:audit')} icon={<History size={19} />}>{query.isPending ? <LoadingState rows={3} /> : query.isError ? <ErrorState title={t('employee:detailErrorTitle')} body={t('employee:detailErrorBody')} onRetry={() => void query.refetch()} /> : query.data?.items.length ? <ol className="employee-audit-list">{query.data.items.map((item) => <li key={item.id}><span className="employee-audit-list__marker" /><div><strong>{t(`employee:auditActions.${item.action}`, { defaultValue: item.action })}</strong><p>{item.actor.displayName}{item.branch ? ` · ${item.branch.name}` : ''}</p>{item.reason && <p className="employee-audit-reason">{item.reason}</p>}<time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time></div></li>)}</ol> : <p className="employee-empty-copy">{t('employee:noAudit')}</p>}</ProfileSection>
 }
 
 function ProfileSection({ title, icon, action, children }: { title: string; icon: ReactNode; action?: ReactNode; children: ReactNode }) { return <section className="employee-profile-section"><header><span>{icon}</span><h2>{title}</h2>{action && <div>{action}</div>}</header><div className="employee-profile-section__body">{children}</div></section> }
 function Fact({ label, value, icon, wide = false }: { label: string; value: ReactNode; icon?: ReactNode; wide?: boolean }) { return <div className={wide ? 'employee-fact--wide' : ''}><dt>{icon}{label}</dt><dd>{value}</dd></div> }
 function initials(name: string) { return name.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase() }
 function formatDate(value: string, language: string) { return new Intl.DateTimeFormat(language.startsWith('en') ? 'en-GB' : 'vi-VN').format(new Date(`${value}T00:00:00`)) }
-function formatDateTime(value: string, language: string) { return new Intl.DateTimeFormat(language.startsWith('en') ? 'en-GB' : 'vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) }

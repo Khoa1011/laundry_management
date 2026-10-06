@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cog, Layers3, PackageCheck, Pencil, Plus, RefreshCw, RotateCcw, Search, Shirt, ShoppingBag, Timer, Trash2, UserRound, X } from 'lucide-react'
+import { ArrowLeft, Ban, CalendarDays, Check, CheckCircle2, ChevronRight, ClipboardList, Clock3, Cog, Eye, FileText, Layers3, PackageCheck, Pencil, Plus, RefreshCw, RotateCcw, Search, Shirt, ShoppingBag, Timer, Trash2, UserRound, UserRoundCheck, WalletCards, WashingMachine, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
@@ -8,19 +8,26 @@ import { PERMISSION_CODES } from '../../auth/permissionCodes.generated'
 import { Field } from '../../components/Field'
 import { OverlayDialog } from '../../components/OverlayDialog'
 import { ErrorState, LoadingState, StatePanel } from '../../components/States'
+import { BulkActionBar, OperationalListHeader, OperationalListShell, OperationalPagination, OperationalSearch, OperationalStatusTabs, SelectionCheckbox } from '../../components/operational-list/OperationalList'
+import { useDebouncedValue } from '../../components/operational-list/useDebouncedValue'
+import { ActionMenu } from '../../components/ui/ActionMenu'
 import { Button, ButtonLink } from '../../components/ui/Button'
 import { CollapsibleFilterPanel } from '../../components/ui/CollapsibleFilterPanel'
 import { DatePickerField } from '../../components/ui/DatePickerField'
+import { DateTimeText } from '../../components/ui/DateTimeText'
+import { DetailSectionTitle } from '../../components/ui/DetailSectionTitle'
 import { Surface } from '../../components/ui/Surface'
 import { useToast } from '../../providers/ToastProvider'
 import { useRealtime } from '../../realtime/context'
 import { QuickCustomerDialog } from '../customers/QuickCustomerDialog'
 import type { PricingPreview } from '../service-catalog/types'
 import { batchKeys, washBatchApi } from '../wash-batches/api'
+import { BatchStatusChip } from '../wash-batches/BatchComponents'
+import { quantityText } from '../wash-batches/presentation'
 import { orderApi, orderKeys } from './api'
 import { localDayStartIso, nextLocalDayStartIso } from './dateFilters'
 import { promisedDateInstant, promisedDateKey, promisedDateLabel } from '../../utils/promisedDate'
-import type { IntakeCustomer, Order, OrderItemNoteUpdate, OrderItemPayload, OrderStatus } from './types'
+import type { IntakeCustomer, Order, OrderItemNoteUpdate, OrderItemPayload, OrderListItem, OrderStatus } from './types'
 import { OrderBatchComposer } from './OrderBatchComposer'
 
 const statusText: Record<OrderStatus, string> = {
@@ -30,9 +37,6 @@ const statusText: Record<OrderStatus, string> = {
 const money = (value: number, currency = 'VND') => new Intl.NumberFormat('vi-VN', {
   style: 'currency', currency, maximumFractionDigits: currency === 'VND' ? 0 : 2,
 }).format(value)
-const when = (value: string) => new Intl.DateTimeFormat('vi-VN', {
-  dateStyle: 'short', timeStyle: 'short',
-}).format(new Date(value))
 const initials = (value?: string) => (value || 'Khách vãng lai')
   .trim()
   .split(/\s+/)
@@ -70,25 +74,43 @@ export function OrderListPage() {
   const location = useLocation()
   const queryClient = useQueryClient()
   const { subscribe } = useRealtime()
-  const [status, setStatus] = useState<OrderStatus>()
+  const { notify } = useToast()
+  const [tab, setTab] = useState<'ALL' | OrderStatus>('ALL')
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
   const [page, setPage] = useState(0)
+  const [size, setSize] = useState(10)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [serviceId, setServiceId] = useState('')
   const [due, setDue] = useState<DueFilter>('')
+  const [selected, setSelected] = useState<Map<number, OrderListItem>>(() => new Map())
+  const [cancelOrder, setCancelOrder] = useState<OrderListItem>()
+  const [cancelReason, setCancelReason] = useState('')
   const canCreate = hasPermission(PERMISSION_CODES.ORDER_CREATE)
   const canCreateBatch = hasPermission(PERMISSION_CODES.BATCH_CREATE)
+  const canCancel = hasPermission(PERMISSION_CODES.ORDER_CANCEL)
   const batchMode = canCreateBatch && location.pathname === '/orders/batching'
+  const status = tab === 'ALL' ? undefined : tab
   const filterOptions = useQuery({ queryKey: orderKeys.filterOptions(branchId), queryFn: () => orderApi.filterOptions(branchId!), enabled: Boolean(branchId && !batchMode) })
   const query = useQuery({
-    queryKey: orderKeys.list(branchId, status, search, page, from, to, serviceId ? Number(serviceId) : undefined, due),
-    queryFn: () => orderApi.list({ branchId: branchId!, status, search: search || undefined, page, size: 20,
+    queryKey: orderKeys.list(branchId, status, debouncedSearch, page, size, from, to, serviceId ? Number(serviceId) : undefined, due),
+    queryFn: () => orderApi.list({ branchId: branchId!, status, search: debouncedSearch || undefined, page, size,
       from: from ? localDayStartIso(from) : undefined,
       to: to ? nextLocalDayStartIso(to) : undefined,
       serviceId: serviceId ? Number(serviceId) : undefined,
       ...dueFilterParams(due) }),
     enabled: Boolean(branchId && !batchMode),
+  })
+  const totalQuery = useQuery({ queryKey: ['orders', 'total', branchId], queryFn: () => orderApi.list({ branchId: branchId!, page: 0, size: 1 }), enabled: Boolean(branchId && !batchMode) })
+  const cancel = useMutation({
+    mutationFn: (order: OrderListItem) => orderApi.reasoned(order.id, branchId!, 'cancel', order.version, cancelReason.trim()),
+    onSuccess: () => {
+      setCancelOrder(undefined); setCancelReason('')
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all })
+      notify({ message: 'Đã hủy đơn hàng.', tone: 'success' })
+    },
+    onError: (error) => notify({ message: error instanceof ApiError && error.status === 409 ? 'Đơn vừa được người khác cập nhật. Hãy tải lại và thử lại.' : 'Không thể hủy đơn hàng.', tone: 'error' }),
   })
   useEffect(() => subscribe('order.', () => {
     void queryClient.invalidateQueries({ queryKey: orderKeys.all, refetchType: 'active' })
@@ -97,78 +119,67 @@ export function OrderListPage() {
     void queryClient.invalidateQueries({ queryKey: orderKeys.all, refetchType: 'active' })
   }), [queryClient, subscribe])
 
-  const statusCount = (value?: OrderStatus) => {
-    if (!query.data) return undefined
-    if (status === value) return query.data.totalElements
-    if (status === undefined && query.data.totalPages <= 1 && value) {
-      return query.data.items.filter((order) => order.status === value).length
-    }
-    return undefined
-  }
   const advancedFilterCount = Number(Boolean(from)) + Number(Boolean(to)) + Number(Boolean(serviceId)) + Number(Boolean(due))
-  const hasActiveFilters = Boolean(status || search || advancedFilterCount)
+  const hasActiveFilters = Boolean(status || debouncedSearch || advancedFilterCount)
+  const pageItems = query.data?.items ?? []
+  const selectedOnPage = pageItems.filter((order) => selected.has(order.id)).length
+  const toggleOrder = (order: OrderListItem, checked: boolean) => setSelected((current) => { const next = new Map(current); if (checked) next.set(order.id, order); else next.delete(order.id); return next })
+  const togglePage = (checked: boolean) => setSelected((current) => { const next = new Map(current); pageItems.forEach((order) => { if (checked) next.set(order.id, order); else next.delete(order.id) }); return next })
+  const openCancel = (order: OrderListItem) => { setCancelOrder(order); setCancelReason('') }
+  const rowActions = (order: OrderListItem) => <div className="operational-row-actions"><ButtonLink className="orders-table__view-button" size="sm" variant="ghost" to={`/orders/${order.id}`}><Eye size={17} />Xem</ButtonLink><ActionMenu label={`Thao tác cho ${order.orderCode}`}><Link role="menuitem" data-tone="view" to={`/orders/${order.id}`}><Eye size={24} aria-hidden="true"/><span className="action-menu__label">Xem chi tiết</span></Link>{canCancel && !['COMPLETED', 'CANCELLED'].includes(order.status) && <button type="button" role="menuitem" data-tone="danger" onClick={() => openCancel(order)}><Trash2 size={24} aria-hidden="true"/><span className="action-menu__label">Hủy đơn</span></button>}</ActionMenu></div>
 
-  return <div className="page-container orders-page">
-    <header className="orders-heading">
-      <div className="orders-heading__copy"><p className="eyebrow">Vận hành tại quầy</p><h1>{batchMode ? 'Ghép mẻ từ đơn hàng' : 'Đơn hàng'}</h1><p>{batchMode ? 'Chọn đồ từ nhiều đơn, kiểm tra tổng khối lượng và yêu cầu trước khi tạo mẻ.' : 'Theo dõi đơn theo trạng thái và cập nhật theo thời gian thực.'}</p></div>
-      {!batchMode && <div className="orders-heading__actions">
-        {canCreateBatch && <Button variant="secondary" onClick={() => navigate('/orders/batching')}><Layers3 size={18} />Ghép mẻ</Button>}
-        {canCreate && <ButtonLink to="/orders/new" variant="primary"><Plus size={18} />Tạo đơn hàng</ButtonLink>}
-      </div>}
-    </header>
-    {batchMode ? <OrderBatchComposer onClose={() => navigate('/orders')} /> : <><div className="order-tabs" role="group" aria-label="Trạng thái đơn hàng">
-      {([undefined, 'RECEIVED', 'PROCESSING', 'READY', 'COMPLETED', 'CANCELLED', 'REOPENED'] as const).map((value) => {
-        const count = statusCount(value)
-        return <button key={value ?? 'all'} type="button" data-status={(value ?? 'all').toLowerCase()} aria-pressed={status === value} className={status === value ? 'active' : ''} onClick={() => { setStatus(value); setPage(0) }}>
-          <span className="order-tabs__icon"><StatusFilterIcon value={value} /></span>
-          <span>{value ? statusText[value] : 'Tất cả'}</span>
-          <span className={`order-tabs__count${count === undefined ? ' order-tabs__count--placeholder' : ''}`} aria-hidden={count === undefined ? true : undefined} aria-label={count === undefined ? undefined : `${count} đơn`}>{count ?? 0}</span>
-        </button>
-      })}
-    </div>
-    <Surface className="orders-list-surface">
-      <div className="orders-toolbar">
-        <label className="order-search"><Search size={18} /><span className="sr-only">Tìm đơn</span>
-          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Mã đơn, tên khách, số điện thoại, dịch vụ" />
-        </label><span className="orders-count" aria-live="polite">{query.isLoading ? 'Đang tải' : `${query.data?.totalElements ?? 0} đơn`}</span>
-      </div>
-      <div className="orders-filter-row">
-        <CollapsibleFilterPanel className="orders-advanced-filters" label="Bộ lọc nâng cao" activeCount={advancedFilterCount} fieldsClassName="orders-date-fields">
+  if (batchMode) return <div className="page-container orders-page"><header className="orders-heading"><div className="orders-heading__copy"><p className="eyebrow">Điều phối xử lý</p><h1>Ghép mẻ từ đơn hàng</h1><p>Chọn đồ từ nhiều đơn, kiểm tra tính tương thích và yêu cầu trước khi tạo mẻ.</p></div></header><OrderBatchComposer onClose={() => navigate('/orders')} /></div>
+
+  const statusTabs = (['ALL', 'RECEIVED', 'PROCESSING', 'READY', 'COMPLETED', 'CANCELLED', 'REOPENED'] as const).map((value) => ({
+    value,
+    label: value === 'ALL' ? 'Tất cả' : statusText[value],
+    icon: <StatusFilterIcon value={value === 'ALL' ? undefined : value} />,
+    tone: value.toLowerCase(),
+    count: value === 'ALL' ? totalQuery.data?.totalElements : tab === value ? query.data?.totalElements : undefined,
+  }))
+
+  return <div className={`page-container orders-page operational-list-page${selected.size ? ' operational-list-page--selected' : ''}`}>
+    <OperationalListShell className="orders-list-shell">
+      <OperationalListHeader icon={<ClipboardList size={26}/>} title="Danh sách đơn hàng" subtitle="Quản lý và theo dõi toàn bộ đơn hàng trong hệ thống" totalValue={totalQuery.isLoading ? '—' : `${totalQuery.data?.totalElements ?? 0} đơn hàng`} action={<div className="operational-list__primary-actions">{canCreateBatch && <Button variant="secondary" onClick={() => navigate('/orders/batching')}><Layers3 size={18}/>Ghép mẻ</Button>}{canCreate && <ButtonLink to="/orders/new"><Plus size={18}/>Tạo đơn mới</ButtonLink>}</div>}/>
+      <div className="operational-list__controls">
+        <div className="operational-list__toolbar">
+          <OperationalSearch label="Tìm đơn hàng" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Mã đơn, tên khách, số điện thoại, dịch vụ…" />
+          <CollapsibleFilterPanel className="orders-advanced-filters" label="Bộ lọc" activeCount={advancedFilterCount} fieldsClassName="orders-date-fields">
           <Field label="Dịch vụ"><select value={serviceId} onChange={(event) => { setServiceId(event.target.value); setPage(0) }}><option value="">Tất cả dịch vụ</option>{filterOptions.data?.services.map((service) => <option key={service.id} value={service.id}>{service.label}</option>)}</select></Field>
           <Field label="Hạn trả"><select value={due} onChange={(event) => { setDue(event.target.value as DueFilter); setPage(0) }}><option value="">Tất cả hạn trả</option><option value="OVERDUE">Đã quá hạn</option><option value="TODAY">Hẹn trả hôm nay</option><option value="TOMORROW">Hẹn trả ngày mai</option><option value="NEXT_7_DAYS">Trong 7 ngày tới</option><option value="NO_DATE">Chưa hẹn trả</option></select></Field>
           <Field label="Từ ngày"><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></Field>
           <Field label="Đến ngày"><input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></Field>
           {advancedFilterCount > 0 && <Button variant="ghost" type="button" onClick={() => { setFrom(''); setTo(''); setServiceId(''); setDue(''); setPage(0) }}>Xóa lọc</Button>}
-        </CollapsibleFilterPanel>
-        <img className="orders-filter-slogan" src="/images/orders/orders-slogan.webp" alt="" aria-hidden="true" />
+          </CollapsibleFilterPanel>
+        </div>
+        <OperationalStatusTabs tabs={statusTabs} value={tab} onChange={(value) => { setTab(value); setPage(0) }} label="Trạng thái đơn hàng" />
       </div>
+      <BulkActionBar count={selected.size} noun="đơn hàng" onClear={() => setSelected(new Map())}>{canCreateBatch && <Button size="sm" onClick={() => navigate(`/orders/batching?orders=${[...selected.keys()].join(',')}`)}><Layers3 size={17}/>Ghép mẻ</Button>}</BulkActionBar>
       {query.isLoading ? <LoadingState rows={6} /> : query.isError
         ? <ErrorState title="Không tải được đơn hàng" body="Kiểm tra kết nối rồi thử lại." onRetry={() => void query.refetch()} />
         : !query.data?.items.length
-          ? <StatePanel className="orders-empty-state" icon={<img className="orders-empty-illustration" src="/images/wash-batches/wash-batches-empty.png" alt="" decoding="async" />} title={hasActiveFilters ? 'Không tìm thấy đơn phù hợp' : 'Chưa có đơn hàng'} body={hasActiveFilters ? 'Thử đổi trạng thái, từ khóa hoặc bộ lọc nâng cao.' : 'Tạo đơn hàng đầu tiên để bắt đầu theo dõi và xử lý.'} action={canCreate ? <ButtonLink to="/orders/new"><Plus size={18} />Tạo đơn hàng</ButtonLink> : undefined} />
+          ? <StatePanel className="orders-empty-state" icon={<img className="orders-empty-illustration" src="/images/wash-batches/wash-batches-empty.png" alt="" decoding="async" />} title={debouncedSearch ? `Không tìm thấy kết quả cho “${debouncedSearch}”` : hasActiveFilters ? 'Không có đơn hàng phù hợp' : 'Chưa có đơn hàng'} body={hasActiveFilters ? 'Thử đổi trạng thái, từ khóa hoặc bộ lọc.' : 'Tạo đơn hàng đầu tiên để bắt đầu theo dõi và xử lý.'} action={debouncedSearch ? <Button variant="secondary" onClick={() => setSearch('')}>Xóa tìm kiếm</Button> : canCreate ? <ButtonLink to="/orders/new"><Plus size={18} />Tạo đơn hàng</ButtonLink> : undefined} />
           : <>
             <div className="orders-mobile-list">{query.data.items.map((order) =>
-              <button className="order-card" key={order.id} onClick={() => navigate(`/orders/${order.id}`)}>
-                <div className="order-card__head"><strong>{order.orderCode}</strong><Status value={order.status} /></div>
+              <article className="order-card" data-selected={selected.has(order.id) || undefined} key={order.id}>
+                <div className="order-card__head"><SelectionCheckbox checked={selected.has(order.id)} onChange={(event) => toggleOrder(order, event.target.checked)} label={`Chọn ${order.orderCode}`}/><Link to={`/orders/${order.id}`}>{order.orderCode}</Link><Status value={order.status} /></div>
                 <div className="order-card__customer"><span className="order-customer-avatar" aria-hidden="true">{initials(order.customerName)}</span><span><h2>{order.customerName || 'Khách vãng lai'}</h2>{order.customerPhone && <small>{order.customerPhone}</small>}</span></div>
                 <p className="order-card__service"><span aria-hidden="true"><Shirt size={17} /></span>{order.serviceSummary || 'Dịch vụ giặt là'}</p>
-                <div className="order-card__foot"><span>{when(order.createdAt)}</span><strong>{money(order.totalAmount, order.currency)}</strong><ChevronRight size={18} /></div>
-              </button>)}</div>
+                <div className="order-card__facts"><span><CalendarDays size={16}/>{order.promisedAt ? promisedDateLabel(order.promisedAt) : 'Chưa hẹn trả'}</span><span><DateTimeText value={order.createdAt} recent /></span></div>
+                <div className="order-card__foot"><strong>{money(order.totalAmount, order.currency)}</strong>{rowActions(order)}</div>
+              </article>)}</div>
             <div className="orders-table-wrap"><table className="orders-table"><thead><tr>
-              <th>Mã đơn</th><th>Thời gian nhận</th><th>Khách hàng</th><th>Dịch vụ</th><th>Tổng tiền</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th>
-            </tr></thead><tbody>{query.data.items.map((order) => <tr key={order.id}>
-              <td><Link to={`/orders/${order.id}`}>{order.orderCode}</Link></td><td>{when(order.createdAt)}</td>
+              <th><SelectionCheckbox checked={Boolean(pageItems.length) && selectedOnPage === pageItems.length} indeterminate={selectedOnPage > 0 && selectedOnPage < pageItems.length} onChange={(event) => togglePage(event.target.checked)} label="Chọn tất cả đơn trên trang này"/></th><th>Mã đơn</th><th>Khách hàng</th><th>Dịch vụ</th><th>Hẹn trả</th><th>Tổng tiền</th><th>Tạo lúc</th><th>Trạng thái</th><th>Thao tác</th>
+            </tr></thead><tbody>{query.data.items.map((order) => <tr key={order.id} data-selected={selected.has(order.id) || undefined}>
+              <td><SelectionCheckbox checked={selected.has(order.id)} onChange={(event) => toggleOrder(order, event.target.checked)} label={`Chọn ${order.orderCode}`}/></td><td><Link to={`/orders/${order.id}`}>{order.orderCode}</Link></td>
               <td><span className="orders-table__customer"><span className="order-customer-avatar" aria-hidden="true">{initials(order.customerName)}</span><span><strong>{order.customerName || 'Khách vãng lai'}</strong><small>{order.customerPhone}</small></span></span></td>
-              <td><span className="orders-table__service"><span aria-hidden="true"><Shirt size={17} /></span>{order.serviceSummary || 'Dịch vụ giặt là'}</span></td><td><strong className="orders-table__amount">{money(order.totalAmount, order.currency)}</strong></td><td><Status value={order.status} /></td>
-              <td><ButtonLink className="orders-table__view-button" size="sm" variant="ghost" to={`/orders/${order.id}`}>Xem</ButtonLink></td>
+              <td><span className="orders-table__service"><span aria-hidden="true"><Shirt size={17} /></span>{order.serviceSummary || 'Dịch vụ giặt là'}</span></td><td>{order.promisedAt ? promisedDateLabel(order.promisedAt) : <span className="text-muted">Chưa hẹn</span>}</td><td><strong className="orders-table__amount">{money(order.totalAmount, order.currency)}</strong></td><td><DateTimeText value={order.createdAt} recent /></td><td><Status value={order.status} /></td>
+              <td>{rowActions(order)}</td>
             </tr>)}</tbody></table></div>
-            {query.data.totalPages > 1 && <nav className="orders-pagination" aria-label="Phân trang đơn hàng">
-              <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={17} />Trước</Button>
-              <span>Trang {page + 1} / {query.data.totalPages}</span>
-              <Button variant="secondary" size="sm" disabled={page + 1 >= query.data.totalPages} onClick={() => setPage((value) => value + 1)}>Sau<ChevronRight size={17} /></Button>
-            </nav>}
+            <OperationalPagination page={page} size={size} totalElements={query.data.totalElements} totalPages={query.data.totalPages} noun="đơn hàng" onPage={setPage} onSize={(value) => { setSize(value); setPage(0) }}/>
           </>}
-    </Surface></>}
+    </OperationalListShell>
+    <OverlayDialog open={Boolean(cancelOrder)} onClose={() => !cancel.isPending && setCancelOrder(undefined)} title={`Hủy đơn ${cancelOrder?.orderCode ?? ''}?`} description="Đơn đã hủy vẫn được giữ trong lịch sử hệ thống." footer={<><Button variant="secondary" disabled={cancel.isPending} onClick={() => setCancelOrder(undefined)}>Quay lại</Button><Button variant="danger" loading={cancel.isPending} disabled={!cancelReason.trim()} onClick={() => cancelOrder && cancel.mutate(cancelOrder)}>Hủy đơn</Button></>}><Field label="Lý do hủy" required><textarea rows={4} maxLength={500} value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} autoFocus/></Field></OverlayDialog>
   </div>
 }
 
@@ -429,6 +440,18 @@ function HistoryDetails({ changed, currency }: { changed?: Record<string, unknow
   return <small className="history-change">{items.before.length} → {items.after.length} dịch vụ · {money(beforeTotal, currency)} → {money(afterTotal, currency)}</small>
 }
 
+function snapshotUnitPrice(item: Order['items'][number]) {
+  const value = item.pricingSnapshot?.unitPriceSnapshot
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function OrderDetailLoading() {
+  return <div className="page-container order-detail order-detail--loading" aria-busy="true" aria-label="Đang tải chi tiết đơn hàng">
+    <div className="order-detail-header"><LoadingState rows={1} /></div>
+    <div className="order-detail-loading-grid"><Surface><LoadingState rows={3} /></Surface><Surface><LoadingState rows={2} /></Surface></div>
+  </div>
+}
+
 export function OrderDetailPage() {
   const id = Number(useParams().orderId)
   const { branchId, hasPermission } = useAuth()
@@ -466,27 +489,89 @@ export function OrderDetailPage() {
     onSuccess: (value) => { setReasonAction(null); setReason(''); queryClient.setQueryData(orderKeys.detail(id), value); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); notify({ message: 'Đã cập nhật trạng thái đơn.', tone: 'success' }) },
     onError: (error) => notify({ message: error instanceof ApiError && error.status === 409 ? 'Đơn vừa được người khác cập nhật. Hãy tải lại rồi thử lại.' : 'Không thể cập nhật trạng thái đơn.', tone: 'error' }),
   })
-  if (order.isLoading) return <div className="page-container"><LoadingState /></div>
+  if (order.isLoading) return <OrderDetailLoading />
   if (order.isError || !order.data) return <div className="page-container"><ErrorState title="Không tải được đơn hàng" body="Đơn không tồn tại hoặc nằm ngoài chi nhánh của bạn." onRetry={() => void order.refetch()} /></div>
   const value = order.data
   const action = nextAction(value)
+  const canEdit = (['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_UPDATE)
   const execute = (name: string) => {
     if (name === 'cancel' || name === 'reopen') {
       setReason('')
       setReasonAction(name)
     } else mutate.mutate({ action: name })
   }
-  return <div className="page-container order-detail"><header className="order-detail-header"><div><Link to="/orders"><ArrowLeft size={18} />Đơn hàng</Link><div><h1>{value.orderCode}</h1><Status value={value.status} /></div><p>Nhận lúc {when(value.createdAt)} · {value.branchCode}</p></div><div>
-    {(['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_UPDATE) && <Button variant="secondary" onClick={() => setEditing(current => !current)}><Pencil size={17} />{editing ? 'Đóng chỉnh sửa' : 'Chỉnh sửa'}</Button>}
-    {action && hasPermission(action[2]) && <Button loading={mutate.isPending} onClick={() => execute(action[0])}><PackageCheck size={18} />{action[1]}</Button>}
-    {(['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_CANCEL) && <Button variant="danger" onClick={() => execute('cancel')}>Hủy đơn</Button>}
-    {value.status === 'COMPLETED' && hasPermission(PERMISSION_CODES.ORDER_REOPEN) && <Button variant="secondary" onClick={() => execute('reopen')}><RotateCcw size={18} />Mở lại</Button>}
-  </div></header>{editing && <OrderEditPanel order={value} onClose={() => setEditing(false)} onSaved={updated => { queryClient.setQueryData(orderKeys.detail(id), updated); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); setEditing(false) }} />}<div className="order-detail-grid"><div className="order-detail-main">
-    <Surface className="order-section"><h2>Thông tin chung</h2><dl className="detail-facts"><div><dt>Khách hàng</dt><dd>{value.customerName || 'Khách vãng lai'}<small>{value.customerPhone}</small></dd></div><div><dt>Ngày hẹn trả</dt><dd>{value.promisedAt ? promisedDateLabel(value.promisedAt) : 'Chưa hẹn'}</dd></div><div><dt>Nhân viên nhận</dt><dd>{value.createdBy.displayName}</dd></div><div><dt>Cập nhật cuối</dt><dd>{when(value.updatedAt)}</dd></div></dl></Surface>
-    <Surface className="order-section"><h2>Dịch vụ ({value.items.length})</h2>{value.items.map((item) => <article className="detail-order-item" key={item.id}><div><strong>{item.serviceName}</strong><span>{item.itemTypeName}</span>{item.note && <small className="detail-order-item__note"><strong>Ghi chú:</strong> {item.note}</small>}</div><div><span>{item.quantity} {item.unitType}</span><strong>{money(item.lineAmount, value.currency)}</strong></div></article>)}</Surface>
-    {value.note && <Surface className="order-section"><h2>Ghi chú</h2><p>{value.note}</p></Surface>}
-  </div><aside><Surface className="order-total"><span>Tổng tiền</span><strong>{money(value.totalAmount, value.currency)}</strong><small>{value.currency} · giá đã đóng băng khi nhận đơn</small></Surface>
-    {canReadBatches && <Surface className="order-batch-references"><h2>Mẻ giặt liên quan</h2>{batchReferences.isLoading ? <LoadingState rows={2} /> : batchReferences.isError ? <ErrorState title="Không tải được mẻ giặt" body="Thông tin đơn vẫn an toàn. Hãy thử tải lại phần này." onRetry={() => void batchReferences.refetch()} /> : batchReferences.data?.length ? batchReferences.data.map(batch => <Link key={batch.id} to={`/wash-batches/${batch.id}`}><span><strong>{batch.batchCode}</strong><small>{batch.serviceName}</small></span><b>{batch.active ? 'Đang hoạt động' : batch.status === 'CANCELLED' ? 'Đã hủy' : batch.status}</b></Link>) : <p>Đơn chưa được xếp vào mẻ giặt.</p>}</Surface>}
-    {canAudit && <Surface className="order-history"><h2>Lịch sử đơn hàng</h2>{history.isLoading ? <LoadingState rows={3} /> : history.isError ? <ErrorState title="Không tải được lịch sử" body="Thử tải lại để xem thay đổi của đơn." onRetry={() => void history.refetch()} /> : history.data?.map((item) => <article key={item.id}><span className="history-dot"><Clock3 size={14} /></span><div><strong>{historyLabel(item.action, item.changedFields)}</strong><p>{item.actor.displayName} · {when(item.createdAt)}</p><HistoryDetails changed={item.changedFields} currency={value.currency} />{item.reason && <small>{item.reason}</small>}</div></article>)}</Surface>}
-  </aside></div><OverlayDialog open={reasonAction !== null} onClose={() => !mutate.isPending && setReasonAction(null)} title={reasonAction === 'cancel' ? 'Hủy đơn hàng' : 'Mở lại đơn hàng'} description="Lý do sẽ được lưu trong lịch sử kiểm toán." footer={<><Button variant="secondary" onClick={() => setReasonAction(null)} disabled={mutate.isPending}>Đóng</Button><Button variant={reasonAction === 'cancel' ? 'danger' : 'primary'} loading={mutate.isPending} disabled={!reason.trim()} onClick={() => reasonAction && mutate.mutate({ action: reasonAction, reason: reason.trim() })}>{reasonAction === 'cancel' ? 'Xác nhận hủy' : 'Xác nhận mở lại'}</Button></>}><Field label="Lý do" required><textarea rows={4} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></Field></OverlayDialog></div>
+  return <div className="page-container order-detail">
+    <header className="order-detail-header">
+      <div className="order-detail-header__identity">
+        <Link className="order-detail-back" to="/orders"><ArrowLeft size={18} aria-hidden="true" />Danh sách đơn hàng</Link>
+        <div className="order-detail-header__title"><h1>{value.orderCode}</h1><Status value={value.status} /></div>
+        <p>Nhận lúc <DateTimeText value={value.createdAt} /> <span aria-hidden="true">•</span> {value.branchCode}</p>
+      </div>
+      <div className="order-detail-actions" aria-label="Thao tác đơn hàng">
+        {canEdit && <Button className="order-detail-action--edit" variant="secondary" onClick={() => setEditing(current => !current)}><Pencil size={17} aria-hidden="true" />{editing ? 'Đóng chỉnh sửa' : 'Chỉnh sửa'}</Button>}
+        {action && hasPermission(action[2]) && <Button className="order-detail-action--primary" loading={mutate.isPending} onClick={() => execute(action[0])}><PackageCheck size={18} aria-hidden="true" />{action[1]}</Button>}
+        {(['RECEIVED', 'PROCESSING', 'READY'] as OrderStatus[]).includes(value.status) && hasPermission(PERMISSION_CODES.ORDER_CANCEL) && <Button className="order-detail-action--danger" variant="danger" onClick={() => execute('cancel')}><Trash2 size={17} aria-hidden="true" />Hủy đơn</Button>}
+        {value.status === 'COMPLETED' && hasPermission(PERMISSION_CODES.ORDER_REOPEN) && <Button className="order-detail-action--reopen" variant="secondary" onClick={() => execute('reopen')}><RotateCcw size={18} aria-hidden="true" />Mở lại</Button>}
+      </div>
+    </header>
+
+    {editing && <OrderEditPanel order={value} onClose={() => setEditing(false)} onSaved={updated => { queryClient.setQueryData(orderKeys.detail(id), updated); void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all }); setEditing(false) }} />}
+
+    <div className="order-detail-grid">
+      <main className="order-detail-main">
+        <Surface as="section" className="order-section order-detail-general">
+          <DetailSectionTitle className="order-detail-section-title" icon={<ClipboardList size={19} />} title="Thông tin chung" />
+          <dl className="detail-facts">
+            <div><span className="detail-fact__icon"><UserRound size={20} aria-hidden="true" /></span><span><dt>Khách hàng</dt><dd>{value.customerName || 'Khách vãng lai'}{value.customerPhone && <small>{value.customerPhone}</small>}</dd></span></div>
+            <div><span className="detail-fact__icon"><CalendarDays size={20} aria-hidden="true" /></span><span><dt>Ngày hẹn trả</dt><dd className={!value.promisedAt ? 'detail-fact__empty' : undefined}>{value.promisedAt ? promisedDateLabel(value.promisedAt) : 'Chưa hẹn'}</dd></span>{canEdit && <Button className="detail-fact__action" size="sm" variant="ghost" aria-label="Cập nhật ngày hẹn trả" onClick={() => setEditing(true)}><Pencil size={16} aria-hidden="true" /></Button>}</div>
+            <div><span className="detail-fact__icon"><UserRoundCheck size={20} aria-hidden="true" /></span><span><dt>Nhân viên nhận</dt><dd>{value.createdBy.displayName}</dd></span></div>
+            <div><span className="detail-fact__icon"><Clock3 size={20} aria-hidden="true" /></span><span><dt>Cập nhật cuối</dt><dd><DateTimeText value={value.updatedAt} /></dd></span></div>
+          </dl>
+        </Surface>
+
+        <Surface as="section" className="order-section order-detail-services">
+          <DetailSectionTitle className="order-detail-section-title" icon={<Layers3 size={19} />} title={<>Dịch vụ <span className="order-detail-count">{value.items.length}</span></>} />
+          {value.items.length ? <div className="order-services-table-wrap"><table className="order-services-table">
+            <caption className="sr-only">Danh sách dịch vụ của đơn hàng</caption>
+            <thead><tr><th scope="col">#</th><th scope="col">Dịch vụ</th><th scope="col">Mô tả</th><th scope="col">Số lượng</th><th scope="col">Đơn giá</th><th scope="col">Thành tiền</th></tr></thead>
+            <tbody>{value.items.map((item, index) => {
+              const unitPrice = snapshotUnitPrice(item)
+              return <tr key={item.id}>
+                <td data-label="#">{index + 1}</td>
+                <td data-label="Dịch vụ"><span className="order-service-name"><span aria-hidden="true"><Shirt size={18} /></span><strong>{item.serviceName}</strong></span></td>
+                <td data-label="Mô tả"><span className="order-service-description">{item.itemTypeName}{item.note && <small className="detail-order-item__note"><strong>Ghi chú:</strong> {item.note}</small>}</span></td>
+                <td data-label="Số lượng">{quantityText(item.quantity, item.unitType)}</td>
+                <td data-label="Đơn giá">{unitPrice === undefined ? '—' : money(unitPrice, value.currency)}</td>
+                <td data-label="Thành tiền"><strong>{money(item.lineAmount, value.currency)}</strong></td>
+              </tr>
+            })}</tbody>
+          </table></div> : <StatePanel compact title="Chưa có dịch vụ" body="Đơn hàng này chưa có dịch vụ nào." />}
+        </Surface>
+
+        <Surface as="section" className="order-section order-detail-note">
+          <DetailSectionTitle className="order-detail-section-title" icon={<FileText size={19} />} title="Ghi chú" action={canEdit ? <Button size="sm" variant="ghost" onClick={() => setEditing(true)}><Pencil size={16} aria-hidden="true" />Chỉnh sửa ghi chú</Button> : undefined} />
+          {value.note ? <p>{value.note}</p> : <p className="order-detail-empty-copy">Chưa có ghi chú cho đơn hàng này.</p>}
+        </Surface>
+      </main>
+
+      <aside className="order-detail-side">
+        <Surface as="section" className="order-total">
+          <span className="order-total__label"><WalletCards size={20} aria-hidden="true" />Tổng tiền thanh toán</span>
+          <strong>{money(value.totalAmount, value.currency)}</strong>
+        </Surface>
+
+        {canReadBatches && <Surface as="section" className="order-batch-references">
+          <DetailSectionTitle className="order-detail-section-title" icon={<WashingMachine size={19} />} title="Mẻ giặt liên quan" />
+          {batchReferences.isLoading ? <LoadingState rows={2} /> : batchReferences.isError ? <ErrorState title="Không tải được mẻ giặt" body="Thông tin đơn vẫn an toàn. Hãy thử tải lại phần này." onRetry={() => void batchReferences.refetch()} /> : batchReferences.data?.length ? <div className="order-batch-reference-list">{batchReferences.data.map(batch => <Link key={batch.id} to={`/wash-batches/${batch.id}`}><span className="order-batch-reference__icon" aria-hidden="true"><WashingMachine size={18} /></span><span className="order-batch-reference__copy"><strong>{batch.batchCode}</strong><small>{batch.serviceName}</small></span><BatchStatusChip status={batch.status} /><ChevronRight size={18} aria-hidden="true" /></Link>)}</div> : <p className="order-detail-empty-copy">Đơn chưa được xếp vào mẻ giặt.</p>}
+        </Surface>}
+
+        {canAudit && <Surface as="section" className="order-history">
+          <DetailSectionTitle className="order-detail-section-title" icon={<Clock3 size={19} />} title="Lịch sử đơn hàng" />
+          {history.isLoading ? <LoadingState rows={3} /> : history.isError ? <ErrorState title="Không tải được lịch sử" body="Thử tải lại để xem thay đổi của đơn." onRetry={() => void history.refetch()} /> : history.data?.length ? <div className="order-history__timeline">{history.data.map((item) => <article key={item.id}><span className="history-dot"><Clock3 size={14} aria-hidden="true" /></span><div><strong>{historyLabel(item.action, item.changedFields)}</strong><p>{item.actor.displayName} <span aria-hidden="true">•</span> <DateTimeText value={item.createdAt} /></p><HistoryDetails changed={item.changedFields} currency={value.currency} />{item.reason && <small>{item.reason}</small>}</div></article>)}</div> : <p className="order-detail-empty-copy">Chưa có sự kiện lịch sử.</p>}
+        </Surface>}
+      </aside>
+    </div>
+
+    <OverlayDialog open={reasonAction !== null} onClose={() => !mutate.isPending && setReasonAction(null)} title={reasonAction === 'cancel' ? 'Hủy đơn hàng' : 'Mở lại đơn hàng'} description="Lý do sẽ được lưu trong lịch sử kiểm toán." footer={<><Button variant="secondary" onClick={() => setReasonAction(null)} disabled={mutate.isPending}>Đóng</Button><Button variant={reasonAction === 'cancel' ? 'danger' : 'primary'} loading={mutate.isPending} disabled={!reason.trim()} onClick={() => reasonAction && mutate.mutate({ action: reasonAction, reason: reason.trim() })}>{reasonAction === 'cancel' ? 'Xác nhận hủy' : 'Xác nhận mở lại'}</Button></>}><Field label="Lý do" required><textarea rows={4} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></Field></OverlayDialog>
+  </div>
 }
