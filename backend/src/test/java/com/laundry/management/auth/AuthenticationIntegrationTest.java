@@ -27,6 +27,7 @@ import com.laundry.management.auth.infrastructure.UserAccountRepository;
 import com.laundry.management.customer.infrastructure.CustomerActivityRepository;
 import com.laundry.management.customer.infrastructure.CustomerAddressRepository;
 import com.laundry.management.customer.infrastructure.CustomerRepository;
+import com.laundry.management.testsupport.EmployeeAggregateTestCleaner;
 import java.time.Instant;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -92,8 +94,12 @@ class AuthenticationIntegrationTest {
     @Autowired
     private BootstrapService bootstrapService;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     @BeforeEach
     void setUp() {
+        EmployeeAggregateTestCleaner.clean(jdbc);
         customerActivityRepository.deleteAll();
         customerAddressRepository.deleteAll();
         customerRepository.deleteAll();

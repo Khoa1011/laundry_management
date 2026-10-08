@@ -11,7 +11,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.laundry.management.auth.domain.*;
 import com.laundry.management.auth.infrastructure.*;
 import com.laundry.management.employee.infrastructure.*;
+import com.laundry.management.testsupport.EmployeeAggregateTestCleaner;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,18 +48,7 @@ class EmployeeSensitiveDataIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        jdbc.update("delete from employee_documents");
-        jdbc.update("delete from employee_identities");
-        jdbc.update("delete from employee_compensations");
-        jdbc.update("delete from employee_audit_logs");
-        jdbc.update("delete from employee_branches");
-        jdbc.update("delete from employees");
-        jdbc.update("delete from authorization_audit_logs");
-        jdbc.update("delete from user_permission_overrides where user_id in (select id from users where username like 'sensitive.%')");
-        jdbc.update("delete from user_roles where user_id in (select id from users where username like 'sensitive.%')");
-        jdbc.update("delete from user_branches where user_id in (select id from users where username like 'sensitive.%')");
-        jdbc.update("delete from users where username like 'sensitive.%'");
-        jdbc.update("delete from branches where code in ('SA', 'SB')");
+        cleanFixtures();
         branchA = branchRepository.save(new Branch("SA", "Sensitive branch A"));
         branchB = branchRepository.save(new Branch("SB", "Sensitive branch B"));
         createUser("sensitive.admin", "Sensitive Admin", roleRepository.findByCode("ADMIN").orElseThrow(), branchA, branchB);
@@ -65,6 +56,21 @@ class EmployeeSensitiveDataIntegrationTest {
         positionId = positionRepository.findByActiveTrueOrderBySortOrderAscNameViAscIdAsc().get(0).getId();
         adminToken = login("sensitive.admin");
         managerToken = login("sensitive.manager");
+    }
+
+    @AfterEach
+    void tearDown() {
+        cleanFixtures();
+    }
+
+    private void cleanFixtures() {
+        EmployeeAggregateTestCleaner.clean(jdbc);
+        jdbc.update("delete from authorization_audit_logs");
+        jdbc.update("delete from user_permission_overrides where user_id in (select id from users where username like 'sensitive.%')");
+        jdbc.update("delete from user_roles where user_id in (select id from users where username like 'sensitive.%')");
+        jdbc.update("delete from user_branches where user_id in (select id from users where username like 'sensitive.%')");
+        jdbc.update("delete from users where username like 'sensitive.%'");
+        jdbc.update("delete from branches where code in ('SA', 'SB')");
     }
 
     @Test

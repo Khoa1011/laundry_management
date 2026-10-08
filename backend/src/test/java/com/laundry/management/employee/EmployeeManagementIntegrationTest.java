@@ -18,10 +18,9 @@ import com.laundry.management.auth.domain.UserAccount;
 import com.laundry.management.auth.infrastructure.BranchRepository;
 import com.laundry.management.auth.infrastructure.RoleRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
-import com.laundry.management.employee.infrastructure.EmployeeAuditRepository;
-import com.laundry.management.employee.infrastructure.EmployeeBranchRepository;
 import com.laundry.management.employee.infrastructure.EmployeePositionRepository;
-import com.laundry.management.employee.infrastructure.EmployeeRepository;
+import com.laundry.management.testsupport.EmployeeAggregateTestCleaner;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,9 +42,6 @@ class EmployeeManagementIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
-    @Autowired private EmployeeAuditRepository auditRepository;
-    @Autowired private EmployeeBranchRepository employeeBranchRepository;
-    @Autowired private EmployeeRepository employeeRepository;
     @Autowired private EmployeePositionRepository positionRepository;
     @Autowired private UserAccountRepository userRepository;
     @Autowired private BranchRepository branchRepository;
@@ -63,23 +59,7 @@ class EmployeeManagementIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        jdbcTemplate.update("delete from notification_recipients");
-        jdbcTemplate.update("delete from notification_preferences");
-        jdbcTemplate.update("delete from notifications");
-        auditRepository.deleteAll();
-        employeeBranchRepository.deleteAll();
-        employeeRepository.deleteAll();
-        jdbcTemplate.update("delete from employee_positions where created_by is not null");
-        jdbcTemplate.update("delete from authorization_audit_logs");
-        jdbcTemplate.update("update users set locked_at = null, locked_reason = null, locked_by = null");
-        jdbcTemplate.update("delete from user_permission_overrides where user_id in "
-            + "(select id from users where username like 'employee.%')");
-        jdbcTemplate.update("delete from user_roles where user_id in "
-            + "(select id from users where username like 'employee.%')");
-        jdbcTemplate.update("delete from user_branches where user_id in "
-            + "(select id from users where username like 'employee.%')");
-        jdbcTemplate.update("delete from users where username like 'employee.%'");
-        jdbcTemplate.update("delete from branches where code in ('EA', 'EB')");
+        cleanFixtures();
 
         branchA = branchRepository.save(new Branch("EA", "Employee branch A"));
         branchB = branchRepository.save(new Branch("EB", "Employee branch B"));
@@ -92,6 +72,27 @@ class EmployeeManagementIntegrationTest {
         positionId = positionRepository.findByActiveTrueOrderBySortOrderAscNameViAscIdAsc().get(0).getId();
         adminToken = login("employee.admin");
         managerAToken = login("employee.manager.a");
+    }
+
+    @AfterEach
+    void tearDown() {
+        cleanFixtures();
+    }
+
+    private void cleanFixtures() {
+        jdbcTemplate.update("delete from notification_recipients");
+        jdbcTemplate.update("delete from notification_preferences");
+        jdbcTemplate.update("delete from notifications");
+        EmployeeAggregateTestCleaner.clean(jdbcTemplate);
+        jdbcTemplate.update("delete from authorization_audit_logs");
+        jdbcTemplate.update("delete from user_permission_overrides where user_id in "
+            + "(select id from users where username like 'employee.%')");
+        jdbcTemplate.update("delete from user_roles where user_id in "
+            + "(select id from users where username like 'employee.%')");
+        jdbcTemplate.update("delete from user_branches where user_id in "
+            + "(select id from users where username like 'employee.%')");
+        jdbcTemplate.update("delete from users where username like 'employee.%'");
+        jdbcTemplate.update("delete from branches where code in ('EA', 'EB')");
     }
 
     @Test

@@ -19,6 +19,7 @@ import com.laundry.management.auth.infrastructure.AuthorizationAuditRepository;
 import com.laundry.management.auth.infrastructure.BranchRepository;
 import com.laundry.management.auth.infrastructure.RoleRepository;
 import com.laundry.management.auth.infrastructure.UserAccountRepository;
+import com.laundry.management.testsupport.EmployeeAggregateTestCleaner;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -31,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -49,9 +51,11 @@ class AccessControlIntegrationTest {
     @Autowired BranchRepository branchRepository;
     @Autowired RoleRepository roleRepository;
     @Autowired AuthorizationAuditRepository auditRepository;
+    @Autowired JdbcTemplate jdbc;
 
     @BeforeEach
     void setUp() {
+        EmployeeAggregateTestCleaner.clean(jdbc);
         auditRepository.deleteAll();
         userRepository.deleteAll();
         branchRepository.deleteAll();
