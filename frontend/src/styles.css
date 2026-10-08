@@ -16,6 +16,7 @@
 @import "./styles/date-picker.css";
 @import "./styles/orders.css";
 @import "./styles/wash-batches.css";
+@import "./styles/sorting.css";
 
 @theme inline {
   --color-app-background: var(--app-background);

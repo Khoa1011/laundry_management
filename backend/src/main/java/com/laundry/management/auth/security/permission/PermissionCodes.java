@@ -100,4 +100,6 @@ public final class PermissionCodes {
     public static final String SERVICE_CREATE = "service.create";
     public static final String SERVICE_UPDATE = "service.update";
     public static final String SERVICE_ARCHIVE = "service.archive";
+    public static final String SORTING_READ = "sorting.read";
+    public static final String SORTING_PROCESS = "sorting.process";
 }

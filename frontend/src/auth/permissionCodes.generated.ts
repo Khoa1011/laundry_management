@@ -94,6 +94,8 @@ export const PERMISSION_CODES = {
   SERVICE_CREATE: 'service.create',
   SERVICE_UPDATE: 'service.update',
   SERVICE_ARCHIVE: 'service.archive',
+  SORTING_READ: 'sorting.read',
+  SORTING_PROCESS: 'sorting.process',
 } as const
 
 export type PermissionCode = typeof PERMISSION_CODES[keyof typeof PERMISSION_CODES]

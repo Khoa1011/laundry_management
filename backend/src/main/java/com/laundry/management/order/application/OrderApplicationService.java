@@ -16,6 +16,7 @@ import com.laundry.management.servicecatalog.api.CatalogDtos;
 import com.laundry.management.servicecatalog.application.PricingEngineService;
 import com.laundry.management.servicecatalog.domain.*;
 import com.laundry.management.servicecatalog.infrastructure.*;
+import com.laundry.management.sorting.infrastructure.ProcessingGroupRepository;
 import java.time.Instant;
 import java.time.Clock;
 import java.math.BigDecimal;
@@ -36,16 +37,18 @@ public class OrderApplicationService {
     private final CurrentUserProvider currentUsers; private final ApplicationEventPublisher events;
     private final OrderTransitionPolicy transitions;
     private final Clock clock;
+    private final ProcessingGroupRepository processingGroups;
 
     public OrderApplicationService(OrderRepository orders, OrderHistoryRepository history, OrderBagRepository bags, BranchRepository branches,
         CustomerRepository customers, UserAccountRepository users, LaundryServiceRepository services,
         ItemTypeRepository itemTypes, PricingEngineService pricing, OrderNumberGenerator numbers,
         OrderMapper mapper, ObjectMapper json, CurrentUserProvider currentUsers, ApplicationEventPublisher events,
-        OrderTransitionPolicy transitions, Clock clock) {
+        OrderTransitionPolicy transitions, Clock clock, ProcessingGroupRepository processingGroups) {
         this.orders=orders;this.history=history;this.bags=bags;this.branches=branches;this.customers=customers;this.users=users;
         this.services=services;this.itemTypes=itemTypes;this.pricing=pricing;this.numbers=numbers;this.mapper=mapper;
         this.json=json;this.currentUsers=currentUsers;this.events=events;this.transitions=transitions;
         this.clock=clock;
+        this.processingGroups=processingGroups;
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_CREATE)")
@@ -120,8 +123,8 @@ public class OrderApplicationService {
             throw bagError(HttpStatus.CONFLICT,ErrorCode.ORDER_BAG_ALREADY_VOIDED,"This bag was already voided.");
         if(bag.getStatus()!=OrderBagStatus.RECEIVED)
             throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_NOT_PRINTABLE,"An unverified legacy bag cannot be voided as a received physical bag.");
-        if(bags.countByOrderIdAndStatus(orderId,OrderBagStatus.RECEIVED)<=1)
-            throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_LAST_ACTIVE,"An order must retain at least one received physical bag.");
+        if(bags.countByOrderIdAndStatusIn(orderId,List.of(OrderBagStatus.RECEIVED,OrderBagStatus.SORTED))<=1)
+            throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_LAST_ACTIVE,"An order must retain at least one active physical bag.");
         String cleanReason=clean(reason);
         if(cleanReason==null || cleanReason.length()>500)
             throw invalidUpdate("A bag void reason of at most 500 characters is required.");
@@ -144,6 +147,8 @@ public class OrderApplicationService {
             throw immutable("Completed or cancelled orders cannot be edited.");
         if(request.itemsPresent() && order.getStatus()!=OrderStatus.RECEIVED)
             throw immutable("Services can only be edited while an order is received.");
+        if(request.itemsPresent() && processingGroups.existsByBagOrderId(id))
+            throw immutable("Services cannot be replaced after physical sorting history exists.");
         if(request.itemNoteUpdatesPresent() && order.getStatus()!=OrderStatus.RECEIVED)
             throw immutable("Order item notes can only be edited while an order is received.");
         UserAccount actor=actor();

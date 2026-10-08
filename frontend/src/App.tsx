@@ -22,6 +22,8 @@ const OrderCreatePage = lazy(() => import('./features/orders/OrderPages').then((
 const OrderDetailPage = lazy(() => import('./features/orders/OrderPages').then((module) => ({ default: module.OrderDetailPage })))
 const WashBatchListPage = lazy(() => import('./features/wash-batches/WashBatchPages').then((module) => ({ default: module.WashBatchListPage })))
 const WashBatchDetailPage = lazy(() => import('./features/wash-batches/WashBatchPages').then((module) => ({ default: module.WashBatchDetailPage })))
+const SortingPage = lazy(() => import('./features/sorting/SortingPages').then((module) => ({ default: module.SortingPage })))
+const WaitingPage = lazy(() => import('./features/sorting/SortingPages').then((module) => ({ default: module.WaitingPage })))
 const ForbiddenPage = lazy(() => import('./pages/PlaceholderPage').then((module) => ({ default: module.ForbiddenPage })))
 const NotFoundPage = lazy(() => import('./pages/PlaceholderPage').then((module) => ({ default: module.NotFoundPage })))
 const AccessLandingPage = lazy(() => import('./features/access-control/AccessPages').then((module) => ({ default: module.AccessLandingPage })))
@@ -103,6 +105,8 @@ const router = createBrowserRouter([
       { path: '/orders/new', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_CREATE}><LazyPage><OrderCreatePage /></LazyPage></PermissionRoute> },
       { path: '/orders/:orderId', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_READ}><LazyPage><OrderDetailPage /></LazyPage></PermissionRoute> },
       { path: '/wash-batches', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_READ}><LazyPage><WashBatchListPage /></LazyPage></PermissionRoute> },
+      { path: '/operations/sorting', element: <PermissionRoute permission={PERMISSION_CODES.SORTING_PROCESS}><LazyPage><SortingPage /></LazyPage></PermissionRoute> },
+      { path: '/operations/waiting', element: <PermissionRoute permission={PERMISSION_CODES.SORTING_READ}><LazyPage><WaitingPage /></LazyPage></PermissionRoute> },
       { path: '/wash-batches/new', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_CREATE}><Navigate to="/orders/batching" replace /></PermissionRoute> },
       { path: '/wash-batches/:batchId', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_READ}><LazyPage><WashBatchDetailPage /></LazyPage></PermissionRoute> },
       { path: '/more', element: <LazyPage><MorePage /></LazyPage> },

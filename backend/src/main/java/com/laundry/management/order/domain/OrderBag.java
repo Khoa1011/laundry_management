@@ -24,6 +24,8 @@ public class OrderBag {
     @Column(name = "voided_at") private Instant voidedAt;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "voided_by") private UserAccount voidedBy;
     @Column(name = "void_reason", length = 500) private String voidReason;
+    @Column(name = "sorted_at") private Instant sortedAt;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "sorted_by") private UserAccount sortedBy;
     @Version @Column(nullable = false) private long version;
 
     protected OrderBag() {}
@@ -51,6 +53,20 @@ public class OrderBag {
         this.updatedBy = actor;
     }
 
+    public void markSorted(UserAccount actor, Instant at) {
+        this.status = OrderBagStatus.SORTED;
+        this.sortedAt = at;
+        this.sortedBy = actor;
+        this.updatedBy = actor;
+    }
+
+    public void reopenSorting(UserAccount actor) {
+        this.status = OrderBagStatus.RECEIVED;
+        this.sortedAt = null;
+        this.sortedBy = null;
+        this.updatedBy = actor;
+    }
+
     public Long getId() { return id; }
     public LaundryOrder getOrder() { return order; }
     public String getBagCode() { return bagCode; }
@@ -62,4 +78,7 @@ public class OrderBag {
     public Instant getVoidedAt() { return voidedAt; }
     public UserAccount getVoidedBy() { return voidedBy; }
     public String getVoidReason() { return voidReason; }
+    public Instant getSortedAt() { return sortedAt; }
+    public UserAccount getSortedBy() { return sortedBy; }
+    public long getVersion() { return version; }
 }

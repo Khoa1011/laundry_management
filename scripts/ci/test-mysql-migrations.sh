@@ -156,8 +156,8 @@ initialize_database "$FRESH_DATABASE"
 start_application "$FRESH_DATABASE" 18080 "$ARTIFACT_DIR/fresh-startup.log"
 assert_scalar \
   "$(mysql_app "$FRESH_DATABASE" --execute="SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1;")" \
-  "25" \
-  "fresh database reaches Flyway V25"
+  "26" \
+  "fresh database reaches Flyway V26"
 assert_scalar \
   "$(mysql_app "$FRESH_DATABASE" --execute="SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0;")" \
   "0" \
@@ -216,7 +216,7 @@ assert_scalar \
 
 stop_application
 echo "Upgrading the seeded V24 database to V25 with Hibernate validation."
-start_application "$LEGACY_DATABASE" 18083 "$ARTIFACT_DIR/v25-upgrade-startup.log"
+start_application "$LEGACY_DATABASE" 18083 "$ARTIFACT_DIR/v25-upgrade-startup.log" "25" "none"
 assert_scalar \
   "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1;")" \
   "25" \
@@ -259,6 +259,79 @@ assert_sql_rejected "$LEGACY_DATABASE" \
 assert_sql_rejected "$LEGACY_DATABASE" \
   "INSERT INTO order_bags (order_id, bag_code, sequence_number, status, created_by, updated_by, voided_at, voided_by, void_reason) VALUES ($LEGACY_ORDER_ID, 'GS-CI-INVALID-RECEIVED', 2, 'RECEIVED', $LEGACY_USER_ID, $LEGACY_USER_ID, NOW(6), $LEGACY_USER_ID, 'Unexpected');" \
   "RECEIVED bag with void metadata is rejected"
+
+stop_application
+echo "Upgrading the seeded V25 database to V26 with Hibernate validation."
+start_application "$LEGACY_DATABASE" 18084 "$ARTIFACT_DIR/v26-upgrade-startup.log"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1;")" \
+  "26" \
+  "legacy database reaches Flyway V26"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM flyway_schema_history WHERE version = '26' AND success = 1;")" \
+  "1" \
+  "Flyway records V26 as successful"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM processing_groups;")" \
+  "0" \
+  "V26 creates an empty processing group table"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = '$LEGACY_DATABASE' AND table_name = 'processing_groups' AND constraint_type = 'UNIQUE' AND constraint_name IN ('uk_processing_groups_code', 'uk_processing_groups_bag_sequence');")" \
+  "2" \
+  "V26 enforces immutable group and bag-sequence uniqueness"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema = '$LEGACY_DATABASE' AND table_name = 'processing_groups' AND constraint_name IN ('fk_processing_groups_bag', 'fk_processing_groups_item', 'fk_processing_groups_created_by', 'fk_processing_groups_updated_by', 'fk_processing_groups_voided_by');")" \
+  "5" \
+  "V26 processing group foreign keys exist"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM permissions WHERE code IN ('sorting.read', 'sorting.process');")" \
+  "2" \
+  "V26 registers sorting permissions"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM order_bags bag JOIN orders o ON o.id = bag.order_id WHERE o.order_code = 'GS-CI-LEGACY-0001' AND bag.status = 'LEGACY_UNVERIFIED' AND bag.sorted_at IS NULL AND bag.sorted_by IS NULL;")" \
+  "1" \
+  "V26 preserves the historical unverified bag"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "UPDATE order_bags SET status = 'SORTED' WHERE order_id = $LEGACY_ORDER_ID;" \
+  "SORTED bag without sorting metadata is rejected"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "INSERT INTO processing_groups (order_bag_id, order_item_id, group_code, sequence_number, quantity, color_group, fabric_care, wash_mode, temperature_profile, detergent_profile, softener_profile, hygiene_level, separate_wash, drying_instruction, status, created_by, updated_by) VALUES (999999999, 999999999, 'BAD-G01', 1, 1, 'UNKNOWN', 'UNKNOWN', 'SERVICE_DEFAULT', 'SERVICE_DEFAULT', 'DEFAULT', 'DEFAULT', 'STANDARD', 0, 'TUMBLE_NORMAL', 'WAITING', $LEGACY_USER_ID, $LEGACY_USER_ID);" \
+  "processing group foreign keys are enforced"
+
+mysql_app "$LEGACY_DATABASE" --execute="INSERT INTO laundry_services (code, name_vi, processing_type, default_unit_type, sharing_allowed, created_by, updated_by) VALUES ('CI-SORT', 'CI sorting service', 'WASH_DRY', 'KG', 1, $LEGACY_USER_ID, $LEGACY_USER_ID);"
+LEGACY_SERVICE_ID="$(mysql_app "$LEGACY_DATABASE" --execute="SELECT id FROM laundry_services WHERE code = 'CI-SORT';")"
+mysql_app "$LEGACY_DATABASE" --execute="INSERT INTO item_types (code, name_vi, default_unit_type, created_by, updated_by) VALUES ('CI-SORT-ITEM', 'CI sorting item', 'KG', $LEGACY_USER_ID, $LEGACY_USER_ID);"
+LEGACY_ITEM_TYPE_ID="$(mysql_app "$LEGACY_DATABASE" --execute="SELECT id FROM item_types WHERE code = 'CI-SORT-ITEM';")"
+mysql_app "$LEGACY_DATABASE" --execute="INSERT INTO order_items (order_id, service_id, item_type_id, service_code_snapshot, service_name_snapshot, item_type_code_snapshot, item_type_name_snapshot, pricing_method_snapshot, unit_type_snapshot, sharing_mode_snapshot, quantity, billable_quantity, line_amount, pricing_snapshot_json, quoted_at) VALUES ($LEGACY_ORDER_ID, $LEGACY_SERVICE_ID, $LEGACY_ITEM_TYPE_ID, 'CI-SORT', 'CI sorting service', 'CI-SORT-ITEM', 'CI sorting item', 'PER_KG', 'KG', 'ANY', 1.000, 1.000, 0, '{}', NOW(6));"
+LEGACY_ITEM_ID="$(mysql_app "$LEGACY_DATABASE" --execute="SELECT id FROM order_items WHERE order_id = $LEGACY_ORDER_ID AND service_code_snapshot = 'CI-SORT';")"
+mysql_app "$LEGACY_DATABASE" --execute="INSERT INTO order_bags (order_id, bag_code, sequence_number, status, created_by, updated_by) VALUES ($LEGACY_ORDER_ID, 'GS-CI-LEGACY-0001-02', 2, 'RECEIVED', $LEGACY_USER_ID, $LEGACY_USER_ID);"
+SORTING_BAG_ID="$(mysql_app "$LEGACY_DATABASE" --execute="SELECT id FROM order_bags WHERE bag_code = 'GS-CI-LEGACY-0001-02';")"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "UPDATE order_bags SET sorted_at = NOW(6), sorted_by = $LEGACY_USER_ID WHERE id = $SORTING_BAG_ID;" \
+  "RECEIVED bag cannot retain sorted metadata"
+mysql_app "$LEGACY_DATABASE" --execute="INSERT INTO processing_groups (order_bag_id, order_item_id, group_code, sequence_number, quantity, color_group, fabric_care, wash_mode, temperature_profile, detergent_profile, softener_profile, hygiene_level, separate_wash, drying_instruction, status, created_by, updated_by) VALUES ($SORTING_BAG_ID, $LEGACY_ITEM_ID, 'GS-CI-LEGACY-0001-02-G01', 1, 1.000, 'DARK', 'STANDARD', 'NORMAL', 'T30', 'DEFAULT', 'DEFAULT', 'STANDARD', 0, 'HANG_DRY', 'WAITING', $LEGACY_USER_ID, $LEGACY_USER_ID);"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM processing_groups WHERE group_code = 'GS-CI-LEGACY-0001-02-G01' AND status = 'WAITING';")" \
+  "1" \
+  "V26 accepts a valid waiting group"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "INSERT INTO processing_groups (order_bag_id, order_item_id, group_code, sequence_number, quantity, color_group, fabric_care, wash_mode, temperature_profile, detergent_profile, softener_profile, hygiene_level, separate_wash, drying_instruction, status, created_by, updated_by) VALUES ($SORTING_BAG_ID, $LEGACY_ITEM_ID, 'GS-CI-LEGACY-0001-02-G01', 2, 1.000, 'DARK', 'STANDARD', 'NORMAL', 'T30', 'DEFAULT', 'DEFAULT', 'STANDARD', 0, 'HANG_DRY', 'WAITING', $LEGACY_USER_ID, $LEGACY_USER_ID);" \
+  "duplicate group code is rejected"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "INSERT INTO processing_groups (order_bag_id, order_item_id, group_code, sequence_number, quantity, color_group, fabric_care, wash_mode, temperature_profile, detergent_profile, softener_profile, hygiene_level, separate_wash, drying_instruction, status, created_by, updated_by) VALUES ($SORTING_BAG_ID, $LEGACY_ITEM_ID, 'GS-CI-LEGACY-0001-02-G02', 1, 1.000, 'DARK', 'STANDARD', 'NORMAL', 'T30', 'DEFAULT', 'DEFAULT', 'STANDARD', 0, 'HANG_DRY', 'WAITING', $LEGACY_USER_ID, $LEGACY_USER_ID);" \
+  "duplicate bag-group sequence is rejected"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "UPDATE processing_groups SET status = 'VOIDED' WHERE group_code = 'GS-CI-LEGACY-0001-02-G01';" \
+  "VOIDED group without audit metadata is rejected"
+mysql_app "$LEGACY_DATABASE" --execute="UPDATE processing_groups SET status = 'VOIDED', voided_at = NOW(6), voided_by = $LEGACY_USER_ID, void_reason = 'CI correction' WHERE group_code = 'GS-CI-LEGACY-0001-02-G01';"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "INSERT INTO processing_groups (order_bag_id, order_item_id, group_code, sequence_number, quantity, color_group, fabric_care, wash_mode, temperature_profile, detergent_profile, softener_profile, hygiene_level, separate_wash, drying_instruction, status, created_by, updated_by) VALUES ($SORTING_BAG_ID, $LEGACY_ITEM_ID, 'GS-CI-LEGACY-0001-02-G01', 2, 1.000, 'DARK', 'STANDARD', 'NORMAL', 'T30', 'DEFAULT', 'DEFAULT', 'STANDARD', 0, 'HANG_DRY', 'WAITING', $LEGACY_USER_ID, $LEGACY_USER_ID);" \
+  "voided group code cannot be reused"
+mysql_app "$LEGACY_DATABASE" --execute="UPDATE order_bags SET status = 'SORTED', sorted_at = NOW(6), sorted_by = $LEGACY_USER_ID WHERE id = $SORTING_BAG_ID;"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM order_bags WHERE id = $SORTING_BAG_ID AND status = 'SORTED' AND sorted_at IS NOT NULL AND sorted_by = $LEGACY_USER_ID;")" \
+  "1" \
+  "V26 accepts a sorted bag with actor and timestamp"
 
 stop_application
 echo "MySQL migration scenarios completed successfully." | tee -a "$ARTIFACT_DIR/assertions.log"

@@ -30,6 +30,8 @@ import com.laundry.management.order.domain.LaundryOrder;
 import com.laundry.management.order.domain.OrderItem;
 import com.laundry.management.order.domain.OrderStatusHistory;
 import com.laundry.management.order.domain.OrderStatus;
+import com.laundry.management.order.domain.OrderBag;
+import com.laundry.management.order.domain.OrderBagStatus;
 import com.laundry.management.order.infrastructure.OrderHistoryRepository;
 import com.laundry.management.order.infrastructure.OrderBagRepository;
 import com.laundry.management.order.infrastructure.OrderRepository;
@@ -41,6 +43,7 @@ import com.laundry.management.servicecatalog.domain.SharingMode;
 import com.laundry.management.servicecatalog.domain.UnitType;
 import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
 import com.laundry.management.servicecatalog.infrastructure.LaundryServiceRepository;
+import com.laundry.management.sorting.infrastructure.ProcessingGroupRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -69,13 +72,14 @@ class OrderApplicationServiceTest {
     private final CurrentUserProvider currentUsers = mock(CurrentUserProvider.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final OrderTransitionPolicy transitions = mock(OrderTransitionPolicy.class);
+    private final ProcessingGroupRepository processingGroups = mock(ProcessingGroupRepository.class);
     private OrderApplicationService service;
 
     @BeforeEach
     void setUp() {
         service = new OrderApplicationService(orders, history, bags, branches, customers, users, services,
             itemTypes, pricing, numbers, mapper, new ObjectMapper(), currentUsers, events, transitions,
-            Clock.fixed(EFFECTIVE_AT, ZoneOffset.UTC));
+            Clock.fixed(EFFECTIVE_AT, ZoneOffset.UTC), processingGroups);
         when(currentUsers.resolveAuthorizedBranch(7L)).thenReturn(7L);
         Branch branch = mock(Branch.class);
         when(branch.getId()).thenReturn(7L);
@@ -163,6 +167,31 @@ class OrderApplicationServiceTest {
         assertThatThrownBy(() -> service.create(createRequest()))
             .isInstanceOfSatisfying(ApiException.class, exception ->
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ORDER_CURRENCY_CONFLICT));
+    }
+
+    @Test
+    void receivedBagMayBeVoidedWhenAnotherBagIsAlreadySorted() {
+        LaundryOrder order = mock(LaundryOrder.class);
+        OrderBag bag = mock(OrderBag.class);
+        Branch branch = mock(Branch.class);
+        when(branch.getId()).thenReturn(7L);
+        when(order.getBranch()).thenReturn(branch);
+        when(order.getId()).thenReturn(11L);
+        when(order.getStatus()).thenReturn(OrderStatus.RECEIVED);
+        when(order.getOrderCode()).thenReturn("OA-DH-000011");
+        when(orders.findForUpdate(11L,7L)).thenReturn(Optional.of(order));
+        when(bags.findForUpdate(31L,11L)).thenReturn(Optional.of(bag));
+        when(bag.getStatus()).thenReturn(OrderBagStatus.RECEIVED);
+        when(bag.getBagCode()).thenReturn("OA-DH-000011-02");
+        when(bag.getSequenceNumber()).thenReturn(2);
+        when(bags.countByOrderIdAndStatusIn(11L,List.of(OrderBagStatus.RECEIVED,OrderBagStatus.SORTED)))
+            .thenReturn(2L);
+
+        service.voidBag(11L,31L,7L,"Nhận nhầm túi");
+
+        verify(bag).voidBag(any(UserAccount.class),org.mockito.ArgumentMatchers.eq(EFFECTIVE_AT),
+            org.mockito.ArgumentMatchers.eq("Nhận nhầm túi"));
+        verify(history).save(isA(OrderStatusHistory.class));
     }
 
     private OrderDtos.CreateRequest createRequest() {

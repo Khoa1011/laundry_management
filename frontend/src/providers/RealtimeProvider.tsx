@@ -29,6 +29,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     hasPermission(PERMISSION_CODES.NOTIFICATION_READ_OWN)
     || hasPermission(PERMISSION_CODES.ORDER_READ)
     || hasPermission(PERMISSION_CODES.BATCH_READ)
+    || hasPermission(PERMISSION_CODES.SORTING_READ)
   )
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('idle')
   const subscribers = useRef(new Map<string, Set<Subscriber>>())

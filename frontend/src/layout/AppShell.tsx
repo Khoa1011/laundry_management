@@ -7,6 +7,8 @@ import {
   Home,
   LogOut,
   Layers3,
+  ScanLine,
+  PackageSearch,
   Menu,
   MoreHorizontal,
   PanelLeftClose,
@@ -37,6 +39,8 @@ import { motionDuration, motionEase } from '../providers/motionPresets'
 const navItems = [
   { to: '/overview', key: 'overview', icon: Home },
   { to: '/orders', key: 'orders', icon: ClipboardList, permission: PERMISSION_CODES.ORDER_READ },
+  { to: '/operations/sorting', key: 'sorting', icon: ScanLine, permission: PERMISSION_CODES.SORTING_PROCESS },
+  { to: '/operations/waiting', key: 'waiting', icon: PackageSearch, permission: PERMISSION_CODES.SORTING_READ },
   { to: '/wash-batches', key: 'washBatches', icon: Layers3, permission: PERMISSION_CODES.BATCH_READ },
   { to: '/customers', key: 'customers', icon: Users, permission: PERMISSION_CODES.CUSTOMER_READ },
   { to: '/employees', key: 'employees', icon: UsersRound, permission: PERMISSION_CODES.EMPLOYEE_READ },
@@ -58,6 +62,7 @@ export function AppShell() {
 
   const focused = location.pathname === '/customers/new'
     || location.pathname === '/orders/new'
+    || location.pathname === '/operations/sorting'
     || /\/customers\/\d+\/edit$/.test(location.pathname)
     || location.pathname === '/employees/new'
     || /\/employees\/\d+\/edit$/.test(location.pathname)

@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ApiError } from '../../api/client'
 import { OverlayDialog } from '../../components/OverlayDialog'
+import { Barcode39 } from '../../components/Barcode39'
 import { Field } from '../../components/Field'
 import { Button } from '../../components/ui/Button'
 import { Surface } from '../../components/ui/Surface'
@@ -12,37 +13,11 @@ import { useToast } from '../../providers/ToastProvider'
 import { orderApi } from './api'
 import type { Order, OrderBag } from './types'
 
-// Code 39 carries only a branch-scoped bag identifier. The visible bag code remains
-// human-readable even if a branch's order-code format changes later.
-const code39: Record<string, string> = {
-  '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn',
-  '4': 'nnnwwnnnw', '5': 'wnnwwnnnn', '6': 'nnwwwnnnn', '7': 'nnnwnnwnw',
-  '8': 'wnnwnnwnn', '9': 'nnwwnnwnn', B: 'nnwnnwnnw', '*': 'nwnnwnwnn',
-}
-
-function BagBarcode({ bag }: { bag: OrderBag }) {
-  const payload = `B${bag.id}`
-  let position = 8
-  const bars: Array<{ x: number; width: number }> = []
-  for (const character of `*${payload}*`) {
-    for (const [index, kind] of [...code39[character]].entries()) {
-      const width = kind === 'w' ? 5 : 2
-      if (index % 2 === 0) bars.push({ x: position, width })
-      position += width
-    }
-    position += 2
-  }
-  return <><svg className="order-bag-barcode" viewBox={`0 0 ${position + 8} 56`} role="img" aria-label={`Mã vạch túi ${bag.bagCode}`} preserveAspectRatio="xMidYMid meet">
-    <rect width={position + 8} height="56" fill="white" />
-    {bars.map((bar, index) => <rect key={index} x={bar.x} y="2" width={bar.width} height="48" fill="black" />)}
-  </svg><small className="order-bag-label__payload">{payload}</small></>
-}
-
 function BagLabel({ order, bag }: { order: Order; bag: OrderBag }) {
   return <article className="order-bag-label">
     <p>{bag.status === 'VOIDED' ? 'Mã túi đã hủy · Không còn hiệu lực' : bag.status === 'LEGACY_UNVERIFIED' ? 'Tem đơn cũ · Chưa xác minh túi' : 'Tem túi đồ'}</p>
     <h3>{bag.bagCode}</h3>
-    <BagBarcode bag={bag} />
+    <Barcode39 payload={`B${bag.id}`} label={`Mã vạch túi ${bag.bagCode}`} />
     <strong>{order.customerName || 'Khách vãng lai'}</strong>
     <dl>
       <div><dt>Đơn hàng</dt><dd>{order.orderCode}</dd></div>
@@ -89,7 +64,7 @@ function mutationMessage(error: unknown) {
   if (!(error instanceof ApiError)) return 'Không thể cập nhật túi. Kiểm tra kết nối rồi thử lại.'
   if (error.status === 403) return 'Bạn không có quyền cập nhật đơn này.'
   if (error.problem.errorCode === 'ORDER_IMMUTABLE') return 'Chỉ có thể thay đổi túi khi đơn đang ở trạng thái Đã nhận.'
-  if (error.problem.errorCode === 'ORDER_BAG_LAST_ACTIVE') return 'Đơn hàng phải còn ít nhất một túi đang nhận.'
+  if (error.problem.errorCode === 'ORDER_BAG_LAST_ACTIVE') return 'Đơn hàng phải còn ít nhất một túi vật lý hợp lệ.'
   if (error.problem.errorCode === 'ORDER_BAG_ALREADY_VOIDED') return 'Túi này đã được hủy trước đó.'
   if (error.problem.errorCode === 'ORDER_BAG_LIMIT_REACHED') return 'Đơn đã đạt giới hạn 99 mã túi.'
   if (error.status === 404) return 'Không tìm thấy đơn hoặc túi trong chi nhánh này.'
@@ -116,8 +91,8 @@ export function OrderBags({ order, onBagUpdated, onOrderUpdated, mutationsDisabl
   const mutationLock = useRef(false)
   const canPrint = hasPermission(PERMISSION_CODES.ORDER_READ) && hasPermission(PERMISSION_CODES.ORDER_BAG_PRINT)
   const canMutate = Boolean(onOrderUpdated) && !mutationsDisabled && order.status === 'RECEIVED' && hasPermission(PERMISSION_CODES.ORDER_UPDATE)
-  const activeCount = order.bags.filter(bag => bag.status === 'RECEIVED').length
-  const printableBags = order.bags.filter(bag => bag.status === 'RECEIVED')
+  const activeCount = order.bags.filter(bag => bag.status === 'RECEIVED' || bag.status === 'SORTED').length
+  const printableBags = order.bags.filter(bag => bag.status === 'RECEIVED' || bag.status === 'SORTED')
   const previewBag = preview && (order.bags.find(bag => bag.id === preview.id) ?? preview)
   const isPrinting = Object.values(printStates).includes('PRINTING')
 
@@ -202,9 +177,9 @@ export function OrderBags({ order, onBagUpdated, onOrderUpdated, mutationsDisabl
     {order.bags?.length ? <div className="order-bags__list">{order.bags.map(bag => {
       const state = printStates[bag.id]
       return <div className={`order-bags__row${bag.status === 'VOIDED' ? ' order-bags__row--voided' : ''}`} key={bag.id}>
-        <div className="order-bags__identity"><strong>{bag.bagCode}</strong><span>Túi {bag.sequenceNumber}/{order.bags.length} · {bag.status === 'VOIDED' ? 'Hủy bỏ' : bag.status === 'LEGACY_UNVERIFIED' ? 'Đơn cũ · Chưa xác minh túi thực tế' : 'Đã nhận'}</span>
+        <div className="order-bags__identity"><strong>{bag.bagCode}</strong><span>Túi {bag.sequenceNumber}/{order.bags.length} · {bag.status === 'VOIDED' ? 'Hủy bỏ' : bag.status === 'LEGACY_UNVERIFIED' ? 'Đơn cũ · Chưa xác minh túi thực tế' : bag.status === 'SORTED' ? 'Đã phân loại' : 'Đã nhận'}</span>
           {bag.status === 'VOIDED' ? <small>Lý do: {bag.voidReason}</small> : <small role="status">{state === 'PRINTING' ? 'Đang gửi yêu cầu in…' : state === 'FAILED' ? 'In thất bại · Thử lại' : state === 'REQUESTED' || bag.printRequestCount > 0 ? 'Đã gửi lệnh in · Kiểm tra máy in' : 'Chưa gửi lệnh in'}</small>}
-          {canMutate && bag.status === 'RECEIVED' && activeCount === 1 && <small>Đơn phải còn ít nhất một túi đang nhận.</small>}
+          {canMutate && bag.status === 'RECEIVED' && activeCount === 1 && <small>Đơn phải còn ít nhất một túi vật lý hợp lệ.</small>}
         </div>
         <div className="order-bags__actions"><Button type="button" variant="ghost" onClick={() => setPreview(bag)}><Eye size={17} />Xem mã</Button>{canPrint && bag.status !== 'VOIDED' && <Button type="button" variant="secondary" loading={state === 'PRINTING'} disabled={printingAll || isPrinting} onClick={() => void print([bag])}>{bag.printRequestCount > 0 || state === 'REQUESTED' ? <RotateCcw size={17} /> : <Printer size={17} />}{bag.printRequestCount > 0 || state === 'REQUESTED' ? 'In lại' : 'In tem'}</Button>}{canMutate && bag.status === 'RECEIVED' && activeCount > 1 && <Button type="button" variant="danger" onClick={() => { setMutationError(''); setVoidReason(''); setVoidTarget(bag) }}><Ban size={17} />Hủy túi</Button>}</div>
       </div>

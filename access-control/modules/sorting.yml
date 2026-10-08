@@ -1,0 +1,21 @@
+{
+  "module": {
+    "code": "sorting",
+    "nameVi": "Phân loại đồ",
+    "nameEn": "Laundry Sorting",
+    "descriptionVi": "Phân loại túi đã nhận thành các nhóm đồ vật lý đang chờ xử lý.",
+    "descriptionEn": "Sort received bags into traceable physical processing groups.",
+    "displayOrder": 24,
+    "dataScopeNotes": "Tra cứu túi, nhóm đồ, hàng chờ, in tem và sự kiện realtime đều giới hạn trong chi nhánh được phép.",
+    "businessPolicyNotes": "Chỉ túi RECEIVED của đơn RECEIVED được xác nhận; nhóm đồ phân bổ theo OrderItem.quantity và không thay đổi giá hay trạng thái đơn."
+  },
+  "permissions": [
+    { "code": "sorting.read", "resource": "sorting", "action": "read", "nameVi": "Xem nhóm đồ và hàng chờ", "nameEn": "View sorting and waiting groups", "descriptionVi": "Xem túi, nhóm đồ và hàng chờ trong chi nhánh được phép.", "descriptionEn": "View branch-scoped bags, groups and waiting queue.", "riskLevel": "LOW", "displayOrder": 10 },
+    { "code": "sorting.process", "resource": "sorting", "action": "process", "nameVi": "Phân loại và in tem nhóm đồ", "nameEn": "Sort bags and print group labels", "descriptionVi": "Quét túi, xác nhận hoặc mở lại phân loại và yêu cầu in tem nhóm đồ.", "descriptionEn": "Resolve bags, confirm or reopen sorting, and request group-label printing.", "riskLevel": "MEDIUM", "displayOrder": 20 }
+  ],
+  "defaultRoleGrants": {
+    "ADMIN": ["sorting.read", "sorting.process"],
+    "MANAGER": ["sorting.read", "sorting.process"],
+    "RECEPTIONIST": ["sorting.read", "sorting.process"]
+  }
+}

@@ -16,6 +16,7 @@ public interface OrderBagRepository extends JpaRepository<OrderBag, Long> {
     Optional<OrderBag> findByIdAndOrderBranchId(Long id, Long branchId);
     Optional<OrderBag> findFirstByOrderIdOrderBySequenceNumberDesc(Long orderId);
     long countByOrderIdAndStatus(Long orderId, OrderBagStatus status);
+    long countByOrderIdAndStatusIn(Long orderId, List<OrderBagStatus> statuses);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select b from OrderBag b where b.id = :id and b.order.id = :orderId")
     Optional<OrderBag> findForUpdate(@Param("id") Long id, @Param("orderId") Long orderId);

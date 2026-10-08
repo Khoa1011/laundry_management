@@ -464,12 +464,29 @@ describe('Order pages', () => {
     } finally { open.mockRestore() }
   })
 
+  it('includes sorted physical bags when printing all bag labels', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_BAG_PRINT)
+    const sorted = { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2, status: 'SORTED' as const }
+    mocks.get.mockResolvedValue({ ...order, bags: [order.bags[0], sorted] })
+    mocks.requestBagPrint.mockImplementation(async (_orderId:number,bagId:number) => bagId === sorted.id ? sorted : order.bags[0])
+    const popup = { document: { open: vi.fn(), write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn(), close: vi.fn() } as unknown as Window
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup)
+    try {
+      renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+      await screen.findByText(sorted.bagCode)
+      await userEvent.click(screen.getByRole('button', { name: 'In tất cả tem' }))
+      await waitFor(() => expect(mocks.requestBagPrint).toHaveBeenCalledTimes(2))
+      expect(mocks.requestBagPrint).toHaveBeenCalledWith(7, sorted.id, 1)
+    } finally { open.mockRestore() }
+  })
+
   it('cannot void the final active bag in UI', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
     mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
     mocks.get.mockResolvedValue({ ...order, status: 'RECEIVED' })
     renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
-    expect(await screen.findByText('Đơn phải còn ít nhất một túi đang nhận.')).toBeInTheDocument()
+    expect(await screen.findByText('Đơn phải còn ít nhất một túi vật lý hợp lệ.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hủy túi' })).not.toBeInTheDocument()
   })
 
@@ -485,7 +502,7 @@ describe('Order pages', () => {
     const dialog = screen.getByRole('dialog', { name: 'Hủy túi CN01-DH-000007-02?' })
     await userEvent.type(within(dialog).getByRole('textbox', { name: /Lý do/ }), 'Nhập nhầm')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Hủy túi' }))
-    expect(await within(dialog).findByText('Đơn hàng phải còn ít nhất một túi đang nhận.')).toBeInTheDocument()
+    expect(await within(dialog).findByText('Đơn hàng phải còn ít nhất một túi vật lý hợp lệ.')).toBeInTheDocument()
     expect(within(dialog).getByRole('textbox', { name: /Lý do/ })).toHaveValue('Nhập nhầm')
     expect(container.querySelector('.order-bags__row--voided')).not.toBeInTheDocument()
   })
