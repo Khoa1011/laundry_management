@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OrderApplicationService {
-    private final OrderRepository orders; private final OrderHistoryRepository history;
+    private final OrderRepository orders; private final OrderHistoryRepository history; private final OrderBagRepository bags;
     private final BranchRepository branches; private final CustomerRepository customers;
     private final UserAccountRepository users; private final LaundryServiceRepository services;
     private final ItemTypeRepository itemTypes; private final PricingEngineService pricing;
@@ -37,12 +37,12 @@ public class OrderApplicationService {
     private final OrderTransitionPolicy transitions;
     private final Clock clock;
 
-    public OrderApplicationService(OrderRepository orders, OrderHistoryRepository history, BranchRepository branches,
+    public OrderApplicationService(OrderRepository orders, OrderHistoryRepository history, OrderBagRepository bags, BranchRepository branches,
         CustomerRepository customers, UserAccountRepository users, LaundryServiceRepository services,
         ItemTypeRepository itemTypes, PricingEngineService pricing, OrderNumberGenerator numbers,
         OrderMapper mapper, ObjectMapper json, CurrentUserProvider currentUsers, ApplicationEventPublisher events,
         OrderTransitionPolicy transitions, Clock clock) {
-        this.orders=orders;this.history=history;this.branches=branches;this.customers=customers;this.users=users;
+        this.orders=orders;this.history=history;this.bags=bags;this.branches=branches;this.customers=customers;this.users=users;
         this.services=services;this.itemTypes=itemTypes;this.pricing=pricing;this.numbers=numbers;this.mapper=mapper;
         this.json=json;this.currentUsers=currentUsers;this.events=events;this.transitions=transitions;
         this.clock=clock;
@@ -64,12 +64,31 @@ public class OrderApplicationService {
         Branch locked=branches.findByIdForUpdate(branchId).orElseThrow(this::notFound);
         LaundryOrder order=new LaundryOrder(numbers.next(locked),locked,customer,name,phone,request.promisedAt(),clean(request.note()),quoted.currency(),actor);
         quoted.items().forEach(order::addItem); orders.saveAndFlush(order);
+        List<OrderBag> orderBags=new ArrayList<>();
+        for(int sequence=1;sequence<=request.bagCount();sequence++)orderBags.add(new OrderBag(order,sequence,actor));
+        bags.saveAllAndFlush(orderBags);
         record(order,OrderHistoryAction.CREATED,null,OrderStatus.RECEIVED,null,writeAudit(Map.of(
-            "fields",List.of("customer","items","promisedAt","note"),
+            "fields",List.of("customer","items","promisedAt","note","bags"),
+            "bagCount",request.bagCount(),"bagCodes",orderBags.stream().map(OrderBag::getBagCode).toList(),
             "currency",quoted.currency(),"pricingEffectiveAt",quoted.effectiveAt(),
             "items",Map.of("before",List.of(),"after",auditItems(quoted.items())))),actor);
         publish(order,"order.created");
         return mapper.detail(order);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_BAG_PRINT)")
+    @Transactional
+    public OrderDtos.BagResponse requestBagPrint(Long orderId, Long bagId, Long requestedBranchId) {
+        Long branchId=currentUsers.resolveAuthorizedBranch(requestedBranchId);
+        LaundryOrder order=orders.findByIdAndBranchId(orderId,branchId).orElseThrow(this::notFound);
+        OrderBag bag=bags.findForPrint(bagId,orderId).orElseThrow(this::notFound);
+        UserAccount actor=actor();
+        bag.recordPrintRequest(actor,Instant.now(clock));
+        bags.flush();
+        record(order,OrderHistoryAction.LABEL_PRINT_REQUESTED,order.getStatus(),order.getStatus(),null,
+            writeAudit(Map.of("bagCode",bag.getBagCode(),"sequenceNumber",bag.getSequenceNumber(),
+                "printRequestCount",bag.getPrintRequestCount())),actor);
+        return mapper.bag(bag);
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_UPDATE)")

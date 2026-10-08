@@ -82,6 +82,7 @@ public final class PermissionCodes {
     public static final String ORDER_CANCEL = "order.cancel";
     public static final String ORDER_REOPEN = "order.reopen";
     public static final String ORDER_AUDIT_READ = "order.audit.read";
+    public static final String ORDER_BAG_PRINT = "order.bag.print";
     public static final String PRICE_LIST_READ = "price-list.read";
     public static final String PRICE_LIST_CREATE = "price-list.create";
     public static final String PRICE_LIST_UPDATE_DRAFT = "price-list.update-draft";

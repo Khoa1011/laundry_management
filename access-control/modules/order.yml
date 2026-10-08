@@ -18,11 +18,12 @@
     { "code": "order.complete", "resource": "order", "action": "complete", "nameVi": "Hoàn tất đơn hàng", "nameEn": "Complete orders", "descriptionVi": "Xác nhận hàng đã được bàn giao và hoàn tất đơn.", "descriptionEn": "Confirm handoff and complete an order.", "riskLevel": "HIGH", "displayOrder": 60 },
     { "code": "order.cancel", "resource": "order", "action": "cancel", "nameVi": "Hủy đơn hàng", "nameEn": "Cancel orders", "descriptionVi": "Hủy đơn hợp lệ với lý do bắt buộc.", "descriptionEn": "Cancel an eligible order with a required reason.", "riskLevel": "HIGH", "displayOrder": 70 },
     { "code": "order.reopen", "resource": "order", "action": "reopen", "nameVi": "Mở lại đơn hàng", "nameEn": "Reopen orders", "descriptionVi": "Mở lại đơn đã hoàn tất với lý do bắt buộc.", "descriptionEn": "Reopen a completed order with a required reason.", "riskLevel": "HIGH", "displayOrder": 80 },
-    { "code": "order.audit.read", "resource": "order.audit", "action": "read", "nameVi": "Xem lịch sử đơn hàng", "nameEn": "View order history", "descriptionVi": "Xem lịch sử trạng thái và thay đổi quan trọng của đơn.", "descriptionEn": "View order status and change history.", "riskLevel": "HIGH", "displayOrder": 90 }
+    { "code": "order.audit.read", "resource": "order.audit", "action": "read", "nameVi": "Xem lịch sử đơn hàng", "nameEn": "View order history", "descriptionVi": "Xem lịch sử trạng thái và thay đổi quan trọng của đơn.", "descriptionEn": "View order status and change history.", "riskLevel": "HIGH", "displayOrder": 90 },
+    { "code": "order.bag.print", "resource": "order.bag", "action": "print", "nameVi": "In tem túi", "nameEn": "Print bag labels", "descriptionVi": "Gửi yêu cầu in hoặc in lại tem túi của đơn trong chi nhánh được phép.", "descriptionEn": "Request printing or reprinting branch-scoped order bag labels.", "riskLevel": "MEDIUM", "displayOrder": 100 }
   ],
   "defaultRoleGrants": {
-    "ADMIN": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
-    "MANAGER": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read"],
-    "RECEPTIONIST": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete"]
+    "ADMIN": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read", "order.bag.print"],
+    "MANAGER": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.cancel", "order.reopen", "order.audit.read", "order.bag.print"],
+    "RECEPTIONIST": ["order.read", "order.create", "order.update", "order.start-processing", "order.mark-ready", "order.complete", "order.bag.print"]
   }
 }

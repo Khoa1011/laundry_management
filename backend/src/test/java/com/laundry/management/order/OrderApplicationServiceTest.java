@@ -31,6 +31,7 @@ import com.laundry.management.order.domain.OrderItem;
 import com.laundry.management.order.domain.OrderStatusHistory;
 import com.laundry.management.order.domain.OrderStatus;
 import com.laundry.management.order.infrastructure.OrderHistoryRepository;
+import com.laundry.management.order.infrastructure.OrderBagRepository;
 import com.laundry.management.order.infrastructure.OrderRepository;
 import com.laundry.management.servicecatalog.api.CatalogDtos;
 import com.laundry.management.servicecatalog.application.PricingEngineService;
@@ -56,6 +57,7 @@ class OrderApplicationServiceTest {
     private static final Instant EFFECTIVE_AT = Instant.parse("2026-09-16T10:15:30Z");
     private final OrderRepository orders = mock(OrderRepository.class);
     private final OrderHistoryRepository history = mock(OrderHistoryRepository.class);
+    private final OrderBagRepository bags = mock(OrderBagRepository.class);
     private final BranchRepository branches = mock(BranchRepository.class);
     private final CustomerRepository customers = mock(CustomerRepository.class);
     private final UserAccountRepository users = mock(UserAccountRepository.class);
@@ -71,7 +73,7 @@ class OrderApplicationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new OrderApplicationService(orders, history, branches, customers, users, services,
+        service = new OrderApplicationService(orders, history, bags, branches, customers, users, services,
             itemTypes, pricing, numbers, mapper, new ObjectMapper(), currentUsers, events, transitions,
             Clock.fixed(EFFECTIVE_AT, ZoneOffset.UTC));
         when(currentUsers.resolveAuthorizedBranch(7L)).thenReturn(7L);
@@ -164,7 +166,7 @@ class OrderApplicationServiceTest {
     }
 
     private OrderDtos.CreateRequest createRequest() {
-        return new OrderDtos.CreateRequest(7L, null, "Khách kiểm thử", "0903123456", null, null, items());
+        return new OrderDtos.CreateRequest(7L, null, "Khách kiểm thử", "0903123456", null, null, items(), 1);
     }
 
     private List<OrderDtos.ItemRequest> items() {

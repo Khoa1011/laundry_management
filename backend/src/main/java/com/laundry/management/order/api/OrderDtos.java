@@ -21,7 +21,8 @@ public final class OrderDtos {
     public record CreateRequest(
         @NotNull Long branchId, Long customerId, @Size(max=150) String guestName,
         @Size(max=30) String guestPhone, Instant promisedAt, @Size(max=2000) String note,
-        @NotEmpty @Size(max=100) List<@Valid ItemRequest> items
+        @NotEmpty @Size(max=100) List<@Valid ItemRequest> items,
+        @NotNull @Min(1) @Max(99) Integer bagCount
     ) {}
     public record ItemNoteUpdate(@NotNull Long itemId, @Size(max=1000) String note) {}
     public static final class UpdateRequest {
@@ -55,9 +56,11 @@ public final class OrderDtos {
         SharingMode sharingMode, BigDecimal quantity, BigDecimal billableQuantity, BigDecimal lineAmount,
         String note, JsonNode pricingSnapshot, Instant quotedAt) {}
     public record ActorResponse(Long id, String displayName) {}
+    public record BagResponse(Long id, String bagCode, int sequenceNumber, OrderBagStatus status,
+        Instant createdAt, Instant lastPrintRequestedAt, int printRequestCount) {}
     public record Response(Long id, String orderCode, Long branchId, String branchCode, Long customerId,
         String customerName, String customerPhone, OrderStatus status, Instant promisedAt, String note,
-        String currency, BigDecimal totalAmount, List<ItemResponse> items, Instant createdAt,
+        String currency, BigDecimal totalAmount, List<ItemResponse> items, List<BagResponse> bags, Instant createdAt,
         ActorResponse createdBy, Instant updatedAt, ActorResponse updatedBy,
         Instant cancelledAt, ActorResponse cancelledBy, String cancelReason,
         Instant reopenedAt, ActorResponse reopenedBy, String reopenReason, long version) {}
@@ -71,6 +74,7 @@ public final class OrderDtos {
         String reason, JsonNode changedFields, OrderStatusSource source, ActorResponse actor, Instant createdAt) {}
 
     public record IntakeCustomerResponse(Long id, String customerCode, String fullName, String phone) {}
+    public record IntakeScanResponse(String type, IntakeCustomerResponse customer, String bagCode) {}
     public record IntakeServiceResponse(Long id, String code, String nameVi, UnitType defaultUnitType,
         boolean sharingAllowed) {}
     public record IntakeItemTypeResponse(Long id, String code, String nameVi, UnitType defaultUnitType) {}

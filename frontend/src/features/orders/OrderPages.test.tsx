@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,7 +13,7 @@ import type { BatchCandidate } from '../wash-batches/types'
 const mocks = vi.hoisted(() => ({
   permissions: new Set<string>(),
   list: vi.fn(), filterOptions: vi.fn(), get: vi.fn(), history: vi.fn(), services: vi.fn(),
-  customers: vi.fn(), preview: vi.fn(), eligibility: vi.fn(),
+  customers: vi.fn(), scan: vi.fn(), preview: vi.fn(), eligibility: vi.fn(), requestBagPrint: vi.fn(),
   create: vi.fn(), update: vi.fn(), transition: vi.fn(), reasoned: vi.fn(),
   batchCandidates: vi.fn(), batchCreate: vi.fn(), batchByOrder: vi.fn(),
   notify: vi.fn(),
@@ -26,6 +26,9 @@ vi.mock('../../auth/AuthProvider', () => ({
 }))
 vi.mock('../../providers/ToastProvider', () => ({ useToast: () => ({ notify: mocks.notify }) }))
 vi.mock('../../realtime/context', () => ({ useRealtime: () => ({ connectionState: 'connected', subscribe: mocks.subscribe }) }))
+vi.mock('../customers/QuickCustomerDialog', () => ({ QuickCustomerDialog: ({ open, onCreated, onClose }: {
+  open: boolean; onCreated: (customer: { id: number; customerCode: string; fullName: string; phone: string }) => void; onClose: () => void
+}) => open ? <div role="dialog" aria-label="Tạo nhanh khách hàng"><button type="button" onClick={() => { onCreated({ id: 31, customerCode: 'KH-001', fullName: 'Khách vừa tạo', phone: '0901234567' }); onClose() }}>Lưu khách kiểm thử</button></div> : null }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, orderApi: { ...actual.orderApi, ...mocks } }
@@ -59,7 +62,7 @@ const order: Order = {
     id: 1, serviceId: 2, itemTypeId: 3, serviceCode: 'WASH', serviceName: 'Giặt thường', itemTypeCode: 'SHIRT', itemTypeName: 'Áo sơ mi',
     pricingMethod: 'BY_WEIGHT', unitType: 'KG', sharingMode: 'ANY', quantity: 3.5,
     billableQuantity: 3.5, lineAmount: 85000, pricingSnapshot: {}, quotedAt: '2026-09-09T10:00:00Z',
-  }], createdAt: '2026-09-09T10:00:00Z', createdBy: { id: 1, displayName: 'Nhân viên A' },
+  }], bags: [{ id: 21, bagCode: 'CN01-DH-000007-01', sequenceNumber: 1, status: 'RECEIVED', createdAt: '2026-09-09T10:00:00Z', printRequestCount: 0 }], createdAt: '2026-09-09T10:00:00Z', createdBy: { id: 1, displayName: 'Nhân viên A' },
   updatedAt: '2026-09-09T10:10:00Z', updatedBy: { id: 1, displayName: 'Nhân viên A' }, version: 2,
 }
 
@@ -83,6 +86,8 @@ describe('Order pages', () => {
     mocks.filterOptions.mockResolvedValue({ services: [{ id: 2, label: 'Giặt sấy thường' }] })
     mocks.services.mockResolvedValue([{ id: 2, code: 'WASH', nameVi: 'Giặt sấy thường', defaultUnitType: 'KG', sharingAllowed: true }])
     mocks.customers.mockResolvedValue([])
+    mocks.scan.mockResolvedValue({ type: 'NOT_FOUND' })
+    mocks.requestBagPrint.mockResolvedValue({ ...order.bags[0], printRequestCount: 1 })
     mocks.eligibility.mockResolvedValue([{ id: 3, code: 'SHIRT', nameVi: 'Áo sơ mi', defaultUnitType: 'KG' }])
     mocks.preview.mockResolvedValue({ currency: 'VND', finalAmount: 50000, explanation: 'Giá hệ thống', billableQuantity: 2, unitType: 'KG' })
     mocks.create.mockResolvedValue(order)
@@ -223,6 +228,113 @@ describe('Order pages', () => {
     expect(screen.getByRole('option', { name: 'Giặt riêng mẻ' })).toBeInTheDocument()
   })
 
+  it('shows scanner state and resolves customer, bag, and unknown codes without a global key handler', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    let resolveCustomer!: (value: unknown) => void
+    mocks.scan.mockImplementation((_branchId: number, code: string) => code === 'KH-001'
+      ? new Promise(resolve => { resolveCustomer = resolve })
+      : code === 'B21' ? Promise.resolve({ type: 'BAG', bagCode: order.bags[0].bagCode }) : Promise.resolve({ type: 'NOT_FOUND' }))
+    renderAt('/orders/new', <OrderCreatePage />)
+    expect(screen.getByText('Máy quét sẵn sàng')).toBeInTheDocument()
+    const scan = screen.getByPlaceholderText('Mã KH, tên hoặc số điện thoại')
+    await userEvent.type(scan, 'KH-001{Enter}')
+    expect(screen.getByText('Đang tra cứu mã…')).toBeInTheDocument()
+    resolveCustomer({ type: 'CUSTOMER', customer: { id: 31, customerCode: 'KH-001', fullName: 'Nguyễn Văn A', phone: '0901234567' } })
+    expect(await screen.findByText('Đã nhận mã KH-001')).toBeInTheDocument()
+    expect(screen.getAllByText('Nguyễn Văn A').length).toBeGreaterThan(0)
+    await userEvent.clear(scan)
+    await userEvent.type(scan, 'B21{Enter}')
+    expect(await screen.findByText(`Đây là mã túi ${order.bags[0].bagCode}, không phải mã khách hàng.`)).toBeInTheDocument()
+    expect(screen.queryByText('Nguyễn Văn A')).not.toBeInTheDocument()
+    await userEvent.clear(scan)
+    await userEvent.type(scan, 'unknown{Enter}')
+    expect(await screen.findByText('Không tìm thấy khách hàng.')).toBeInTheDocument()
+  })
+
+  it('edits bag count directly and keeps it in the summary without changing preview inputs', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    const { container } = renderAt('/orders/new', <OrderCreatePage />)
+    const bagCount = screen.getByRole('spinbutton', { name: 'Số túi' })
+    expect(bagCount).toHaveValue(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Tăng số túi' }))
+    expect(bagCount).toHaveValue(2)
+    expect(container.querySelector('.order-summary')).toHaveTextContent('Số túi2')
+    await userEvent.clear(bagCount)
+    await userEvent.type(bagCount, '4')
+    expect(bagCount).toHaveValue(4)
+    await userEvent.click(screen.getByRole('button', { name: 'Giảm số túi' }))
+    expect(bagCount).toHaveValue(3)
+    expect(mocks.preview).not.toHaveBeenCalled()
+  })
+
+  it('keeps the scan input available after lookup failure', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    mocks.scan.mockRejectedValue(new Error('offline'))
+    renderAt('/orders/new', <OrderCreatePage />)
+    const scan = screen.getByPlaceholderText('Mã KH, tên hoặc số điện thoại')
+    await userEvent.type(scan, 'KH-404{Enter}')
+    expect(await screen.findByText('Lỗi tra cứu. Thử lại.')).toBeInTheDocument()
+    expect(scan).toBeEnabled()
+  })
+
+  it('auto-selects a quick-created customer without clearing the order draft', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    mocks.permissions.add(PERMISSION_CODES.CUSTOMER_CREATE)
+    renderAt('/orders/new', <OrderCreatePage />)
+    await screen.findByRole('option', { name: 'Giặt sấy thường' })
+    await userEvent.selectOptions(screen.getByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.type(screen.getByRole('textbox', { name: /Ghi chú xử lý/ }), 'Giặt nhẹ')
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo nhanh khách hàng' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu khách kiểm thử' }))
+    expect(screen.getByText('Đã nhận mã KH-001')).toBeInTheDocument()
+    expect(screen.getAllByText('Khách vừa tạo').length).toBeGreaterThan(0)
+    expect(screen.getByRole('textbox', { name: /Ghi chú xử lý/ })).toHaveValue('Giặt nhẹ')
+    expect(screen.getByRole('button', { name: 'Tạo đơn' })).toBeEnabled()
+  })
+
+  it('locks the draft during submit and preserves it after a failed request', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    let rejectCreate!: (reason: Error) => void
+    mocks.create.mockImplementation(() => new Promise((_resolve, reject) => { rejectCreate = reject }))
+    renderAt('/orders/new', <OrderCreatePage />)
+    await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
+    await userEvent.type(screen.getByLabelText('Tên khách'), 'Khách kiểm thử')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo đơn' }))
+    expect(mocks.create).toHaveBeenCalledOnce()
+    expect(screen.getByLabelText('Tên khách')).toBeDisabled()
+    await userEvent.keyboard('{Enter}')
+    expect(mocks.create).toHaveBeenCalledOnce()
+    rejectCreate(new Error('unavailable'))
+    expect(await screen.findByText('Không thể tạo đơn.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tên khách')).toHaveValue('Khách kiểm thử')
+    expect(screen.getByLabelText('Tên khách')).toBeEnabled()
+  })
+
+  it('shows generated bags after create, previews a label, and resets for the next customer', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_CREATE)
+    mocks.create.mockResolvedValue({ ...order, bags: [order.bags[0], { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2 }] })
+    renderAt('/orders/new', <OrderCreatePage />)
+    await userEvent.click(screen.getByRole('button', { name: 'Khách vãng lai' }))
+    await userEvent.type(screen.getByLabelText('Tên khách'), 'Khách kiểm thử')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Dịch vụ/), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/^Loại đồ/), '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Tăng số túi' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo đơn' }))
+    expect(await screen.findByRole('heading', { name: /Đã tạo đơn CN01-DH-000007/ })).toBeInTheDocument()
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ bagCount: 2 }))
+    expect(screen.getByText('CN01-DH-000007-02')).toBeInTheDocument()
+    await userEvent.click(screen.getAllByRole('button', { name: 'Xem mã' })[0])
+    expect(screen.getByRole('dialog')).toHaveTextContent('CN01-DH-000007-01')
+    await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Đóng' }).at(-1)!)
+    await userEvent.click(screen.getByRole('button', { name: /Tiếp nhận khách tiếp theo/ }))
+    expect(screen.getByText('Máy quét sẵn sàng')).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: 'Số túi' })).toHaveValue(1)
+    await waitFor(() => expect(screen.getByPlaceholderText('Mã KH, tên hoặc số điện thoại')).toHaveFocus())
+  })
+
   it('shows only semantic actions granted for the current ready state', async () => {
     mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
     mocks.permissions.add(PERMISSION_CODES.ORDER_COMPLETE)
@@ -231,6 +343,44 @@ describe('Order pages', () => {
     expect(container.querySelector('.order-detail')).toHaveClass('page-container')
     expect(screen.queryByRole('button', { name: 'Hủy đơn' })).not.toBeInTheDocument()
     expect(screen.queryByText('Lịch sử đơn hàng')).not.toBeInTheDocument()
+  })
+
+  it('shows branch-scoped bags in order detail and sends truthful print requests, including print all and reprint', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_BAG_PRINT)
+    const second = { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2 }
+    mocks.get.mockResolvedValue({ ...order, bags: [order.bags[0], second] })
+    mocks.requestBagPrint.mockImplementation((_orderId: number, bagId: number) => Promise.resolve({ ...(bagId === 21 ? order.bags[0] : second), printRequestCount: 1 }))
+    const print = vi.fn()
+    const write = vi.fn()
+    const popup = { document: { open: vi.fn(), write, close: vi.fn() }, focus: vi.fn(), print, close: vi.fn() } as unknown as Window
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup)
+    try {
+      renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+      expect(await screen.findByText('CN01-DH-000007-01')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'In tất cả tem' }))
+      await waitFor(() => expect(mocks.requestBagPrint).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(print).toHaveBeenCalledOnce())
+      expect(write.mock.calls[0][0]).toContain('B21')
+      expect(write.mock.calls[0][0]).not.toContain('0903 123 456')
+      expect(screen.getAllByText(/Đã gửi lệnh in/)).toHaveLength(2)
+      await userEvent.click(screen.getAllByRole('button', { name: 'In lại' })[0])
+      await waitFor(() => expect(mocks.requestBagPrint).toHaveBeenCalledTimes(3))
+      expect(open).toHaveBeenCalledTimes(2)
+    } finally { open.mockRestore() }
+  })
+
+  it('does not audit a print when the browser blocks its popup', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_BAG_PRINT)
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    try {
+      renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+      await userEvent.click(await screen.findByRole('button', { name: 'In tất cả tem' }))
+      expect(mocks.requestBagPrint).not.toHaveBeenCalled()
+      expect(screen.getByText('In thất bại · Thử lại')).toBeInTheDocument()
+      expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error' }))
+    } finally { open.mockRestore() }
   })
 
   it('requires a concrete item type and uses intake options without catalog permissions', async () => {

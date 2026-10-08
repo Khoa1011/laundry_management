@@ -5,20 +5,28 @@ export function Field({
   required,
   hint,
   error,
+  controlId,
   children,
 }: {
   label: string
   required?: boolean
   hint?: string
   error?: string
+  controlId?: string
   children: ReactElement
 }) {
+  const caption = <>{label}{required && <span aria-hidden="true"> *</span>}</>
+  if (controlId) return (
+    <div className={`form-field${error ? ' form-field--error' : ''}`}>
+      <label className="form-field__label" htmlFor={controlId}>{caption}</label>
+      {children}
+      {hint && !error && <span className="form-field__hint">{hint}</span>}
+      {error && <span className="form-field__error" role="alert">{error}</span>}
+    </div>
+  )
   return (
     <label className={`form-field${error ? ' form-field--error' : ''}`}>
-      <span className="form-field__label">
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
-      </span>
+      <span className="form-field__label">{caption}</span>
       {children}
       {hint && !error && <span className="form-field__hint">{hint}</span>}
       {error && <span className="form-field__error" role="alert">{error}</span>}

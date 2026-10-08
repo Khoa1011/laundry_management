@@ -76,6 +76,7 @@ export const PERMISSION_CODES = {
   ORDER_CANCEL: 'order.cancel',
   ORDER_REOPEN: 'order.reopen',
   ORDER_AUDIT_READ: 'order.audit.read',
+  ORDER_BAG_PRINT: 'order.bag.print',
   PRICE_LIST_READ: 'price-list.read',
   PRICE_LIST_CREATE: 'price-list.create',
   PRICE_LIST_UPDATE_DRAFT: 'price-list.update-draft',

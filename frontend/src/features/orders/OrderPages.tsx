@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, CalendarDays, Check, CheckCircle2, ChevronRight, ClipboardList, Clock3, Cog, Eye, FileText, Layers3, PackageCheck, Pencil, Plus, RefreshCw, RotateCcw, Search, Shirt, ShoppingBag, Timer, Trash2, UserRound, UserRoundCheck, WalletCards, WashingMachine, X } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
@@ -27,8 +27,9 @@ import { quantityText } from '../wash-batches/presentation'
 import { orderApi, orderKeys } from './api'
 import { localDayStartIso, nextLocalDayStartIso } from './dateFilters'
 import { promisedDateInstant, promisedDateKey, promisedDateLabel } from '../../utils/promisedDate'
-import type { IntakeCustomer, Order, OrderItemNoteUpdate, OrderItemPayload, OrderListItem, OrderStatus } from './types'
+import type { IntakeCustomer, Order, OrderBag, OrderItemNoteUpdate, OrderItemPayload, OrderListItem, OrderStatus } from './types'
 import { OrderBatchComposer } from './OrderBatchComposer'
+import { OrderBags } from './BagLabels'
 
 const statusText: Record<OrderStatus, string> = {
   RECEIVED: 'Đã nhận', PROCESSING: 'Đang xử lý', READY: 'Sẵn sàng',
@@ -43,6 +44,11 @@ const initials = (value?: string) => (value || 'Khách vãng lai')
   .slice(-2)
   .map((part) => part[0]?.toLocaleUpperCase('vi-VN'))
   .join('')
+const quantitySummary = (items: Order['items']) => {
+  const totals = new Map<Order['items'][number]['unitType'], number>()
+  items.forEach(item => totals.set(item.unitType, (totals.get(item.unitType) ?? 0) + item.quantity))
+  return [...totals].map(([unit, amount]) => quantityText(amount, unit)).join(' · ')
+}
 type DueFilter = '' | 'OVERDUE' | 'TODAY' | 'TOMORROW' | 'NEXT_7_DAYS' | 'NO_DATE'
 const localDateKey = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
 const shiftedLocalDateKey = (days: number) => { const value = new Date(); value.setHours(12, 0, 0, 0); value.setDate(value.getDate() + days); return localDateKey(value) }
@@ -201,16 +207,21 @@ const normalizedItemNote = (value?: string) => value?.trim() || null
 
 export function OrderCreatePage() {
   const { branchId, hasPermission } = useAuth()
-  const navigate = useNavigate()
   const { notify } = useToast()
   const [mode, setMode] = useState<'existing' | 'guest'>('existing')
   const [search, setSearch] = useState('')
+  const scanInputRef = useRef<HTMLInputElement>(null)
+  const scanVersion = useRef(0)
+  const submitLock = useRef(false)
+  const [scanStatus, setScanStatus] = useState<{ type: 'READY' | 'LOOKING_UP' | 'FOUND_CUSTOMER' | 'WRONG_CODE_TYPE' | 'NOT_FOUND' | 'ERROR'; code?: string }>({ type: 'READY' })
+  const [completedOrder, setCompletedOrder] = useState<Order>()
   const [customerId, setCustomerId] = useState<number>()
   const [chosenCustomer, setChosenCustomer] = useState<IntakeCustomer>()
   const [guestName, setGuestName] = useState('')
   const [guestPhone, setGuestPhone] = useState('')
   const [promisedDate, setPromisedDate] = useState('')
   const [note, setNote] = useState('')
+  const [bagCount, setBagCount] = useState(1)
   const [items, setItems] = useState<DraftItem[]>([{ key: 1, serviceId: 0, sharingMode: 'ANY', quantity: 1 }])
   const [quotes, setQuotes] = useState<Record<number, PricingPreview>>({})
   const [eligible, setEligible] = useState<Record<number, Array<{ id: number; nameVi: string }>>>({})
@@ -225,6 +236,26 @@ export function OrderCreatePage() {
   const hasPrivateLoad = items.some((item) => item.sharingMode === 'PRIVATE_LOAD')
   const shouldCreateBatch = canCreateBatch && (createBatchAfterSave || hasPrivateLoad)
   const serviceGroupCount = new Set(items.filter((item) => item.serviceId).map((item) => item.serviceId)).size
+
+  const scanCustomer = async () => {
+    if (!branchId || !search.trim()) return
+    const version = ++scanVersion.current
+    setScanStatus({ type: 'LOOKING_UP' })
+    try {
+      const result = await orderApi.scan(branchId, search.trim())
+      if (version !== scanVersion.current) return
+      if (result.type === 'CUSTOMER' && result.customer) {
+        setCustomerId(result.customer.id)
+        setChosenCustomer(result.customer)
+        setScanStatus({ type: 'FOUND_CUSTOMER', code: result.customer.customerCode })
+        setFormError('')
+      } else if (result.type === 'BAG') { setCustomerId(undefined); setChosenCustomer(undefined); setScanStatus({ type: 'WRONG_CODE_TYPE', code: result.bagCode }) }
+      else { setCustomerId(undefined); setChosenCustomer(undefined); setScanStatus({ type: 'NOT_FOUND' }) }
+    } catch (error) {
+      if (version !== scanVersion.current) return
+      setScanStatus({ type: 'ERROR', code: error instanceof ApiError && error.status === 403 ? 'Không có quyền tra cứu khách.' : undefined })
+    }
+  }
 
   useEffect(() => {
     const valid = pricingItems.filter((item): item is PricingDraftItem & { itemTypeId: number } => Boolean(item.serviceId && item.itemTypeId && item.quantity > 0))
@@ -242,7 +273,7 @@ export function OrderCreatePage() {
       const order = await orderApi.create({
         branchId: branchId!, customerId: mode === 'existing' ? customerId : undefined,
         guestName: mode === 'guest' ? guestName : undefined, guestPhone: mode === 'guest' ? guestPhone : undefined,
-        promisedAt: promisedDate ? promisedDateInstant(promisedDate) : undefined, note: note || undefined,
+        promisedAt: promisedDate ? promisedDateInstant(promisedDate) : undefined, note: note || undefined, bagCount,
         items: items.map(({ serviceId, itemTypeId, sharingMode, priorityLevel, quantity, note: itemNote }) => ({ serviceId, itemTypeId: itemTypeId!, sharingMode, priorityLevel, quantity, note: itemNote })),
       })
       if (!shouldCreateBatch) return { order, batchCount: 0, batchFailures: 0 }
@@ -259,24 +290,33 @@ export function OrderCreatePage() {
     onSuccess: ({ order, batchCount, batchFailures }) => {
       if (batchFailures) notify({ title: 'Đã tạo đơn hàng', message: `${order.orderCode} đã lưu; ${batchFailures} mẻ chưa tạo được. Bạn có thể ghép lại tại danh sách đơn.`, tone: 'info' })
       else notify({ title: 'Đã tạo đơn hàng', message: batchCount ? `${order.orderCode} · Đã tạo ${batchCount} mẻ nháp riêng` : order.orderCode, tone: 'success' })
-      navigate(`/orders/${order.id}`, { replace: true })
+      setCompletedOrder(order)
     },
+    onError: () => { submitLock.current = false; notify({ message: 'Không thể tạo đơn. Dữ liệu đang nhập vẫn được giữ; hãy kiểm tra và thử lại.', tone: 'error' }) },
   })
+  const dirty = Boolean(customerId || guestName || guestPhone || note || promisedDate || createBatchAfterSave || bagCount !== 1 || items.some((item) => item.serviceId))
   useEffect(() => {
-    const dirty = Boolean(customerId || guestName || guestPhone || note || promisedDate || createBatchAfterSave || items.some((item) => item.serviceId))
-    const warn = (event: BeforeUnloadEvent) => { if (dirty && !create.isSuccess) event.preventDefault() }
+    const warn = (event: BeforeUnloadEvent) => { if (dirty && !completedOrder) event.preventDefault() }
     window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn)
-  }, [create.isSuccess, createBatchAfterSave, customerId, guestName, guestPhone, items, note, promisedDate])
+  }, [completedOrder, dirty])
+  const confirmLeave = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (create.isPending || (dirty && !window.confirm('Đơn chưa được lưu. Bạn có chắc muốn rời trang?'))) event.preventDefault()
+  }
   const selectService = (key: number, serviceId: number) => {
     updateItem(key, { serviceId, itemTypeId: undefined })
-    if (serviceId && branchId) void orderApi.eligibility(branchId, serviceId).then((value) => setEligible((current) => ({ ...current, [key]: value })))
+    if (serviceId && branchId) void orderApi.eligibility(branchId, serviceId)
+      .then((value) => setEligible((current) => ({ ...current, [key]: value })))
+      .catch(() => setFormError('Không tải được loại đồ phù hợp. Hãy chọn lại dịch vụ hoặc thử lại.'))
   }
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    if (submitLock.current || create.isPending || completedOrder) return
     if (mode === 'existing' && !customerId) return setFormError('Hãy chọn một khách hàng.')
     if (mode === 'guest' && !guestName.trim() && !guestPhone.trim()) return setFormError('Nhập tên hoặc số điện thoại khách vãng lai.')
     if (!items.every((item) => item.serviceId && item.itemTypeId && item.quantity > 0)) return setFormError('Mỗi dịch vụ phải có loại đồ cụ thể.')
+    if (!Number.isInteger(bagCount) || bagCount < 1 || bagCount > 99) return setFormError('Số túi phải là số nguyên từ 1 đến 99.')
     if (formError) return
+    submitLock.current = true
     create.mutate()
   }
   const total = Object.values(quotes).reduce((sum, value) => sum + value.finalAmount, 0)
@@ -284,26 +324,51 @@ export function OrderCreatePage() {
     ? chosenCustomer ? { name: chosenCustomer.fullName, phone: chosenCustomer.phone } : undefined
     : (guestName.trim() || guestPhone.trim()) ? { name: guestName.trim() || 'Khách vãng lai', phone: guestPhone.trim() } : undefined
   const validItemCount = items.filter((item) => item.serviceId && item.itemTypeId).length
-  const readyToSubmit = Boolean(branchId && customerSummary && items.every((item) => item.serviceId && item.itemTypeId && item.quantity > 0) && !formError)
+  const readyToSubmit = Boolean(branchId && customerSummary && Number.isInteger(bagCount) && bagCount >= 1 && bagCount <= 99 && items.every((item) => item.serviceId && item.itemTypeId && item.quantity > 0) && !formError && !create.isPending)
+
+  const nextCustomer = () => {
+    scanVersion.current++
+    submitLock.current = false
+    create.reset()
+    setCompletedOrder(undefined)
+    setMode('existing'); setSearch(''); setCustomerId(undefined); setChosenCustomer(undefined)
+    setGuestName(''); setGuestPhone(''); setPromisedDate(''); setNote(''); setBagCount(1)
+    setItems([{ key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])
+    setQuotes({}); setEligible({}); setFormError(''); setCreateBatchAfterSave(false)
+    setScanStatus({ type: 'READY' })
+    window.setTimeout(() => scanInputRef.current?.focus(), 0)
+  }
+
+  if (completedOrder) return <div className="page-container order-intake-success">
+    <div className="order-intake-success__intro"><CheckCircle2 size={30} aria-hidden="true" /><div><h1>Đã tạo đơn {completedOrder.orderCode}</h1><p>Đơn đã lưu. Bạn có thể in tem túi rồi tiếp nhận khách tiếp theo.</p></div></div>
+    <Surface className="order-intake-success__summary"><strong>{completedOrder.customerName || 'Khách vãng lai'}</strong><span>{completedOrder.items.length} dịch vụ · {quantitySummary(completedOrder.items)} · {completedOrder.bags?.length ?? 0} túi · {money(completedOrder.totalAmount, completedOrder.currency)}</span><span>Hẹn trả: {completedOrder.promisedAt ? promisedDateLabel(completedOrder.promisedAt) : 'Chưa hẹn'}</span></Surface>
+    <OrderBags order={completedOrder} onBagUpdated={(bag: OrderBag) => setCompletedOrder(current => current && ({ ...current, bags: current.bags.map(item => item.id === bag.id ? bag : item) }))} />
+    <div className="order-intake-success__actions"><ButtonLink to={`/orders/${completedOrder.id}`} variant="secondary">Xem chi tiết đơn</ButtonLink><Button onClick={nextCustomer}><Plus size={18} />Tiếp nhận khách tiếp theo</Button></div>
+  </div>
 
   return <form className="page-container order-create" onSubmit={submit}>
-    <nav className="order-breadcrumb" aria-label="Đường dẫn"><Link to="/orders">Đơn hàng</Link><ChevronRight size={15} /><span>Tạo đơn hàng</span></nav>
-    <header className="order-create-heading"><div><h1>Tạo đơn hàng</h1><p>Tiếp nhận đơn mới tại quầy</p></div><ButtonLink to="/orders" variant="secondary"><ArrowLeft size={18} />Quay lại</ButtonLink></header>
+    <nav className="order-breadcrumb" aria-label="Đường dẫn"><Link to="/orders" onClick={confirmLeave}>Đơn hàng</Link><ChevronRight size={15} /><span>Tạo đơn hàng</span></nav>
+    <header className="order-create-heading"><div><h1>Tạo đơn hàng</h1><p>Tiếp nhận đơn mới tại quầy</p></div><ButtonLink to="/orders" variant="secondary" onClick={confirmLeave}><ArrowLeft size={18} />Quay lại</ButtonLink></header>
     <ol className="order-steps" aria-label="Tiến trình tạo đơn">
       <li className="active"><span>1</span><div><strong>Khách hàng</strong><small>Chọn hoặc tạo khách hàng</small></div></li>
       <li className={customerSummary ? 'complete' : ''}><span>2</span><div><strong>Dịch vụ</strong><small>Thêm dịch vụ và thông tin</small></div></li>
       <li className={validItemCount ? 'complete' : ''}><span>3</span><div><strong>Hẹn trả</strong><small>Xác nhận và hoàn tất</small></div></li>
     </ol>
-    <div className="order-create-grid"><div className="order-form-stack">
-      <Surface className="order-section order-section--customer"><div className="section-title"><span>1</span><div><h2>Thông tin khách hàng</h2><p>Tìm kiếm khách hàng có sẵn hoặc ghi nhận khách vãng lai.</p></div></div>
-        <div className="segmented" role="group" aria-label="Loại khách hàng"><button type="button" aria-pressed={mode === 'existing'} className={mode === 'existing' ? 'active' : ''} onClick={() => { setMode('existing'); setFormError('') }}><UserRound size={17} />Khách hàng có sẵn</button><button type="button" aria-pressed={mode === 'guest'} className={mode === 'guest' ? 'active' : ''} onClick={() => { setMode('guest'); setFormError('') }}><Plus size={17} />Khách vãng lai</button></div>
-        {mode === 'existing' ? <><Field label="Tìm khách hàng" hint="Nhập tên, số điện thoại đầy đủ hoặc 3–4 số cuối"><div className="order-customer-search"><Search size={18} aria-hidden="true" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nhập ít nhất 2 ký tự" /></div></Field>
+    <fieldset className="order-create-fields" disabled={create.isPending}><div className="order-create-grid"><div className="order-form-stack">
+      <Surface className="order-section order-section--customer"><div className="section-title"><span>1</span><div><h2>Thông tin khách hàng</h2><p>Quét mã khách hoặc tìm theo tên, số điện thoại.</p></div></div>
+        <div className="segmented" role="group" aria-label="Loại khách hàng"><button type="button" aria-pressed={mode === 'existing'} className={mode === 'existing' ? 'active' : ''} onClick={() => { setMode('existing'); setFormError('') }}><UserRound size={17} />Khách hàng có sẵn</button><button type="button" aria-pressed={mode === 'guest'} className={mode === 'guest' ? 'active' : ''} onClick={() => { scanVersion.current++; setMode('guest'); setFormError('') }}><Plus size={17} />Khách vãng lai</button></div>
+        {mode === 'existing' ? <><Field label="Quét mã / tìm khách hàng" controlId="order-customer-scan" hint="Quét mã rồi nhấn Enter; cũng có thể tìm theo tên, SĐT hoặc 3–4 số cuối"><div className="order-customer-search"><Search size={18} aria-hidden="true" /><input id="order-customer-scan" ref={scanInputRef} value={search} onChange={(event) => { scanVersion.current++; setSearch(event.target.value); setCustomerId(undefined); setChosenCustomer(undefined); setScanStatus({ type: 'READY' }) }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void scanCustomer() } }} placeholder="Mã KH, tên hoặc số điện thoại" autoComplete="off" /><Button type="button" size="sm" variant="secondary" disabled={!search.trim() || scanStatus.type === 'LOOKING_UP'} onClick={() => void scanCustomer()}>Tra cứu</Button></div></Field>
+          <p className={`order-scan-status order-scan-status--${scanStatus.type.toLowerCase()}`} role={scanStatus.type === 'ERROR' || scanStatus.type === 'WRONG_CODE_TYPE' ? 'alert' : 'status'}>{scanStatus.type === 'READY' ? 'Máy quét sẵn sàng' : scanStatus.type === 'LOOKING_UP' ? 'Đang tra cứu mã…' : scanStatus.type === 'FOUND_CUSTOMER' ? `Đã nhận mã ${scanStatus.code}` : scanStatus.type === 'WRONG_CODE_TYPE' ? `Đây là mã túi ${scanStatus.code}, không phải mã khách hàng.` : scanStatus.type === 'NOT_FOUND' ? 'Không tìm thấy khách hàng.' : scanStatus.code || 'Lỗi tra cứu. Thử lại.'}</p>
+          {chosenCustomer && <div className="order-selected-customer"><span className="customer-avatar" aria-hidden="true">{initials(chosenCustomer.fullName)}</span><div><strong>{chosenCustomer.fullName}</strong><small>{chosenCustomer.customerCode} · {chosenCustomer.phone || 'Chưa có SĐT'}</small></div><Button type="button" variant="ghost" onClick={() => { scanVersion.current++; setCustomerId(undefined); setChosenCustomer(undefined); setSearch(''); setScanStatus({ type: 'READY' }); scanInputRef.current?.focus() }}>Đổi khách</Button></div>}
           {customers.isFetching && <p className="order-search-status">Đang tìm khách hàng…</p>}
-          {customers.data?.length ? <div className="customer-results" aria-label="Kết quả khách hàng">{customers.data.map((customer) => <button type="button" key={customer.id} className={`customer-result${customerId === customer.id ? ' selected' : ''}`} onClick={() => { setCustomerId(customer.id); setChosenCustomer(customer); setFormError('') }}><span className="customer-avatar" aria-hidden="true">{customer.fullName.trim().slice(0, 1).toUpperCase()}</span><span><strong>{customer.fullName}</strong><small>{customer.phone} · {customer.customerCode}</small></span>{customerId === customer.id ? <span className="customer-result__choice"><Check size={18} />Đã chọn</span> : <span className="customer-result__choice">Chọn</span>}</button>)}</div> : search.trim().length >= 2 && !customers.isFetching ? <p className="order-search-status">Không tìm thấy khách hàng phù hợp.</p> : null}</>
+          {customers.isError && <div className="order-search-status" role="alert">Không thể tìm khách hàng. <Button type="button" variant="ghost" onClick={() => void customers.refetch()}>Thử lại</Button></div>}
+          {!chosenCustomer && (customers.data?.length ? <div className="customer-results" aria-label="Kết quả khách hàng">{customers.data.map((customer) => <button type="button" key={customer.id} className={`customer-result${customerId === customer.id ? ' selected' : ''}`} onClick={() => { setCustomerId(customer.id); setChosenCustomer(customer); setFormError(''); setScanStatus({ type: 'FOUND_CUSTOMER', code: customer.customerCode }) }}><span className="customer-avatar" aria-hidden="true">{customer.fullName.trim().slice(0, 1).toUpperCase()}</span><span><strong>{customer.fullName}</strong><small>{customer.phone} · {customer.customerCode}</small></span>{customerId === customer.id ? <span className="customer-result__choice"><Check size={18} />Đã chọn</span> : <span className="customer-result__choice">Chọn</span>}</button>)}</div> : search.trim().length >= 2 && !customers.isFetching && !customers.isError && scanStatus.type === 'READY' ? <p className="order-search-status">Không tìm thấy khách hàng phù hợp.</p> : null)}</>
           : <><div className="form-grid"><Field label="Tên khách"><input value={guestName} onChange={(event) => { setGuestName(event.target.value); setFormError('') }} maxLength={150} placeholder="Nhập tên khách hàng" /></Field><Field label="Số điện thoại"><input type="tel" inputMode="tel" value={guestPhone} onChange={(event) => { setGuestPhone(event.target.value); setFormError('') }} maxLength={30} placeholder="Nhập số điện thoại" /></Field></div><p className="field-hint">Thông tin này chỉ được lưu trên đơn hàng, không tự tạo hồ sơ khách hàng.</p></>}
         {mode === 'existing' && hasPermission(PERMISSION_CODES.CUSTOMER_CREATE) && <Button type="button" variant="secondary" onClick={() => setQuickCustomerOpen(true)}><Plus size={18} />Tạo nhanh khách hàng</Button>}
       </Surface>
       <Surface className="order-section order-section--services"><div className="section-title"><span>2</span><div><h2>Dịch vụ</h2><p>Thêm dịch vụ vào đơn hàng, giá sẽ được tính tự động.</p></div></div>
+        {services.isLoading && <p className="order-search-status" role="status">Đang tải dịch vụ…</p>}
+        {services.isError && <ErrorState title="Không tải được dịch vụ" body="Kiểm tra kết nối rồi thử lại." onRetry={() => void services.refetch()} />}
         {items.map((item, index) => <div className="order-item-editor" key={item.key}><div className="order-item-editor__head"><strong>Dịch vụ {index + 1}</strong>{items.length > 1 && <button type="button" onClick={() => setItems((value) => value.filter((candidate) => candidate.key !== item.key))} aria-label={`Xóa dịch vụ ${index + 1}`}><Trash2 size={18} /></button>}</div>
           <div className="form-grid"><Field label="Dịch vụ" required><select value={item.serviceId || ''} onChange={(event) => selectService(item.key, Number(event.target.value))}><option value="">Chọn dịch vụ</option>{services.data?.map((service) => <option key={service.id} value={service.id}>{service.nameVi}</option>)}</select></Field>
             <Field label="Loại đồ" required><select value={item.itemTypeId || ''} onChange={(event) => updateItem(item.key, { itemTypeId: event.target.value ? Number(event.target.value) : undefined })}><option value="">Chọn loại đồ</option>{eligible[item.key]?.map((option) => <option key={option.id} value={option.id}>{option.nameVi}</option>)}</select></Field>
@@ -315,12 +380,13 @@ export function OrderCreatePage() {
         <Button type="button" variant="secondary" onClick={() => setItems((value) => [...value, { key: Date.now(), serviceId: 0, sharingMode: 'ANY', quantity: 1 }])}><Plus size={18} />Thêm dịch vụ</Button>
         {formError && <p className="form-error" role="alert">{formError}</p>}
       </Surface>
-      <Surface className="order-section order-section--promise"><div className="section-title"><span>3</span><div><h2>Hẹn trả và ghi chú</h2><p>Chọn ngày hẹn trả và thêm thông tin bổ sung.</p></div></div><div className="form-grid"><DatePickerField label="Ngày hẹn trả" value={promisedDate} onChange={setPromisedDate} hint="Không cần chọn giờ." /><Field label="Ghi chú" hint={`${note.length}/2000`}><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={2} placeholder="Ghi chú thêm…" /></Field></div>
+      <Surface className="order-section order-section--promise"><div className="section-title"><span>3</span><div><h2>Túi đồ và hẹn trả</h2><p>Ghi nhận số túi vật lý và thông tin hoàn tất đơn.</p></div></div><Field label="Số túi" controlId="order-bag-count-input" required hint="Mỗi túi sẽ có mã riêng; từ 1 đến 99 túi."><div className="order-bag-count"><button type="button" aria-label="Giảm số túi" disabled={bagCount <= 1} onClick={() => setBagCount(current => Math.max(1, current - 1))}>−</button><input id="order-bag-count-input" type="number" min="1" max="99" step="1" inputMode="numeric" value={bagCount} onChange={(event) => setBagCount(event.target.value === '' ? 0 : Number(event.target.value))} /><button type="button" aria-label="Tăng số túi" disabled={bagCount >= 99} onClick={() => setBagCount(current => Math.min(99, current + 1))}>+</button></div></Field><div className="form-grid"><DatePickerField label="Ngày hẹn trả" value={promisedDate} onChange={setPromisedDate} hint="Không cần chọn giờ." /><Field label="Ghi chú" hint={`${note.length}/2000`}><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={2} placeholder="Ghi chú thêm…" /></Field></div>
         {canCreateBatch && <label className="order-create-batch-choice"><input type="checkbox" checked={shouldCreateBatch} disabled={hasPrivateLoad} onChange={(event) => setCreateBatchAfterSave(event.target.checked)} /><span className="order-create-batch-choice__icon"><Layers3 size={20} /></span><span><strong>{hasPrivateLoad ? 'Tự tạo mẻ nháp riêng' : 'Tạo mẻ nháp riêng sau khi lưu'}</strong><small>{hasPrivateLoad ? 'Đơn có yêu cầu giặt riêng nên hệ thống sẽ tự tạo mẻ.' : `Không cần chuyển sang trang Mẻ giặt để tạo lại${serviceGroupCount > 1 ? `; hệ thống sẽ tách thành ${serviceGroupCount} mẻ theo dịch vụ` : ''}.`}</small></span></label>}
       </Surface>
-    </div><Surface as="aside" className="order-summary"><div className="order-summary__head"><span><ClipboardList size={21} /></span><div><h2>Tóm tắt đơn hàng</h2><p>Thông tin đơn sẽ được cập nhật tự động.</p></div></div><div className="order-summary__body"><section><div className="order-summary__label"><span><UserRound size={18} /></span><strong>Khách hàng</strong></div>{customerSummary ? <div className="order-summary__selection"><strong>{customerSummary.name}</strong><small>{customerSummary.phone || 'Không có số điện thoại'}</small></div> : <div className="order-summary__placeholder"><strong>Chưa chọn khách hàng</strong><small>Vui lòng chọn hoặc nhập khách hàng.</small></div>}</section><section><div className="order-summary__label"><span><ShoppingBag size={18} /></span><strong>Dịch vụ</strong></div>{validItemCount ? <div className="order-summary__services">{items.filter((item) => item.serviceId && item.itemTypeId).map((item) => <div key={item.key}><span>{services.data?.find((service) => service.id === item.serviceId)?.nameVi ?? 'Dịch vụ'}</span><strong>{quotes[item.key] ? money(quotes[item.key].finalAmount, quotes[item.key].currency) : 'Đang tính…'}</strong></div>)}</div> : <div className="order-summary__placeholder"><strong>Chưa có dịch vụ</strong><small>Thêm dịch vụ để xem chi tiết.</small></div>}</section><dl><div><dt>Số dịch vụ</dt><dd>{validItemCount}</dd></div><div><dt>Tạm tính</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div><div><dt>Giảm giá</dt><dd>{money(0)}</dd></div><div><dt>Phụ phí</dt><dd>{money(0)}</dd></div><div className="order-summary__total"><dt>Tổng cộng</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div></dl><p className="order-summary__note">Giá cuối cùng được hệ thống tính lại khi lưu đơn.</p><Button type="submit" size="lg" loading={create.isPending} disabled={!readyToSubmit}>Lưu đơn hàng</Button>{create.error && <p className="form-error">{create.error instanceof ApiError ? create.error.message : 'Không thể tạo đơn.'}</p>}</div></Surface></div>
+    </div><Surface as="aside" className="order-summary"><div className="order-summary__head"><span><ClipboardList size={21} /></span><div><h2>Tóm tắt đơn hàng</h2><p>Thông tin đơn sẽ được cập nhật tự động.</p></div></div><div className="order-summary__body"><section><div className="order-summary__label"><span><UserRound size={18} /></span><strong>Khách hàng</strong></div>{customerSummary ? <div className="order-summary__selection"><strong>{customerSummary.name}</strong><small>{customerSummary.phone || 'Không có số điện thoại'}</small></div> : <div className="order-summary__placeholder"><strong>Chưa chọn khách hàng</strong><small>Vui lòng chọn hoặc nhập khách hàng.</small></div>}</section><section><div className="order-summary__label"><span><ShoppingBag size={18} /></span><strong>Dịch vụ</strong></div>{validItemCount ? <div className="order-summary__services">{items.filter((item) => item.serviceId && item.itemTypeId).map((item) => <div key={item.key}><span>{services.data?.find((service) => service.id === item.serviceId)?.nameVi ?? 'Dịch vụ'}</span><strong>{quotes[item.key] ? money(quotes[item.key].finalAmount, quotes[item.key].currency) : 'Đang tính…'}</strong></div>)}</div> : <div className="order-summary__placeholder"><strong>Chưa có dịch vụ</strong><small>Thêm dịch vụ để xem chi tiết.</small></div>}</section><dl><div><dt>Số dịch vụ</dt><dd>{validItemCount}</dd></div><div><dt>Số túi</dt><dd>{bagCount}</dd></div><div><dt>Tạm tính</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div><div><dt>Giảm giá</dt><dd>{money(0)}</dd></div><div><dt>Phụ phí</dt><dd>{money(0)}</dd></div><div className="order-summary__total"><dt>Tổng cộng</dt><dd>{money(total, Object.values(quotes)[0]?.currency)}</dd></div></dl><p className="order-summary__note">Giá cuối cùng được hệ thống tính lại khi lưu đơn.</p><Button type="submit" size="lg" loading={create.isPending} disabled={!readyToSubmit}>Xác nhận đơn</Button></div></Surface></div></fieldset>
+    {create.error && <p className="order-create-submit-error form-error" role="alert">{create.error instanceof ApiError ? create.error.message : 'Không thể tạo đơn.'}</p>}
     <div className="mobile-order-action"><span><small>Tổng tạm tính</small><strong>{money(total, Object.values(quotes)[0]?.currency)}</strong></span><Button type="submit" loading={create.isPending} disabled={!readyToSubmit}>Tạo đơn</Button></div>
-    <QuickCustomerDialog open={quickCustomerOpen} onClose={() => setQuickCustomerOpen(false)} onCreated={(customer) => { setCustomerId(customer.id); setChosenCustomer(customer); setSearch(customer.fullName) }} />
+    <QuickCustomerDialog open={quickCustomerOpen} onClose={() => setQuickCustomerOpen(false)} onCreated={(customer) => { scanVersion.current++; setCustomerId(customer.id); setChosenCustomer(customer); setSearch(customer.customerCode); setScanStatus({ type: 'FOUND_CUSTOMER', code: customer.customerCode }) }} />
   </form>
 }
 
@@ -422,7 +488,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
 
 const historyLabels: Record<string, string> = {
   CREATED: 'Tạo đơn hàng', STARTED_PROCESSING: 'Bắt đầu xử lý', MARKED_READY: 'Đánh dấu sẵn sàng',
-  COMPLETED: 'Hoàn tất đơn hàng', CANCELLED: 'Hủy đơn hàng', REOPENED: 'Mở lại đơn hàng',
+  COMPLETED: 'Hoàn tất đơn hàng', CANCELLED: 'Hủy đơn hàng', REOPENED: 'Mở lại đơn hàng', LABEL_PRINT_REQUESTED: 'Yêu cầu in tem túi',
 }
 function historyLabel(action: string, changed?: Record<string, unknown>) {
   const fields = Array.isArray(changed?.fields) ? changed.fields as string[] : []
@@ -547,6 +613,8 @@ export function OrderDetailPage() {
             })}</tbody>
           </table></div> : <StatePanel compact title="Chưa có dịch vụ" body="Đơn hàng này chưa có dịch vụ nào." />}
         </Surface>
+
+        <OrderBags order={value} onBagUpdated={bag => { queryClient.setQueryData<Order>(orderKeys.detail(id), current => current && ({ ...current, bags: current.bags.map(item => item.id === bag.id ? bag : item) })); if (canAudit) void history.refetch() }} />
 
         <Surface as="section" className="order-section order-detail-note">
           <DetailSectionTitle className="order-detail-section-title" icon={<FileText size={19} />} title="Ghi chú" action={canEdit ? <Button size="sm" variant="ghost" onClick={() => setEditing(true)}><Pencil size={16} aria-hidden="true" />Chỉnh sửa ghi chú</Button> : undefined} />

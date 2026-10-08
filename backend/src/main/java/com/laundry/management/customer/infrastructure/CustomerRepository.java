@@ -17,6 +17,7 @@ import java.util.List;
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Optional<Customer> findByIdAndBranchId(Long id, Long branchId);
+    Optional<Customer> findByBranchIdAndCustomerCodeAndStatus(Long branchId, String customerCode, CustomerStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Customer c where c.id = :id and c.branch.id = :branchId")

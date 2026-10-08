@@ -25,6 +25,7 @@ import com.laundry.management.notification.infrastructure.NotificationRepository
 import com.laundry.management.notification.infrastructure.NotificationRecipientRepository;
 import com.laundry.management.order.infrastructure.BranchOrderSequenceRepository;
 import com.laundry.management.order.infrastructure.OrderHistoryRepository;
+import com.laundry.management.order.infrastructure.OrderBagRepository;
 import com.laundry.management.order.infrastructure.OrderRepository;
 import com.laundry.management.servicecatalog.infrastructure.ItemTypeRepository;
 import com.laundry.management.servicecatalog.infrastructure.LaundryServiceRepository;
@@ -45,6 +46,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -61,6 +63,7 @@ class OrderIntegrationTest {
     @Autowired PermissionRepository permissions;
     @Autowired OrderRepository orders;
     @Autowired OrderHistoryRepository orderHistory;
+    @Autowired OrderBagRepository orderBags;
     @Autowired BranchOrderSequenceRepository orderSequences;
     @Autowired NotificationRepository notifications;
     @Autowired NotificationRecipientRepository notificationRecipients;
@@ -68,6 +71,7 @@ class OrderIntegrationTest {
     @Autowired PriceRuleRepository priceRules;
     @Autowired PriceListRepository priceLists;
     @Autowired ServiceItemEligibilityRepository eligibility;
+    @Autowired JdbcTemplate jdbc;
     @Autowired ItemTypeRepository itemTypes;
     @Autowired LaundryServiceRepository services;
 
@@ -110,6 +114,7 @@ class OrderIntegrationTest {
         notificationRecipients.deleteAll();
         notifications.deleteAll();
         orderHistory.deleteAll();
+        orderBags.deleteAll();
         orders.deleteAll();
         orderSequences.deleteAll();
         pricingAudit.deleteAll();
@@ -145,6 +150,119 @@ class OrderIntegrationTest {
             .andExpect(jsonPath("$.customerPhone").value("0909 000 123"))
             .andExpect(jsonPath("$.items", hasSize(2)))
             .andExpect(jsonPath("$.items[0].serviceName").value("Giặt sấy kiểm thử"));
+    }
+
+    @Test
+    void createsServerAuthoritativeBagsInOrderAndDetailWithoutChangingPricing() throws Exception {
+        JsonNode oneBag = createGuestOrder(managerA, item(2));
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("branchId", branchA.getId()); request.put("guestName", "Khách ba túi"); request.put("bagCount", 3);
+        request.putArray("items").add(item(2));
+        JsonNode created = body(mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+            .andExpect(status().isCreated()).andReturn());
+        org.assertj.core.api.Assertions.assertThat(created.path("totalAmount").decimalValue())
+            .isEqualByComparingTo(oneBag.path("totalAmount").decimalValue());
+        org.assertj.core.api.Assertions.assertThat(created.path("bags").size()).isEqualTo(3);
+        for (int sequence = 1; sequence <= 3; sequence++) {
+            JsonNode bag = created.path("bags").get(sequence - 1);
+            org.assertj.core.api.Assertions.assertThat(bag.path("bagCode").asText())
+                .isEqualTo(created.path("orderCode").asText() + "-" + String.format("%02d", sequence));
+            org.assertj.core.api.Assertions.assertThat(bag.path("sequenceNumber").asInt()).isEqualTo(sequence);
+            org.assertj.core.api.Assertions.assertThat(bag.path("status").asText()).isEqualTo("RECEIVED");
+        }
+        org.assertj.core.api.Assertions.assertThat(created.path("bags").get(0).path("bagCode").asText())
+            .isNotEqualTo(oneBag.path("bags").get(0).path("bagCode").asText());
+        mockMvc.perform(get("/api/orders/{id}", created.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.bags", hasSize(3)));
+    }
+
+    @Test
+    void rejectsInvalidBagCountsBeforePersistingOrder() throws Exception {
+        long before = orders.count();
+        for (int count : new int[] {0, 100}) {
+            ObjectNode request = objectMapper.createObjectNode();
+            request.put("branchId", branchA.getId()); request.put("guestName", "Khách thử"); request.put("bagCount", count);
+            request.putArray("items").add(item(1));
+            mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                    .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+                .andExpect(status().isBadRequest());
+        }
+        org.assertj.core.api.Assertions.assertThat(orders.count()).isEqualTo(before);
+    }
+
+    @Test
+    void rollsBackOrderWhenItsBagCodeConflicts() throws Exception {
+        JsonNode first = createGuestOrder(managerA, item(1));
+        String nextCode = branchA.getCode() + "-DH-000002-01";
+        jdbc.update("UPDATE order_bags SET bag_code = ? WHERE id = ?", nextCode, first.path("bags").get(0).path("id").asLong());
+        long orderCount = orders.count();
+        long bagCount = orderBags.count();
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("branchId", branchA.getId()); request.put("guestName", "Khách xung đột"); request.put("bagCount", 1);
+        request.putArray("items").add(item(1));
+        mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+            .andExpect(status().isConflict());
+        org.assertj.core.api.Assertions.assertThat(orders.count()).isEqualTo(orderCount);
+        org.assertj.core.api.Assertions.assertThat(orderBags.count()).isEqualTo(bagCount);
+    }
+
+    @Test
+    void resolvesExactCustomerCodeAndRealBagCodeInsideAuthorizedBranch() throws Exception {
+        ObjectNode customer = objectMapper.createObjectNode();
+        customer.put("fullName", "Khách tra cứu mã"); customer.put("phone", "090 324 7812");
+        customer.put("customerType", "INDIVIDUAL"); customer.put("source", "WALK_IN"); customer.put("branchId", branchA.getId());
+        JsonNode createdCustomer = body(mockMvc.perform(post("/api/customers").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(customer.toString()))
+            .andExpect(status().isCreated()).andReturn());
+        String customerCode = createdCustomer.path("customerCode").asText();
+        mockMvc.perform(get("/api/orders/intake/customers").param("branchId", branchA.getId().toString())
+                .param("query", customerCode).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].customerCode").value(customerCode));
+        mockMvc.perform(get("/api/orders/intake/customers").param("branchId", branchA.getId().toString())
+                .param("query", "Khách tra cứu").header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].customerCode").value(customerCode));
+        mockMvc.perform(get("/api/orders/intake/scan").param("branchId", branchA.getId().toString())
+                .param("code", customerCode).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("CUSTOMER"));
+        JsonNode createdOrder = createGuestOrder(managerA, item(1));
+        JsonNode bag = createdOrder.path("bags").get(0);
+        mockMvc.perform(get("/api/orders/intake/scan").param("branchId", branchA.getId().toString())
+                .param("code", bag.path("bagCode").asText()).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("BAG"))
+            .andExpect(jsonPath("$.bagCode").value(bag.path("bagCode").asText()));
+        mockMvc.perform(get("/api/orders/intake/scan").param("branchId", branchA.getId().toString())
+                .param("code", "B" + bag.path("id").asLong()).header("Authorization", bearer(receptionistA)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("BAG"));
+        mockMvc.perform(get("/api/orders/intake/scan").param("branchId", branchB.getId().toString())
+                .param("code", bag.path("bagCode").asText()).header("Authorization", bearer(managerB)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("NOT_FOUND"));
+    }
+
+    @Test
+    void auditsPrintRequestsWithoutClaimingPhysicalPrintAndEnforcesBranch() throws Exception {
+        JsonNode created = createGuestOrder(managerA, item(1));
+        long id = created.path("id").asLong();
+        long bagId = created.path("bags").get(0).path("id").asLong();
+        mockMvc.perform(post("/api/orders/{id}/bags/{bagId}/print-requests", id, bagId)
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.printRequestCount").value(1))
+            .andExpect(jsonPath("$.status").value("RECEIVED"));
+        mockMvc.perform(post("/api/orders/{id}/bags/{bagId}/print-requests", id, bagId)
+                .header("Authorization", bearer(managerB)).header("X-Branch-Id", branchB.getId()))
+            .andExpect(status().isNotFound());
+        String deniedName = "order.print.denied." + UUID.randomUUID().toString().substring(0, 6);
+        UserAccount denied = createAccount(deniedName, "Order print denied", passwordEncoder.encode(PASSWORD), branchA, "RECEPTIONIST");
+        denied.overridePermission(permissions.findByCode("order.bag.print").orElseThrow(), PermissionOverrideEffect.DENY);
+        users.saveAndFlush(denied);
+        mockMvc.perform(post("/api/orders/{id}/bags/{bagId}/print-requests", id, bagId)
+                .header("Authorization", bearer(login(deniedName))).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/orders/{id}/history", id)
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.action == 'LABEL_PRINT_REQUESTED')]").isNotEmpty());
     }
 
     @Test
@@ -387,6 +505,7 @@ class OrderIntegrationTest {
 
         ObjectNode create = objectMapper.createObjectNode();
         create.put("branchId", branchA.getId()); create.put("guestName", "Khách patch");
+        create.put("bagCount", 1);
         create.put("promisedAt", "2026-09-20T10:00:00Z"); create.put("note", "Ghi chú ban đầu");
         create.putArray("items").add(item(2));
         JsonNode order = body(mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
@@ -531,6 +650,7 @@ class OrderIntegrationTest {
         request.put("branchId", branchA.getId());
         request.put("guestName", "Khách vãng lai kiểm thử");
         request.put("guestPhone", "0909 000 123");
+        request.put("bagCount", 1);
         ArrayNode values = request.putArray("items");
         for (ObjectNode item : items) values.add(item);
         MvcResult result = mockMvc.perform(post("/api/orders").header("Authorization", bearer(token))

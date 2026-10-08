@@ -3,7 +3,10 @@ package com.laundry.management.order.application;
 import com.laundry.management.auth.security.CurrentUserProvider;
 import com.laundry.management.customer.application.PhoneNormalizer;
 import com.laundry.management.customer.infrastructure.CustomerRepository;
+import com.laundry.management.customer.domain.Customer;
+import com.laundry.management.customer.domain.CustomerStatus;
 import com.laundry.management.order.api.OrderDtos;
+import com.laundry.management.order.infrastructure.OrderBagRepository;
 import com.laundry.management.servicecatalog.api.CatalogDtos;
 import com.laundry.management.servicecatalog.application.PricingEngineService;
 import com.laundry.management.servicecatalog.domain.CatalogStatus;
@@ -25,16 +28,17 @@ public class OrderIntakeQueryService {
 
     private final CurrentUserProvider currentUsers;
     private final CustomerRepository customers;
+    private final OrderBagRepository bags;
     private final PhoneNormalizer phoneNormalizer;
     private final LaundryServiceRepository services;
     private final ServiceItemEligibilityRepository eligibility;
     private final PricingEngineService pricing;
     private final Clock clock;
 
-    public OrderIntakeQueryService(CurrentUserProvider currentUsers, CustomerRepository customers,
+    public OrderIntakeQueryService(CurrentUserProvider currentUsers, CustomerRepository customers, OrderBagRepository bags,
         PhoneNormalizer phoneNormalizer, LaundryServiceRepository services,
         ServiceItemEligibilityRepository eligibility, PricingEngineService pricing, Clock clock) {
-        this.currentUsers=currentUsers; this.customers=customers; this.phoneNormalizer=phoneNormalizer;
+        this.currentUsers=currentUsers; this.customers=customers; this.bags=bags; this.phoneNormalizer=phoneNormalizer;
         this.services=services; this.eligibility=eligibility; this.pricing=pricing; this.clock=clock;
     }
 
@@ -44,14 +48,30 @@ public class OrderIntakeQueryService {
         Long branchId=currentUsers.resolveAuthorizedBranch(requestedBranchId);
         String value=query==null?"":query.trim();
         if(value.length()<2)return List.of();
+        var exactCustomer=customers.findByBranchIdAndCustomerCodeAndStatus(branchId,value.toUpperCase(Locale.ROOT),CustomerStatus.ACTIVE);
+        if(exactCustomer.isPresent())return List.of(intakeCustomer(exactCustomer.get()));
         String digits=value.replaceAll("\\D","");
         String exact=phoneNormalizer.tryNormalizeForSearch(value).orElse(null);
         boolean suffix=value.matches("\\d{3,4}");
         String namePattern=exact==null&&!suffix?"%"+escape(value.toLowerCase(Locale.ROOT))+"%":null;
         String reverseSuffix=suffix?new StringBuilder(digits).reverse()+"%":null;
         return customers.counterSearch(branchId,namePattern,exact,reverseSuffix,PageRequest.of(0,20)).stream()
-            .map(customer->new OrderDtos.IntakeCustomerResponse(customer.getId(),customer.getCustomerCode(),
-                customer.getFullName(),customer.getPhone())).toList();
+            .map(this::intakeCustomer).toList();
+    }
+
+    @PreAuthorize(CREATE_PERMISSION)
+    @Transactional(readOnly=true)
+    public OrderDtos.IntakeScanResponse scan(String code, Long requestedBranchId) {
+        Long branchId=currentUsers.resolveAuthorizedBranch(requestedBranchId);
+        String value=code==null?"":code.trim().toUpperCase(Locale.ROOT);
+        if(value.isEmpty()||value.length()>64)return new OrderDtos.IntakeScanResponse("NOT_FOUND",null,null);
+        var customer=customers.findByBranchIdAndCustomerCodeAndStatus(branchId,value,CustomerStatus.ACTIVE);
+        if(customer.isPresent())return new OrderDtos.IntakeScanResponse("CUSTOMER",intakeCustomer(customer.get()),null);
+        var bag=value.matches("B[0-9]{1,18}")
+            ? bags.findByIdAndOrderBranchId(Long.parseLong(value.substring(1)),branchId)
+            : bags.findByBagCodeAndOrderBranchId(value,branchId);
+        return bag.map(orderBag->new OrderDtos.IntakeScanResponse("BAG",null,orderBag.getBagCode()))
+            .orElseGet(()->new OrderDtos.IntakeScanResponse("NOT_FOUND",null,null));
     }
 
     @PreAuthorize(CREATE_PERMISSION)
@@ -84,4 +104,5 @@ public class OrderIntakeQueryService {
     }
 
     private String escape(String value){return value.replace("!","!!").replace("%","!%").replace("_","!_");}
+    private OrderDtos.IntakeCustomerResponse intakeCustomer(Customer customer){return new OrderDtos.IntakeCustomerResponse(customer.getId(),customer.getCustomerCode(),customer.getFullName(),customer.getPhone());}
 }

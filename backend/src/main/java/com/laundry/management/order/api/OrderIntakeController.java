@@ -16,6 +16,10 @@ public class OrderIntakeController {
     public List<OrderDtos.IntakeCustomerResponse> customers(@RequestParam String query,
         @RequestParam(required=false) Long branchId){return intake.customers(query,branchId);}
 
+    @GetMapping("/scan")
+    public OrderDtos.IntakeScanResponse scan(@RequestParam String code,
+        @RequestParam(required=false) Long branchId){return intake.scan(code,branchId);}
+
     @GetMapping("/services")
     public List<OrderDtos.IntakeServiceResponse> services(@RequestParam(required=false) Long branchId){
         return intake.services(branchId);
