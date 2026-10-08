@@ -342,7 +342,7 @@ export function OrderCreatePage() {
   if (completedOrder) return <div className="page-container order-intake-success">
     <div className="order-intake-success__intro"><CheckCircle2 size={30} aria-hidden="true" /><div><h1>Đã tạo đơn {completedOrder.orderCode}</h1><p>Đơn đã lưu. Bạn có thể in tem túi rồi tiếp nhận khách tiếp theo.</p></div></div>
     <Surface className="order-intake-success__summary"><strong>{completedOrder.customerName || 'Khách vãng lai'}</strong><span>{completedOrder.items.length} dịch vụ · {quantitySummary(completedOrder.items)} · {completedOrder.bags?.length ?? 0} túi · {money(completedOrder.totalAmount, completedOrder.currency)}</span><span>Hẹn trả: {completedOrder.promisedAt ? promisedDateLabel(completedOrder.promisedAt) : 'Chưa hẹn'}</span></Surface>
-    <OrderBags order={completedOrder} onBagUpdated={(bag: OrderBag) => setCompletedOrder(current => current && ({ ...current, bags: current.bags.map(item => item.id === bag.id ? bag : item) }))} />
+    <OrderBags order={completedOrder} onOrderUpdated={setCompletedOrder} onBagUpdated={(bag: OrderBag) => setCompletedOrder(current => current && ({ ...current, bags: current.bags.map(item => item.id === bag.id ? bag : item) }))} />
     <div className="order-intake-success__actions"><ButtonLink to={`/orders/${completedOrder.id}`} variant="secondary">Xem chi tiết đơn</ButtonLink><Button onClick={nextCustomer}><Plus size={18} />Tiếp nhận khách tiếp theo</Button></div>
   </div>
 
@@ -489,6 +489,7 @@ function OrderEditPanel({ order, onSaved, onClose }: { order: Order; onSaved: (v
 const historyLabels: Record<string, string> = {
   CREATED: 'Tạo đơn hàng', STARTED_PROCESSING: 'Bắt đầu xử lý', MARKED_READY: 'Đánh dấu sẵn sàng',
   COMPLETED: 'Hoàn tất đơn hàng', CANCELLED: 'Hủy đơn hàng', REOPENED: 'Mở lại đơn hàng', LABEL_PRINT_REQUESTED: 'Yêu cầu in tem túi',
+  BAG_ADDED: 'Thêm túi đồ', BAG_VOIDED: 'Hủy túi đồ',
 }
 function historyLabel(action: string, changed?: Record<string, unknown>) {
   const fields = Array.isArray(changed?.fields) ? changed.fields as string[] : []
@@ -499,6 +500,7 @@ function historyLabel(action: string, changed?: Record<string, unknown>) {
   return historyLabels[action] ?? 'Cập nhật đơn hàng'
 }
 function HistoryDetails({ changed, currency }: { changed?: Record<string, unknown>; currency: string }) {
+  if (typeof changed?.bagCode === 'string') return <small className="history-change">{changed.bagCode}</small>
   const items = changed?.items as { before?: Array<Record<string, unknown>>; after?: Array<Record<string, unknown>> } | undefined
   if (!items?.before || !items.after) return null
   const beforeTotal = items.before.reduce((sum, item) => sum + Number(item.lineAmount ?? 0), 0)
@@ -614,7 +616,7 @@ export function OrderDetailPage() {
           </table></div> : <StatePanel compact title="Chưa có dịch vụ" body="Đơn hàng này chưa có dịch vụ nào." />}
         </Surface>
 
-        <OrderBags order={value} onBagUpdated={bag => { queryClient.setQueryData<Order>(orderKeys.detail(id), current => current && ({ ...current, bags: current.bags.map(item => item.id === bag.id ? bag : item) })); if (canAudit) void history.refetch() }} />
+        <OrderBags order={value} mutationsDisabled={editing} onOrderUpdated={updated => { queryClient.setQueryData(orderKeys.detail(id), updated); if (canAudit) void history.refetch(); void queryClient.invalidateQueries({ queryKey: orderKeys.all, refetchType: 'none' }) }} onBagUpdated={bag => { queryClient.setQueryData<Order>(orderKeys.detail(id), current => current && ({ ...current, bags: current.bags.map(item => item.id === bag.id ? bag : item) })); if (canAudit) void history.refetch() }} />
 
         <Surface as="section" className="order-section order-detail-note">
           <DetailSectionTitle className="order-detail-section-title" icon={<FileText size={19} />} title="Ghi chú" action={canEdit ? <Button size="sm" variant="ghost" onClick={() => setEditing(true)}><Pencil size={16} aria-hidden="true" />Chỉnh sửa ghi chú</Button> : undefined} />

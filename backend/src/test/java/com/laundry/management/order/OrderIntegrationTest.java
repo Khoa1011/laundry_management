@@ -34,6 +34,9 @@ import com.laundry.management.servicecatalog.infrastructure.PriceRuleRepository;
 import com.laundry.management.servicecatalog.infrastructure.PricingAuditRepository;
 import com.laundry.management.servicecatalog.infrastructure.ServiceItemEligibilityRepository;
 import java.time.Instant;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -181,7 +184,7 @@ class OrderIntegrationTest {
     @Test
     void rejectsInvalidBagCountsBeforePersistingOrder() throws Exception {
         long before = orders.count();
-        for (int count : new int[] {0, 100}) {
+        for (int count : new int[] {-1, 0, 100}) {
             ObjectNode request = objectMapper.createObjectNode();
             request.put("branchId", branchA.getId()); request.put("guestName", "Khách thử"); request.put("bagCount", count);
             request.putArray("items").add(item(1));
@@ -189,7 +192,134 @@ class OrderIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
                 .andExpect(status().isBadRequest());
         }
+        ObjectNode invalidType = objectMapper.createObjectNode();
+        invalidType.put("branchId", branchA.getId()); invalidType.put("guestName", "Khách thử"); invalidType.put("bagCount", "1.5");
+        invalidType.putArray("items").add(item(1));
+        mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(invalidType.toString()))
+            .andExpect(status().isBadRequest());
+        invalidType.put("bagCount", 1.5);
+        mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                .contentType(MediaType.APPLICATION_JSON).content(invalidType.toString()))
+            .andExpect(status().isBadRequest());
         org.assertj.core.api.Assertions.assertThat(orders.count()).isEqualTo(before);
+    }
+
+    @Test
+    void defaultsMissingAndNullBagCountToOneWithoutChangingExplicitOne() throws Exception {
+        for (String mode : java.util.List.of("omitted", "null", "explicit")) {
+            ObjectNode request = objectMapper.createObjectNode();
+            request.put("branchId", branchA.getId()); request.put("guestName", "Khách cũ");
+            if (mode.equals("null")) request.putNull("bagCount");
+            if (mode.equals("explicit")) request.put("bagCount", 1);
+            request.putArray("items").add(item(1));
+            JsonNode created = body(mockMvc.perform(post("/api/orders").header("Authorization", bearer(managerA))
+                    .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+                .andExpect(status().isCreated()).andReturn());
+            org.assertj.core.api.Assertions.assertThat(created.path("bags").size()).as(mode).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void addsAndVoidsPhysicalBagsWithoutReusingCodesOrChangingPrice() throws Exception {
+        JsonNode initial = createGuestOrder(managerA, item(2));
+        long id = initial.path("id").asLong();
+        String firstCode = initial.path("bags").get(0).path("bagCode").asText();
+        long firstBagId = initial.path("bags").get(0).path("id").asLong();
+        JsonNode second = addBag(managerA, branchA.getId(), id, 200);
+        org.assertj.core.api.Assertions.assertThat(second.path("bags").size()).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThat(second.path("bags").get(0).path("bagCode").asText()).isEqualTo(firstCode);
+        String secondCode = second.path("bags").get(1).path("bagCode").asText();
+        org.assertj.core.api.Assertions.assertThat(secondCode).isEqualTo(initial.path("orderCode").asText() + "-02");
+        long secondBagId = second.path("bags").get(1).path("id").asLong();
+        JsonNode voided = voidBag(managerA, branchA.getId(), id, secondBagId, "Nhập nhầm số túi", 200);
+        org.assertj.core.api.Assertions.assertThat(voided.path("bags").get(1).path("status").asText()).isEqualTo("VOIDED");
+        org.assertj.core.api.Assertions.assertThat(voided.path("bags").get(1).path("voidReason").asText()).isEqualTo("Nhập nhầm số túi");
+        org.assertj.core.api.Assertions.assertThat(voided.path("bags").get(1).path("voidedAt").isNull()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(orderBags.count()).isEqualTo(2);
+        JsonNode third = addBag(managerA, branchA.getId(), id, 200);
+        org.assertj.core.api.Assertions.assertThat(third.path("bags").get(2).path("bagCode").asText())
+            .isEqualTo(initial.path("orderCode").asText() + "-03");
+        org.assertj.core.api.Assertions.assertThat(third.path("bags").get(1).path("bagCode").asText()).isEqualTo(secondCode);
+        org.assertj.core.api.Assertions.assertThat(third.path("totalAmount").decimalValue())
+            .isEqualByComparingTo(initial.path("totalAmount").decimalValue());
+        org.assertj.core.api.Assertions.assertThat(third.path("items").get(0).path("id").asLong())
+            .isEqualTo(initial.path("items").get(0).path("id").asLong());
+        org.assertj.core.api.Assertions.assertThat(third.path("items").get(0).path("lineAmount").decimalValue())
+            .isEqualByComparingTo(initial.path("items").get(0).path("lineAmount").decimalValue());
+        voidBag(managerA, branchA.getId(), id, secondBagId, "Lần hai", 409);
+        voidBag(managerA, branchA.getId(), id, firstBagId, "", 400);
+        voidBag(managerA, branchA.getId(), id, firstBagId, "x".repeat(501), 400);
+        mockMvc.perform(post("/api/orders/{id}/bags/{bagId}/print-requests", id, secondBagId)
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.errorCode").value("ORDER_BAG_NOT_PRINTABLE"));
+        mockMvc.perform(get("/api/orders/{id}/history", id)
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.action == 'BAG_ADDED')]").isNotEmpty())
+            .andExpect(jsonPath("$[?(@.action == 'BAG_VOIDED')]").isNotEmpty());
+    }
+
+    @Test
+    void rejectsLastBagWrongOrderCrossBranchAndMissingUpdatePermission() throws Exception {
+        JsonNode one = createGuestOrder(managerA, item(1));
+        long id = one.path("id").asLong(); long bagId = one.path("bags").get(0).path("id").asLong();
+        voidBag(managerA, branchA.getId(), id, bagId, "Nhập nhầm", 422);
+        addBag(managerB, branchB.getId(), id, 404);
+        voidBag(managerB, branchB.getId(), id, bagId, "Nhập nhầm", 404);
+        addBag(receptionistA, branchA.getId(), id, 403);
+        voidBag(receptionistA, branchA.getId(), id, bagId, "Nhập nhầm", 403);
+        JsonNode other = createGuestOrder(managerA, item(1));
+        addBag(managerA, branchA.getId(), id, 200);
+        voidBag(managerA, branchA.getId(), id, other.path("bags").get(0).path("id").asLong(), "Sai đơn", 404);
+    }
+
+    @Test
+    void restrictsBagMutationsToReceivedOrdersAndLeavesLegacyPlaceholderUnverified() throws Exception {
+        JsonNode processing = command(managerA, createGuestOrder(managerA, item(1)), "start-processing", null, 200);
+        addBag(managerA, branchA.getId(), processing.path("id").asLong(), 422);
+        voidBag(managerA, branchA.getId(), processing.path("id").asLong(), processing.path("bags").get(0).path("id").asLong(), "Sai", 422);
+        JsonNode ready = command(managerA, processing, "mark-ready", null, 200);
+        addBag(managerA, branchA.getId(), ready.path("id").asLong(), 422);
+        JsonNode completed = command(managerA, ready, "complete", null, 200);
+        addBag(managerA, branchA.getId(), completed.path("id").asLong(), 422);
+        JsonNode cancelled = command(managerA, createGuestOrder(managerA, item(1)), "cancel", "Khách yêu cầu", 200);
+        addBag(managerA, branchA.getId(), cancelled.path("id").asLong(), 422);
+        JsonNode reopened = command(managerA, completed, "reopen", "Khách quay lại", 200);
+        addBag(managerA, branchA.getId(), reopened.path("id").asLong(), 422);
+        JsonNode legacy = createGuestOrder(managerA, item(1));
+        long legacyBagId = legacy.path("bags").get(0).path("id").asLong();
+        jdbc.update("UPDATE order_bags SET status = 'LEGACY_UNVERIFIED' WHERE id = ?", legacyBagId);
+        addBag(managerA, branchA.getId(), legacy.path("id").asLong(), 200);
+        voidBag(managerA, branchA.getId(), legacy.path("id").asLong(), legacyBagId, "Không phải túi xác minh", 422);
+        mockMvc.perform(get("/api/orders/{id}", legacy.path("id").asLong())
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.bags[0].status").value("LEGACY_UNVERIFIED"));
+    }
+
+    @Test
+    void concurrentAddsNeverDuplicateBagSequenceOrCode() throws Exception {
+        JsonNode created = createGuestOrder(managerA, item(1));
+        long id = created.path("id").asLong();
+        var executor = Executors.newFixedThreadPool(2);
+        var gate = new CyclicBarrier(2);
+        try {
+            var first = executor.submit(() -> { gate.await(); return addBag(managerA, branchA.getId(), id, 200); });
+            var second = executor.submit(() -> { gate.await(); return addBag(managerA, branchA.getId(), id, 200); });
+            first.get(15, TimeUnit.SECONDS);
+            second.get(15, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+        JsonNode detail = body(mockMvc.perform(get("/api/orders/{id}", id)
+                .header("Authorization", bearer(managerA)).header("X-Branch-Id", branchA.getId()))
+            .andExpect(status().isOk()).andReturn());
+        org.assertj.core.api.Assertions.assertThat(detail.path("bags").size()).isEqualTo(3);
+        org.assertj.core.api.Assertions.assertThat(java.util.List.of(
+            detail.path("bags").get(0).path("sequenceNumber").asInt(),
+            detail.path("bags").get(1).path("sequenceNumber").asInt(),
+            detail.path("bags").get(2).path("sequenceNumber").asInt())).containsExactly(1, 2, 3);
+        org.assertj.core.api.Assertions.assertThat(detail.path("bags").get(1).path("bagCode").asText())
+            .isNotEqualTo(detail.path("bags").get(2).path("bagCode").asText());
     }
 
     @Test
@@ -643,6 +773,19 @@ class OrderIntegrationTest {
 
     private JsonNode createGuestOrder(String token, ObjectNode... items) throws Exception {
         return createGuestOrderExpecting(token, 201, items);
+    }
+
+    private JsonNode addBag(String token, Long branchId, long orderId, int expectedStatus) throws Exception {
+        return body(mockMvc.perform(post("/api/orders/{id}/bags", orderId)
+                .header("Authorization", bearer(token)).header("X-Branch-Id", branchId))
+            .andExpect(status().is(expectedStatus)).andReturn());
+    }
+
+    private JsonNode voidBag(String token, Long branchId, long orderId, long bagId, String reason, int expectedStatus) throws Exception {
+        return body(mockMvc.perform(post("/api/orders/{id}/bags/{bagId}/void", orderId, bagId)
+                .header("Authorization", bearer(token)).header("X-Branch-Id", branchId)
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.createObjectNode().put("reason", reason).toString()))
+            .andExpect(status().is(expectedStatus)).andReturn());
     }
 
     private JsonNode createGuestOrderExpecting(String token, int expectedStatus, ObjectNode... items) throws Exception {

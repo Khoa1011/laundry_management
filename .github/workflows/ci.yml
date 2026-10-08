@@ -206,7 +206,7 @@ jobs:
           chmod +x mvnw
           ./mvnw -B -ntp -DskipTests package
 
-      - name: Test fresh and V23-to-V24 migrations
+        - name: Test fresh and V23-to-V25 migrations
         run: bash scripts/ci/test-mysql-migrations.sh
         env:
           MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
@@ -227,7 +227,7 @@ jobs:
             echo "## MySQL Migrations"
             echo "- Result: ${{ job.status }}"
             echo "- Commit: \`$GITHUB_SHA\`"
-            echo "- Scenarios: fresh schema and seeded V23 upgrade to V24 on MySQL 8."
+              echo "- Scenarios: fresh schema and seeded V23 upgrade through V24 to V25 on MySQL 8."
             echo "- Checks: Flyway, Hibernate validation, application startup, legacy backfill, data retention, constraints, foreign keys, and indexes."
           } >> "$GITHUB_STEP_SUMMARY"
 

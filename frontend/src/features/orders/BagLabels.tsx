@@ -1,8 +1,9 @@
-import { Eye, Printer, RotateCcw, ShoppingBag } from 'lucide-react'
+import { Ban, Eye, Plus, Printer, RotateCcw, ShoppingBag } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ApiError } from '../../api/client'
 import { OverlayDialog } from '../../components/OverlayDialog'
+import { Field } from '../../components/Field'
 import { Button } from '../../components/ui/Button'
 import { Surface } from '../../components/ui/Surface'
 import { useAuth } from '../../auth/AuthProvider'
@@ -39,7 +40,7 @@ function BagBarcode({ bag }: { bag: OrderBag }) {
 
 function BagLabel({ order, bag }: { order: Order; bag: OrderBag }) {
   return <article className="order-bag-label">
-    <p>{bag.status === 'LEGACY_UNVERIFIED' ? 'Tem đơn cũ · Chưa xác minh túi' : 'Tem túi đồ'}</p>
+    <p>{bag.status === 'VOIDED' ? 'Mã túi đã hủy · Không còn hiệu lực' : bag.status === 'LEGACY_UNVERIFIED' ? 'Tem đơn cũ · Chưa xác minh túi' : 'Tem túi đồ'}</p>
     <h3>{bag.bagCode}</h3>
     <BagBarcode bag={bag} />
     <strong>{order.customerName || 'Khách vãng lai'}</strong>
@@ -84,37 +85,64 @@ const browserBagPrintGateway: BagPrintGateway = {
 
 type PrintState = 'PRINTING' | 'REQUESTED' | 'FAILED'
 
-export function OrderBags({ order, onBagUpdated }: { order: Order; onBagUpdated: (bag: OrderBag) => void }) {
+function mutationMessage(error: unknown) {
+  if (!(error instanceof ApiError)) return 'Không thể cập nhật túi. Kiểm tra kết nối rồi thử lại.'
+  if (error.status === 403) return 'Bạn không có quyền cập nhật đơn này.'
+  if (error.problem.errorCode === 'ORDER_IMMUTABLE') return 'Chỉ có thể thay đổi túi khi đơn đang ở trạng thái Đã nhận.'
+  if (error.problem.errorCode === 'ORDER_BAG_LAST_ACTIVE') return 'Đơn hàng phải còn ít nhất một túi đang nhận.'
+  if (error.problem.errorCode === 'ORDER_BAG_ALREADY_VOIDED') return 'Túi này đã được hủy trước đó.'
+  if (error.problem.errorCode === 'ORDER_BAG_LIMIT_REACHED') return 'Đơn đã đạt giới hạn 99 mã túi.'
+  if (error.status === 404) return 'Không tìm thấy đơn hoặc túi trong chi nhánh này.'
+  return 'Không thể cập nhật túi. Dữ liệu đang nhập được giữ lại; hãy thử lại.'
+}
+
+export function OrderBags({ order, onBagUpdated, onOrderUpdated, mutationsDisabled = false }: {
+  order: Order
+  onBagUpdated: (bag: OrderBag) => void
+  onOrderUpdated?: (order: Order) => void
+  mutationsDisabled?: boolean
+}) {
   const { hasPermission } = useAuth()
   const { notify } = useToast()
   const [preview, setPreview] = useState<OrderBag | null>(null)
   const [printStates, setPrintStates] = useState<Record<number, PrintState>>({})
   const [printingAll, setPrintingAll] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [voidTarget, setVoidTarget] = useState<OrderBag | null>(null)
+  const [voidReason, setVoidReason] = useState('')
+  const [mutationError, setMutationError] = useState('')
+  const [mutating, setMutating] = useState(false)
   const printLock = useRef(false)
+  const mutationLock = useRef(false)
   const canPrint = hasPermission(PERMISSION_CODES.ORDER_READ) && hasPermission(PERMISSION_CODES.ORDER_BAG_PRINT)
+  const canMutate = Boolean(onOrderUpdated) && !mutationsDisabled && order.status === 'RECEIVED' && hasPermission(PERMISSION_CODES.ORDER_UPDATE)
+  const activeCount = order.bags.filter(bag => bag.status === 'RECEIVED').length
+  const printableBags = order.bags.filter(bag => bag.status === 'RECEIVED')
   const previewBag = preview && (order.bags.find(bag => bag.id === preview.id) ?? preview)
   const isPrinting = Object.values(printStates).includes('PRINTING')
 
   const setState = (bagId: number, state: PrintState) => setPrintStates(current => ({ ...current, [bagId]: state }))
   const print = async (requested: OrderBag[]) => {
     if (printLock.current) return
+    const eligible = requested.filter(bag => bag.status !== 'VOIDED')
+    if (!eligible.length) return
     const session = browserBagPrintGateway.open()
     if (!session) {
-      requested.forEach(bag => setState(bag.id, 'FAILED'))
+      eligible.forEach(bag => setState(bag.id, 'FAILED'))
       notify({ message: 'Trình duyệt đã chặn cửa sổ in. Hãy cho phép cửa sổ bật lên rồi thử lại.', tone: 'error' })
       return
     }
     printLock.current = true
-    requested.forEach(bag => setState(bag.id, 'PRINTING'))
-    setPrintingAll(requested.length > 1)
-    const results = await Promise.allSettled(requested.map(bag => orderApi.requestBagPrint(order.id, bag.id, order.branchId)))
+    eligible.forEach(bag => setState(bag.id, 'PRINTING'))
+    setPrintingAll(eligible.length > 1)
+    const results = await Promise.allSettled(eligible.map(bag => orderApi.requestBagPrint(order.id, bag.id, order.branchId)))
     const printable: OrderBag[] = []
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         printable.push(result.value)
         onBagUpdated(result.value)
       } else {
-        setState(requested[index].id, 'FAILED')
+        setState(eligible[index].id, 'FAILED')
       }
     })
     try {
@@ -136,20 +164,61 @@ export function OrderBags({ order, onBagUpdated }: { order: Order; onBagUpdated:
     }
   }
 
+  const closeMutation = () => {
+    if (mutationLock.current) return
+    setAddOpen(false); setVoidTarget(null); setVoidReason(''); setMutationError('')
+  }
+  const addBag = async () => {
+    if (mutationLock.current || !canMutate) return
+    mutationLock.current = true; setMutating(true); setMutationError('')
+    try {
+      const updated = await orderApi.addBag(order.id, order.branchId)
+      onOrderUpdated?.(updated)
+      setAddOpen(false)
+      notify({ message: `Đã thêm túi ${updated.bags.at(-1)?.bagCode ?? ''}.`, tone: 'success' })
+    } catch (error) { setMutationError(mutationMessage(error)) }
+    finally { mutationLock.current = false; setMutating(false) }
+  }
+  const voidBag = async () => {
+    if (mutationLock.current || !canMutate || !voidTarget || !voidReason.trim()) return
+    mutationLock.current = true; setMutating(true); setMutationError('')
+    try {
+      const updated = await orderApi.voidBag(order.id, voidTarget.id, order.branchId, voidReason.trim())
+      onOrderUpdated?.(updated)
+      setVoidTarget(null); setVoidReason('')
+      notify({ message: `Đã hủy túi ${voidTarget.bagCode}. Mã túi được giữ trong lịch sử.`, tone: 'success' })
+    } catch (error) { setMutationError(mutationMessage(error)) }
+    finally { mutationLock.current = false; setMutating(false) }
+  }
+
   return <Surface as="section" className="order-bags">
     <div className="order-bags__heading">
       <div><h2><ShoppingBag size={20} aria-hidden="true" />Túi đồ ({order.bags?.length ?? 0})</h2><p>Mỗi túi có mã riêng để nhận diện tại quầy.</p></div>
-      {canPrint && Boolean(order.bags?.length) && <Button type="button" variant="secondary" loading={printingAll} disabled={isPrinting} onClick={() => void print(order.bags)}><Printer size={18} />In tất cả tem</Button>}
+      <div className="order-bags__heading-actions">
+        {canMutate && <Button type="button" variant="secondary" onClick={() => { setMutationError(''); setAddOpen(true) }}><Plus size={18} />Thêm túi</Button>}
+        {canPrint && printableBags.length > 0 && <Button type="button" variant="secondary" loading={printingAll} disabled={isPrinting} onClick={() => void print(printableBags)}><Printer size={18} />In tất cả tem</Button>}
+      </div>
     </div>
     {order.bags?.length ? <div className="order-bags__list">{order.bags.map(bag => {
       const state = printStates[bag.id]
-      return <div className="order-bags__row" key={bag.id}>
-        <div className="order-bags__identity"><strong>{bag.bagCode}</strong><span>Túi {bag.sequenceNumber}/{order.bags.length} · {bag.status === 'LEGACY_UNVERIFIED' ? 'Đơn cũ · Chưa xác minh túi thực tế' : 'Đã nhận'}</span><small role="status">{state === 'PRINTING' ? 'Đang gửi yêu cầu in…' : state === 'FAILED' ? 'In thất bại · Thử lại' : state === 'REQUESTED' || bag.printRequestCount > 0 ? 'Đã gửi lệnh in · Kiểm tra máy in' : 'Chưa gửi lệnh in'}</small></div>
-        <div className="order-bags__actions"><Button type="button" variant="ghost" onClick={() => setPreview(bag)}><Eye size={17} />Xem mã</Button>{canPrint && <Button type="button" variant="secondary" loading={state === 'PRINTING'} disabled={printingAll || isPrinting} onClick={() => void print([bag])}>{bag.printRequestCount > 0 || state === 'REQUESTED' ? <RotateCcw size={17} /> : <Printer size={17} />}{bag.printRequestCount > 0 || state === 'REQUESTED' ? 'In lại' : 'In tem'}</Button>}</div>
+      return <div className={`order-bags__row${bag.status === 'VOIDED' ? ' order-bags__row--voided' : ''}`} key={bag.id}>
+        <div className="order-bags__identity"><strong>{bag.bagCode}</strong><span>Túi {bag.sequenceNumber}/{order.bags.length} · {bag.status === 'VOIDED' ? 'Hủy bỏ' : bag.status === 'LEGACY_UNVERIFIED' ? 'Đơn cũ · Chưa xác minh túi thực tế' : 'Đã nhận'}</span>
+          {bag.status === 'VOIDED' ? <small>Lý do: {bag.voidReason}</small> : <small role="status">{state === 'PRINTING' ? 'Đang gửi yêu cầu in…' : state === 'FAILED' ? 'In thất bại · Thử lại' : state === 'REQUESTED' || bag.printRequestCount > 0 ? 'Đã gửi lệnh in · Kiểm tra máy in' : 'Chưa gửi lệnh in'}</small>}
+          {canMutate && bag.status === 'RECEIVED' && activeCount === 1 && <small>Đơn phải còn ít nhất một túi đang nhận.</small>}
+        </div>
+        <div className="order-bags__actions"><Button type="button" variant="ghost" onClick={() => setPreview(bag)}><Eye size={17} />Xem mã</Button>{canPrint && bag.status !== 'VOIDED' && <Button type="button" variant="secondary" loading={state === 'PRINTING'} disabled={printingAll || isPrinting} onClick={() => void print([bag])}>{bag.printRequestCount > 0 || state === 'REQUESTED' ? <RotateCcw size={17} /> : <Printer size={17} />}{bag.printRequestCount > 0 || state === 'REQUESTED' ? 'In lại' : 'In tem'}</Button>}{canMutate && bag.status === 'RECEIVED' && activeCount > 1 && <Button type="button" variant="danger" onClick={() => { setMutationError(''); setVoidReason(''); setVoidTarget(bag) }}><Ban size={17} />Hủy túi</Button>}</div>
       </div>
     })}</div> : <p>Đơn chưa có túi đồ.</p>}
-    <OverlayDialog open={Boolean(preview)} onClose={() => setPreview(null)} title={`Tem túi ${preview?.bagCode ?? ''}`} footer={<>{canPrint && previewBag && <Button type="button" loading={printStates[previewBag.id] === 'PRINTING'} disabled={isPrinting} onClick={() => void print([previewBag])}><Printer size={18} />{previewBag.printRequestCount > 0 ? 'In lại' : 'In tem'}</Button>}<Button type="button" variant="secondary" onClick={() => setPreview(null)}>Đóng</Button></>}>
+    <OverlayDialog open={Boolean(preview)} onClose={() => setPreview(null)} title={`Tem túi ${preview?.bagCode ?? ''}`} footer={<>{canPrint && previewBag && previewBag.status !== 'VOIDED' && <Button type="button" loading={printStates[previewBag.id] === 'PRINTING'} disabled={isPrinting} onClick={() => void print([previewBag])}><Printer size={18} />{previewBag.printRequestCount > 0 ? 'In lại' : 'In tem'}</Button>}<Button type="button" variant="secondary" onClick={() => setPreview(null)}>Đóng</Button></>}>
       {previewBag && <BagLabel order={order} bag={previewBag} />}
+    </OverlayDialog>
+    <OverlayDialog open={addOpen} onClose={closeMutation} title="Thêm túi mới" footer={<><Button type="button" variant="secondary" disabled={mutating} onClick={closeMutation}>Hủy</Button><Button type="button" loading={mutating} onClick={() => void addBag()}>Thêm túi</Button></>}>
+      <p>Hệ thống sẽ cấp mã cho túi tiếp theo. Mã túi đã tạo sẽ không thể đổi.</p>
+      {mutationError && <p className="form-error" role="alert">{mutationError}</p>}
+    </OverlayDialog>
+    <OverlayDialog open={Boolean(voidTarget)} onClose={closeMutation} title={`Hủy túi ${voidTarget?.bagCode ?? ''}?`} footer={<><Button type="button" variant="secondary" disabled={mutating} onClick={closeMutation}>Quay lại</Button><Button type="button" variant="danger" loading={mutating} disabled={!voidReason.trim()} onClick={() => void voidBag()}>Hủy túi</Button></>}>
+      <p>Mã túi sẽ được giữ lại trong lịch sử và không thể sử dụng lại.</p>
+      <Field label="Lý do" required error={mutationError}><textarea rows={3} maxLength={500} value={voidReason} onChange={event => { setVoidReason(event.target.value); setMutationError('') }} autoFocus /></Field>
     </OverlayDialog>
   </Surface>
 }

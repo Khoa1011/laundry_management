@@ -79,9 +79,10 @@ public class OrderApplicationService {
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_READ) and @permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_BAG_PRINT)")
     @Transactional
     public OrderDtos.BagResponse requestBagPrint(Long orderId, Long bagId, Long requestedBranchId) {
-        Long branchId=currentUsers.resolveAuthorizedBranch(requestedBranchId);
-        LaundryOrder order=orders.findByIdAndBranchId(orderId,branchId).orElseThrow(this::notFound);
-        OrderBag bag=bags.findForPrint(bagId,orderId).orElseThrow(this::notFound);
+        LaundryOrder order=locked(orderId,requestedBranchId);
+        OrderBag bag=bags.findForUpdate(bagId,orderId).orElseThrow(this::notFound);
+        if(bag.getStatus()==OrderBagStatus.VOIDED)
+            throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_NOT_PRINTABLE,"Voided bags cannot be printed.");
         UserAccount actor=actor();
         bag.recordPrintRequest(actor,Instant.now(clock));
         bags.flush();
@@ -89,6 +90,48 @@ public class OrderApplicationService {
             writeAudit(Map.of("bagCode",bag.getBagCode(),"sequenceNumber",bag.getSequenceNumber(),
                 "printRequestCount",bag.getPrintRequestCount())),actor);
         return mapper.bag(bag);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_UPDATE)")
+    @Transactional
+    public OrderDtos.Response addBag(Long orderId, Long requestedBranchId) {
+        LaundryOrder order=locked(orderId,requestedBranchId);
+        requireReceived(order);
+        int sequence=bags.findFirstByOrderIdOrderBySequenceNumberDesc(orderId)
+            .map(bag->bag.getSequenceNumber()+1).orElse(1);
+        if(sequence>99)
+            throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_LIMIT_REACHED,"An order cannot have more than 99 bag codes.");
+        UserAccount actor=actor();
+        OrderBag bag=bags.saveAndFlush(new OrderBag(order,sequence,actor));
+        order.touch(actor,Instant.now(clock));
+        record(order,OrderHistoryAction.BAG_ADDED,order.getStatus(),order.getStatus(),null,
+            writeAudit(Map.of("bagCode",bag.getBagCode(),"sequenceNumber",sequence)),actor);
+        orders.flush();publish(order,"order.bag.added");
+        return mapper.detail(order);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_UPDATE)")
+    @Transactional
+    public OrderDtos.Response voidBag(Long orderId, Long bagId, Long requestedBranchId, String reason) {
+        LaundryOrder order=locked(orderId,requestedBranchId);
+        requireReceived(order);
+        OrderBag bag=bags.findForUpdate(bagId,orderId).orElseThrow(this::notFound);
+        if(bag.getStatus()==OrderBagStatus.VOIDED)
+            throw bagError(HttpStatus.CONFLICT,ErrorCode.ORDER_BAG_ALREADY_VOIDED,"This bag was already voided.");
+        if(bag.getStatus()!=OrderBagStatus.RECEIVED)
+            throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_NOT_PRINTABLE,"An unverified legacy bag cannot be voided as a received physical bag.");
+        if(bags.countByOrderIdAndStatus(orderId,OrderBagStatus.RECEIVED)<=1)
+            throw bagError(HttpStatus.UNPROCESSABLE_ENTITY,ErrorCode.ORDER_BAG_LAST_ACTIVE,"An order must retain at least one received physical bag.");
+        String cleanReason=clean(reason);
+        if(cleanReason==null || cleanReason.length()>500)
+            throw invalidUpdate("A bag void reason of at most 500 characters is required.");
+        UserAccount actor=actor();
+        bag.voidBag(actor,Instant.now(clock),cleanReason);
+        bags.flush();order.touch(actor,Instant.now(clock));
+        record(order,OrderHistoryAction.BAG_VOIDED,order.getStatus(),order.getStatus(),cleanReason,
+            writeAudit(Map.of("bagCode",bag.getBagCode(),"sequenceNumber",bag.getSequenceNumber())),actor);
+        orders.flush();publish(order,"order.bag.voided");
+        return mapper.detail(order);
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.laundry.management.auth.security.permission.PermissionCodes).ORDER_UPDATE)")
@@ -199,6 +242,8 @@ public class OrderApplicationService {
         return new QuoteResult(result,currencies.iterator().next(),effectiveAt);
     }
     private LaundryOrder locked(Long id,Long requestedBranch){Long b=currentUsers.resolveAuthorizedBranch(requestedBranch);return orders.findForUpdate(id,b).orElseThrow(this::notFound);}
+    private void requireReceived(LaundryOrder order){if(order.getStatus()!=OrderStatus.RECEIVED)throw immutable("Bags can only be changed while an order is received.");}
+    private ApiException bagError(HttpStatus status,ErrorCode code,String detail){return new ApiException(status,code,"Order bag unavailable",detail);}
     private void record(LaundryOrder o,OrderHistoryAction a,OrderStatus f,OrderStatus t,String reason,String changed,UserAccount actor){history.save(new OrderStatusHistory(o,a,f,t,reason,changed,OrderStatusSource.MANUAL_COMMAND,actor));}
     private void publish(LaundryOrder o,String type){events.publishEvent(new OrderChangedEvent(o.getId(),o.getOrderCode(),o.getBranch().getId(),o.getStatus(),o.getVersion(),type,Instant.now(clock)));}
     private void requireVersion(LaundryOrder o,long v){if(o.getVersion()!=v)throw new ApiException(HttpStatus.CONFLICT,ErrorCode.ORDER_VERSION_CONFLICT,"Order changed","This order was updated by another user. Reload and try again.");}

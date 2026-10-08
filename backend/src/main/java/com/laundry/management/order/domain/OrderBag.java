@@ -21,6 +21,9 @@ public class OrderBag {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "updated_by") private UserAccount updatedBy;
     @Column(name = "last_print_requested_at") private Instant lastPrintRequestedAt;
     @Column(name = "print_request_count", nullable = false) private int printRequestCount;
+    @Column(name = "voided_at") private Instant voidedAt;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "voided_by") private UserAccount voidedBy;
+    @Column(name = "void_reason", length = 500) private String voidReason;
     @Version @Column(nullable = false) private long version;
 
     protected OrderBag() {}
@@ -40,6 +43,14 @@ public class OrderBag {
         this.updatedBy = actor;
     }
 
+    public void voidBag(UserAccount actor, Instant at, String reason) {
+        this.status = OrderBagStatus.VOIDED;
+        this.voidedAt = at;
+        this.voidedBy = actor;
+        this.voidReason = reason;
+        this.updatedBy = actor;
+    }
+
     public Long getId() { return id; }
     public LaundryOrder getOrder() { return order; }
     public String getBagCode() { return bagCode; }
@@ -48,4 +59,7 @@ public class OrderBag {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getLastPrintRequestedAt() { return lastPrintRequestedAt; }
     public int getPrintRequestCount() { return printRequestCount; }
+    public Instant getVoidedAt() { return voidedAt; }
+    public UserAccount getVoidedBy() { return voidedBy; }
+    public String getVoidReason() { return voidReason; }
 }

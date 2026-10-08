@@ -156,8 +156,8 @@ initialize_database "$FRESH_DATABASE"
 start_application "$FRESH_DATABASE" 18080 "$ARTIFACT_DIR/fresh-startup.log"
 assert_scalar \
   "$(mysql_app "$FRESH_DATABASE" --execute="SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1;")" \
-  "24" \
-  "fresh database reaches Flyway V24"
+  "25" \
+  "fresh database reaches Flyway V25"
 assert_scalar \
   "$(mysql_app "$FRESH_DATABASE" --execute="SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0;")" \
   "0" \
@@ -180,7 +180,7 @@ assert_scalar \
   "V23 fixture contains one historical order"
 
 echo "Upgrading the seeded V23 database to V24."
-start_application "$LEGACY_DATABASE" 18082 "$ARTIFACT_DIR/v24-upgrade-startup.log"
+start_application "$LEGACY_DATABASE" 18082 "$ARTIFACT_DIR/v24-upgrade-startup.log" "24" "none"
 assert_scalar \
   "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1;")" \
   "24" \
@@ -214,6 +214,30 @@ assert_scalar \
   "3" \
   "order_bags check constraints exist"
 
+stop_application
+echo "Upgrading the seeded V24 database to V25 with Hibernate validation."
+start_application "$LEGACY_DATABASE" 18083 "$ARTIFACT_DIR/v25-upgrade-startup.log"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1;")" \
+  "25" \
+  "legacy database reaches Flyway V25"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM flyway_schema_history WHERE version = '25' AND success = 1;")" \
+  "1" \
+  "Flyway records V25 as successful"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM order_bags bag JOIN orders legacy_order ON legacy_order.id = bag.order_id WHERE legacy_order.order_code = 'GS-CI-LEGACY-0001' AND bag.status = 'LEGACY_UNVERIFIED' AND bag.voided_at IS NULL AND bag.voided_by IS NULL AND bag.void_reason IS NULL;")" \
+  "1" \
+  "V25 preserves the unverified legacy bag without void metadata"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = '$LEGACY_DATABASE' AND table_name = 'order_bags' AND constraint_type = 'CHECK' AND constraint_name IN ('ck_order_bags_status', 'ck_order_bags_void_metadata');")" \
+  "2" \
+  "V25 bag status and void metadata checks exist"
+assert_scalar \
+  "$(mysql_app "$LEGACY_DATABASE" --execute="SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema = '$LEGACY_DATABASE' AND table_name = 'order_bags' AND constraint_name = 'fk_order_bags_voided_by';")" \
+  "1" \
+  "V25 voided-by foreign key exists"
+
 LEGACY_ORDER_ID="$(mysql_app "$LEGACY_DATABASE" --execute="SELECT id FROM orders WHERE order_code = 'GS-CI-LEGACY-0001';")"
 LEGACY_USER_ID="$(mysql_app "$LEGACY_DATABASE" --execute="SELECT id FROM users WHERE username = 'ci-legacy-user';")"
 
@@ -229,6 +253,12 @@ assert_sql_rejected "$LEGACY_DATABASE" \
 assert_sql_rejected "$LEGACY_DATABASE" \
   "INSERT INTO order_bags (order_id, bag_code, sequence_number, status, created_by, updated_by) VALUES ($LEGACY_ORDER_ID, 'GS-CI-INVALID-STATUS', 2, 'INVALID', $LEGACY_USER_ID, $LEGACY_USER_ID);" \
   "invalid bag status is rejected"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "INSERT INTO order_bags (order_id, bag_code, sequence_number, status, created_by, updated_by) VALUES ($LEGACY_ORDER_ID, 'GS-CI-INVALID-VOID', 2, 'VOIDED', $LEGACY_USER_ID, $LEGACY_USER_ID);" \
+  "VOIDED bag without metadata is rejected"
+assert_sql_rejected "$LEGACY_DATABASE" \
+  "INSERT INTO order_bags (order_id, bag_code, sequence_number, status, created_by, updated_by, voided_at, voided_by, void_reason) VALUES ($LEGACY_ORDER_ID, 'GS-CI-INVALID-RECEIVED', 2, 'RECEIVED', $LEGACY_USER_ID, $LEGACY_USER_ID, NOW(6), $LEGACY_USER_ID, 'Unexpected');" \
+  "RECEIVED bag with void metadata is rejected"
 
 stop_application
 echo "MySQL migration scenarios completed successfully." | tee -a "$ARTIFACT_DIR/assertions.log"

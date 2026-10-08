@@ -1285,15 +1285,17 @@
 .order-bags__heading { display: flex; flex-direction: column; gap: var(--space-sm); justify-content: space-between; }
 .order-bags__heading h2 { display: flex; align-items: center; gap: var(--space-xs); margin: 0; font-size: var(--text-lg); }
 .order-bags__heading p { margin: var(--space-xs) 0 0; color: var(--text-secondary); }
-.order-bags__heading .button { align-self: stretch; }
+.order-bags__heading-actions { display: grid; gap: var(--space-xs); }
+.order-bags__heading-actions .button { width: 100%; }
 .order-bags__list { display: grid; margin-top: var(--space-md); border-top: 1px solid var(--border-default); }
 .order-bags__row { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md) 0; border-bottom: 1px solid var(--border-default); }
 .order-bags__row:last-child { border-bottom: 0; padding-bottom: 0; }
 .order-bags__identity { display: grid; gap: var(--space-2xs); min-width: 0; }
 .order-bags__identity strong { overflow-wrap: anywhere; font-size: var(--text-md); }
 .order-bags__identity span { color: var(--text-secondary); font-size: var(--text-sm); }
-.order-bags__identity small { color: var(--text-secondary); }
-.order-bags__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-xs); }
+.order-bags__identity small { color: var(--text-secondary); overflow-wrap: anywhere; }
+.order-bags__row--voided .order-bags__identity { color: var(--text-secondary); }
+.order-bags__actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); gap: var(--space-xs); }
 .order-bags__actions .button { min-width: 0; }
 .order-bag-label { width: 100%; max-width: 20rem; margin: auto; padding: var(--space-md); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-primary); background: var(--surface); text-align: center; }
 .order-bag-label p { margin: 0 0 var(--space-xs); color: var(--text-secondary); }
@@ -1310,6 +1312,8 @@
   .order-intake-success__actions { display: flex; justify-content: flex-end; }
   .order-intake-success__actions .button { width: auto; }
   .order-bags__heading { flex-direction: row; align-items: center; }
+  .order-bags__heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+  .order-bags__heading-actions .button { width: auto; }
   .order-bags__row { flex-direction: row; align-items: center; justify-content: space-between; }
   .order-bags__actions { display: flex; flex: none; }
 }

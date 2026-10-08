@@ -13,7 +13,7 @@ import type { BatchCandidate } from '../wash-batches/types'
 const mocks = vi.hoisted(() => ({
   permissions: new Set<string>(),
   list: vi.fn(), filterOptions: vi.fn(), get: vi.fn(), history: vi.fn(), services: vi.fn(),
-  customers: vi.fn(), scan: vi.fn(), preview: vi.fn(), eligibility: vi.fn(), requestBagPrint: vi.fn(),
+  customers: vi.fn(), scan: vi.fn(), preview: vi.fn(), eligibility: vi.fn(), requestBagPrint: vi.fn(), addBag: vi.fn(), voidBag: vi.fn(),
   create: vi.fn(), update: vi.fn(), transition: vi.fn(), reasoned: vi.fn(),
   batchCandidates: vi.fn(), batchCreate: vi.fn(), batchByOrder: vi.fn(),
   notify: vi.fn(),
@@ -88,6 +88,8 @@ describe('Order pages', () => {
     mocks.customers.mockResolvedValue([])
     mocks.scan.mockResolvedValue({ type: 'NOT_FOUND' })
     mocks.requestBagPrint.mockResolvedValue({ ...order.bags[0], printRequestCount: 1 })
+    mocks.addBag.mockResolvedValue(order)
+    mocks.voidBag.mockResolvedValue(order)
     mocks.eligibility.mockResolvedValue([{ id: 3, code: 'SHIRT', nameVi: 'Áo sơ mi', defaultUnitType: 'KG' }])
     mocks.preview.mockResolvedValue({ currency: 'VND', finalAmount: 50000, explanation: 'Giá hệ thống', billableQuantity: 2, unitType: 'KG' })
     mocks.create.mockResolvedValue(order)
@@ -381,6 +383,111 @@ describe('Order pages', () => {
       expect(screen.getByText('In thất bại · Thử lại')).toBeInTheDocument()
       expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error' }))
     } finally { open.mockRestore() }
+  })
+
+  it('shows add and void controls only for received orders with update permission', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    mocks.get.mockResolvedValue({ ...order, status: 'RECEIVED', bags: [order.bags[0], { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2 }] })
+    const { unmount } = renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    expect(await screen.findByRole('button', { name: 'Thêm túi' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Hủy túi' })).toHaveLength(2)
+    unmount()
+    mocks.permissions.delete(PERMISSION_CODES.ORDER_UPDATE)
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await screen.findByText('CN01-DH-000007-02')
+    expect(screen.queryByRole('button', { name: 'Thêm túi' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hủy túi' })).not.toBeInTheDocument()
+  })
+
+  it('adds one bag with a locked dialog, then exposes its print action', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_BAG_PRINT)
+    const received = { ...order, status: 'RECEIVED' as const }
+    const added = { ...received, bags: [...received.bags, { ...received.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2 }] }
+    mocks.get.mockResolvedValue(received)
+    let resolveAdd!: (value: Order) => void
+    mocks.addBag.mockReturnValue(new Promise<Order>(resolve => { resolveAdd = resolve }))
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await userEvent.click(await screen.findByRole('button', { name: 'Thêm túi' }))
+    const dialog = screen.getByRole('dialog', { name: 'Thêm túi mới' })
+    expect(dialog).toHaveTextContent('Mã túi đã tạo sẽ không thể đổi')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Thêm túi' }))
+    expect(within(dialog).getByRole('button', { name: /Thêm túi/ })).toBeDisabled()
+    expect(mocks.addBag).toHaveBeenCalledOnce()
+    resolveAdd(added)
+    expect(await screen.findByText('CN01-DH-000007-02')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'In tem' })).toHaveLength(2)
+  })
+
+  it('requires a reason and retains a voided bag without its print action', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_BAG_PRINT)
+    const second = { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2 }
+    const received = { ...order, status: 'RECEIVED' as const, bags: [order.bags[0], second] }
+    mocks.get.mockResolvedValue(received)
+    mocks.voidBag.mockResolvedValue({ ...received, bags: [received.bags[0], { ...second, status: 'VOIDED', voidReason: 'Nhập nhầm' }] })
+    const { container } = renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await screen.findByText('CN01-DH-000007-02')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Hủy túi' })[1])
+    const dialog = screen.getByRole('dialog', { name: 'Hủy túi CN01-DH-000007-02?' })
+    expect(within(dialog).getByRole('button', { name: 'Hủy túi' })).toBeDisabled()
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Lý do/ }), 'Nhập nhầm')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Hủy túi' }))
+    await waitFor(() => expect(container.querySelectorAll('.order-bags__row--voided')).toHaveLength(1))
+    const voidedRow = container.querySelector('.order-bags__row--voided') as HTMLElement
+    expect(voidedRow).toHaveTextContent('CN01-DH-000007-02')
+    expect(voidedRow).toHaveTextContent('Nhập nhầm')
+    expect(within(voidedRow).queryByRole('button', { name: /In tem|In lại/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hủy túi' })).not.toBeInTheDocument()
+  })
+
+  it('excludes voided and legacy bags from print all and hides mutation controls in ready state', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_BAG_PRINT)
+    mocks.get.mockResolvedValue({ ...order, bags: [order.bags[0],
+      { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2, status: 'VOIDED', voidReason: 'Sai' },
+      { ...order.bags[0], id: 23, bagCode: 'CN01-DH-000007-03', sequenceNumber: 3, status: 'LEGACY_UNVERIFIED' }] })
+    const popup = { document: { open: vi.fn(), write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn(), close: vi.fn() } as unknown as Window
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup)
+    try {
+      renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+      expect(await screen.findByText('CN01-DH-000007-03')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Thêm túi' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Hủy túi' })).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'In tất cả tem' }))
+      await waitFor(() => expect(mocks.requestBagPrint).toHaveBeenCalledOnce())
+      expect(mocks.requestBagPrint).toHaveBeenCalledWith(7, 21, 1)
+    } finally { open.mockRestore() }
+  })
+
+  it('cannot void the final active bag in UI', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    mocks.get.mockResolvedValue({ ...order, status: 'RECEIVED' })
+    renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    expect(await screen.findByText('Đơn phải còn ít nhất một túi đang nhận.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hủy túi' })).not.toBeInTheDocument()
+  })
+
+  it('preserves the reason on stale last-bag validation failure', async () => {
+    mocks.permissions.add(PERMISSION_CODES.ORDER_READ)
+    mocks.permissions.add(PERMISSION_CODES.ORDER_UPDATE)
+    const second = { ...order.bags[0], id: 22, bagCode: 'CN01-DH-000007-02', sequenceNumber: 2 }
+    mocks.get.mockResolvedValue({ ...order, status: 'RECEIVED', bags: [order.bags[0], second] })
+    mocks.voidBag.mockRejectedValue(new ApiError(422, { status: 422, title: 'Invalid bag', errorCode: 'ORDER_BAG_LAST_ACTIVE' }))
+    const { container } = renderAt('/orders/7', <OrderDetailPage />, '/orders/:orderId')
+    await screen.findByText('CN01-DH-000007-02')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Hủy túi' })[1])
+    const dialog = screen.getByRole('dialog', { name: 'Hủy túi CN01-DH-000007-02?' })
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Lý do/ }), 'Nhập nhầm')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Hủy túi' }))
+    expect(await within(dialog).findByText('Đơn hàng phải còn ít nhất một túi đang nhận.')).toBeInTheDocument()
+    expect(within(dialog).getByRole('textbox', { name: /Lý do/ })).toHaveValue('Nhập nhầm')
+    expect(container.querySelector('.order-bags__row--voided')).not.toBeInTheDocument()
   })
 
   it('requires a concrete item type and uses intake options without catalog permissions', async () => {

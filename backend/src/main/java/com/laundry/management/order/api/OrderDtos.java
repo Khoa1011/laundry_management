@@ -2,6 +2,7 @@ package com.laundry.management.order.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.laundry.management.order.domain.*;
 import com.laundry.management.servicecatalog.domain.*;
 import jakarta.validation.Valid;
@@ -22,8 +23,10 @@ public final class OrderDtos {
         @NotNull Long branchId, Long customerId, @Size(max=150) String guestName,
         @Size(max=30) String guestPhone, Instant promisedAt, @Size(max=2000) String note,
         @NotEmpty @Size(max=100) List<@Valid ItemRequest> items,
-        @NotNull @Min(1) @Max(99) Integer bagCount
-    ) {}
+        @JsonDeserialize(using = StrictBagCountDeserializer.class) @NotNull @Min(1) @Max(99) Integer bagCount
+    ) {
+        public CreateRequest { bagCount = bagCount == null ? 1 : bagCount; }
+    }
     public record ItemNoteUpdate(@NotNull Long itemId, @Size(max=1000) String note) {}
     public static final class UpdateRequest {
         @NotNull private Long version;
@@ -51,13 +54,15 @@ public final class OrderDtos {
     }
     public record TransitionRequest(@NotNull Long version) {}
     public record ReasonedTransitionRequest(@NotNull Long version, @NotBlank @Size(max=500) String reason) {}
+    public record VoidBagRequest(@NotBlank @Size(max=500) String reason) {}
     public record ItemResponse(Long id, Long serviceId, Long itemTypeId, String serviceCode, String serviceName,
         String itemTypeCode, String itemTypeName, PricingMethod pricingMethod, UnitType unitType,
         SharingMode sharingMode, BigDecimal quantity, BigDecimal billableQuantity, BigDecimal lineAmount,
         String note, JsonNode pricingSnapshot, Instant quotedAt) {}
     public record ActorResponse(Long id, String displayName) {}
     public record BagResponse(Long id, String bagCode, int sequenceNumber, OrderBagStatus status,
-        Instant createdAt, Instant lastPrintRequestedAt, int printRequestCount) {}
+        Instant createdAt, Instant lastPrintRequestedAt, int printRequestCount,
+        Instant voidedAt, ActorResponse voidedBy, String voidReason) {}
     public record Response(Long id, String orderCode, Long branchId, String branchCode, Long customerId,
         String customerName, String customerPhone, OrderStatus status, Instant promisedAt, String note,
         String currency, BigDecimal totalAmount, List<ItemResponse> items, List<BagResponse> bags, Instant createdAt,

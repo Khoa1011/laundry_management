@@ -28,7 +28,7 @@ public class OrderMapper {
     }
     public OrderDtos.HistoryResponse history(OrderStatusHistory h){return new OrderDtos.HistoryResponse(h.getId(),h.getAction(),h.getFromStatus(),h.getToStatus(),h.getReason(),read(h.getChangedFieldsJson()),h.getSource(),actor(h.getActor()),h.getCreatedAt());}
     private OrderDtos.ItemResponse item(OrderItem i){return new OrderDtos.ItemResponse(i.getId(),i.getServiceId(),i.getItemTypeId(),i.getServiceCodeSnapshot(),i.getServiceNameSnapshot(),i.getItemTypeCodeSnapshot(),i.getItemTypeNameSnapshot(),i.getPricingMethodSnapshot(),i.getUnitTypeSnapshot(),i.getSharingModeSnapshot(),i.getQuantity(),i.getBillableQuantity(),i.getLineAmount(),i.getNote(),read(i.getPricingSnapshotJson()),i.getQuotedAt());}
-    public OrderDtos.BagResponse bag(OrderBag b){return new OrderDtos.BagResponse(b.getId(),b.getBagCode(),b.getSequenceNumber(),b.getStatus(),b.getCreatedAt(),b.getLastPrintRequestedAt(),b.getPrintRequestCount());}
+    public OrderDtos.BagResponse bag(OrderBag b){return new OrderDtos.BagResponse(b.getId(),b.getBagCode(),b.getSequenceNumber(),b.getStatus(),b.getCreatedAt(),b.getLastPrintRequestedAt(),b.getPrintRequestCount(),b.getVoidedAt(),actorNullable(b.getVoidedBy()),b.getVoidReason());}
     private OrderDtos.ActorResponse actor(com.laundry.management.auth.domain.UserAccount u){return new OrderDtos.ActorResponse(u.getId(),u.getDisplayName());}
     private OrderDtos.ActorResponse actorNullable(com.laundry.management.auth.domain.UserAccount u){return u==null?null:actor(u);}
     private JsonNode read(String value){try{return value==null?null:json.readTree(value);}catch(Exception e){return json.getNodeFactory().textNode("Unavailable snapshot");}}
