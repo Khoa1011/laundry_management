@@ -1,0 +1,290 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  access-control:
+    name: Access Control
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Validate permission manifests
+        run: node scripts/access-control/validate-permissions.mjs
+
+      - name: Check generated permission files
+        run: node scripts/access-control/check-generated-permissions.mjs
+
+      - name: Test access-control tooling
+        run: node --test scripts/access-control/access-control.test.mjs
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Access Control"
+            echo "- Result: ${{ job.status }}"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Permission manifests, generated constants, and tooling tests were checked without running the generator."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22 with npm cache
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: |
+          mkdir -p reports
+          npm test -- --reporter=default --reporter=junit --outputFile.junit=reports/vitest-junit.xml
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload frontend test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-test-report-${{ github.run_id }}
+          path: frontend/reports/vitest-junit.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Frontend"
+            echo "- Result: ${{ job.status }}"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Node: \`$(node --version)\`"
+            echo "- Test counts are available in the Vitest log and JUnit artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17 with Maven cache
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
+
+      - name: Test
+        run: ./mvnw -B -ntp test
+
+      - name: Package without repeating tests
+        run: ./mvnw -B -ntp -DskipTests package
+
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-surefire-reports-${{ github.run_id }}
+          path: backend/target/surefire-reports/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Backend"
+            echo "- Result: ${{ job.status }}"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Java: \`$(java -version 2>&1 | head -n 1)\`"
+            echo "- Test counts and failures are available in the Maven log and Surefire artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  mysql-migrations:
+    name: MySQL Migrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: laundry_ci_service
+          MYSQL_USER: laundry_ci
+          MYSQL_PASSWORD: ciAppPasswordOnly
+          MYSQL_ROOT_PASSWORD: ciRootPasswordOnly
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=ciRootPasswordOnly --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+          --health-start-period=30s
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_APP_USER: laundry_ci
+      MYSQL_APP_PASSWORD: ciAppPasswordOnly
+      MYSQL_ROOT_PASSWORD: ciRootPasswordOnly
+      APP_JWT_SECRET: ci-only-jwt-secret-with-at-least-thirty-two-characters
+      APP_EMPLOYEE_IDENTITY_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17 with Maven cache
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Build backend artifact
+        working-directory: backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp -DskipTests package
+
+      - name: Test fresh and V23-to-V24 migrations
+        run: bash scripts/ci/test-mysql-migrations.sh
+        env:
+          MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
+
+      - name: Upload migration logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mysql-migration-logs-${{ github.run_id }}
+          path: artifacts/ci/mysql-migrations/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## MySQL Migrations"
+            echo "- Result: ${{ job.status }}"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Scenarios: fresh schema and seeded V23 upgrade to V24 on MySQL 8."
+            echo "- Checks: Flyway, Hibernate validation, application startup, legacy backfill, data retention, constraints, foreign keys, and indexes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  docker-smoke:
+    name: Docker Smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: laundry-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      MYSQL_DATABASE: laundry_ci_smoke
+      MYSQL_USER: laundry_ci
+      MYSQL_PASSWORD: ciSmokeAppPasswordOnly
+      MYSQL_ROOT_PASSWORD: ciSmokeRootPasswordOnly
+      MYSQL_PORT: 13306
+      BACKEND_PORT: 18080
+      FRONTEND_PORT: 15173
+      DB_CONNECTION_TIMEOUT_MS: 30000
+      APP_JWT_SECRET: ci-only-smoke-jwt-secret-with-at-least-thirty-two-characters
+      APP_JWT_EXPIRATION: PT1H
+      APP_REFRESH_TOKEN_EXPIRATION: P7D
+      APP_REFRESH_TOKEN_SECURE_COOKIE: "false"
+      APP_BOOTSTRAP_ENABLED: "false"
+      APP_DEMO_SEED_ENABLED: "false"
+      APP_EMPLOYEE_IDENTITY_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22 for log sanitization
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Build and smoke-test the Compose stack
+        run: bash scripts/ci/docker-smoke.sh
+
+      - name: Upload sanitized Docker failure logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docker-smoke-failure-logs-${{ github.run_id }}
+          path: artifacts/ci/docker-smoke/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Docker Smoke"
+            echo "- Result: ${{ job.status }}"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Compose services: MySQL, backend, and frontend."
+            echo "- The stack is always removed with its CI-only volumes after the check."
+          } >> "$GITHUB_STEP_SUMMARY"
