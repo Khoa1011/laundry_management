@@ -1,3 +1,4 @@
+import { enOperations, viOperations } from './features/operations/translations'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { enAccess, viAccess } from './features/access-control/translations'
@@ -22,6 +23,7 @@ const vi = {
   notification: viNotifications,
   appearance: viAppearance,
   catalog: viCatalog,
+  operations: viOperations,
 }
 
 type TranslationShape<T> = { [Key in keyof T]: T[Key] extends string ? string : TranslationShape<T[Key]> }
@@ -42,6 +44,7 @@ const en: TranslationResources = {
   notification: enNotifications,
   appearance: enAppearance,
   catalog: enCatalog,
+  operations: enOperations,
 }
 
 const savedLanguage = localStorage.getItem('laundry.language')

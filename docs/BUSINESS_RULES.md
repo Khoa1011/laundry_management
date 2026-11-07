@@ -61,9 +61,20 @@ This is the initial business-rule template for the laundry shop management syste
 
 ## Inventory
 
-- **NEEDS CONFIRMATION** - Define tracked items, units, locations, and stock ownership.
-- **NEEDS CONFIRMATION** - Define receipts, consumption, transfers, adjustments, returns, and negative-stock behavior.
-- **NEEDS CONFIRMATION** - Define reorder thresholds, valuation, and stock-count reconciliation.
+- Finance/Inventory requirements confirmed by the user on 2026-11-07 are documented in `FINANCE_INVENTORY_ARCHITECTURE.md`. Implementation status is tracked separately; confirmed target rules do not imply completed workflows.
+- Warehouses, suppliers, item categories, units, items and purchase packages belong to an authorized branch. Permission and branch membership are independent checks. There is currently no additional per-warehouse or per-cash-account assignment model.
+- Codes are server-generated, branch-scoped and immutable. Catalog records are deactivated rather than hard deleted. Updates require a current version and leave an audit record in the same transaction.
+- Units have an immutable COUNT, MASS or VOLUME dimension. An item's base unit is immutable. Multiple purchase packages store positive exact decimal factors into the base unit; input and base units must share a dimension. Posted transactions will retain conversion snapshots.
+- Reference purchase price is separately protected from ordinary item details and editing. It is not current inventory cost. Minimum stock cannot be negative; an optional maximum must be at least the minimum. Expiry tracking requires lot tracking.
+- Confirmed posting rules for subsequent phases: receipts increase stock independently of payment, consumption creates no second cash expense, transfers conserve total stock, stocktakes detect intervening movements, and valuation uses moving weighted average per warehouse. Negative stock is disabled by default. These posting workflows are not provided by the master-data foundation.
+
+## Cash and supplier-payable management
+
+- The master-data foundation owns branch-scoped cash accounts and income/expense categories. Account setup never accepts or edits a current balance or an opening balance. Currency is VND; opening balance requires its own authorized posted operation in the finance phase.
+- Settings default to required approval, a zero approval threshold, and no negative stock/cash. Defaults are returned without writing to the database. Default warehouses/accounts must be active in the same branch; selecting a different default is required before deactivation.
+- Confirmed target rules: only posted cash documents affect balances; transfers conserve total cash and are excluded from business income/expense; reconciliations record discrepancies without overwriting balances. Posted documents are immutable and corrections use linked, single-use reversal entries.
+- Purchase receipts create supplier obligations independently of cash settlement. Each partial payment reduces cash and the allocated payable once; returns and actual refunds are distinct operations. Supplier payables do not redefine customer debt or Order Payment behavior.
+- Stock, cash, liability and audit changes must commit together; retries and concurrent posting must not duplicate movements. Ledger posting, reconciliation, payables, reporting, notifications and export remain subsequent implementation phases.
 
 ## Employees and permissions
 

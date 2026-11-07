@@ -1,3 +1,4 @@
+import { modulePermissions } from './features/operations/catalog'
 import { lazy, Suspense, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from 'react-router-dom'
@@ -7,6 +8,7 @@ import { StatePanel } from './components/States'
 import { AppShell } from './layout/AppShell'
 import { LoginPage } from './pages/LoginPage'
 
+const OperationsPage = lazy(() => import('./features/operations/OperationsPages').then((module) => ({ default: module.OperationsPage })))
 const CustomerListPage = lazy(() => import('./features/customers/CustomerListPage').then((module) => ({ default: module.CustomerListPage })))
 const CustomerFormPage = lazy(() => import('./features/customers/CustomerFormPage').then((module) => ({ default: module.CustomerFormPage })))
 const CustomerDetailPage = lazy(() => import('./features/customers/CustomerDetailPage').then((module) => ({ default: module.CustomerDetailPage })))
@@ -99,6 +101,10 @@ const router = createBrowserRouter([
       { path: '/catalog/item-types', element: <PermissionRoute permission={PERMISSION_CODES.ITEM_TYPE_READ}><LazyPage><ItemTypeCatalogPage /></LazyPage></PermissionRoute> },
       { path: '/catalog/price-lists', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><LazyPage><PriceListPage /></LazyPage></PermissionRoute> },
       { path: '/catalog/price-lists/:priceListId', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><PermissionRoute permission={PERMISSION_CODES.PRICE_RULE_READ}><LazyPage><PriceListDetailPage /></LazyPage></PermissionRoute></PermissionRoute> },
+      { path: '/inventory', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><OperationsPage module="inventory" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/:resource', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><OperationsPage module="inventory" /></LazyPage></AnyPermissionRoute> },
+      { path: '/finance', element: <AnyPermissionRoute permissions={modulePermissions('finance')}><LazyPage><OperationsPage module="finance" /></LazyPage></AnyPermissionRoute> },
+      { path: '/finance/:resource', element: <AnyPermissionRoute permissions={modulePermissions('finance')}><LazyPage><OperationsPage module="finance" /></LazyPage></AnyPermissionRoute> },
       { path: '/overview', element: <LazyPage><OverviewPage /></LazyPage> },
       { path: '/orders', element: <PermissionRoute permission={PERMISSION_CODES.ORDER_READ}><LazyPage><OrderListPage /></LazyPage></PermissionRoute> },
       { path: '/orders/batching', element: <PermissionRoute permission={PERMISSION_CODES.BATCH_CREATE}><LazyPage><OrderListPage /></LazyPage></PermissionRoute> },

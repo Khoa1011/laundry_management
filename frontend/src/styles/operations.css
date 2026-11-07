@@ -1,0 +1,30 @@
+.operations-workspace { display: grid; gap: var(--space-md); min-width: 0; }
+.operations-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2xs); padding: var(--space-xs); }
+.operations-notice { color: var(--text-secondary); margin: 0; max-width: 75ch; }
+.operations-catalog { padding: var(--space-md); min-width: 0; }
+.operations-catalog h2 { font-size: var(--text-lg); margin: 0 0 var(--space-md); }
+.operations-section-header { display: flex; gap: var(--space-sm); align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.operations-section-header h2 { margin: 0; }
+.operations-filters { display: grid; gap: var(--space-sm); margin-block: var(--space-md); }
+.operations-form { display: grid; gap: var(--space-md); max-width: var(--content-form-max); }
+.operations-form > *, .operations-reference > *, .operations-filters > * { min-width: 0; }
+.operations-form input:not([type="checkbox"]), .operations-form textarea, .operations-form select, .operations-filters input, .operations-filters select { width: 100%; font-size: var(--field-font-size); }
+.operations-form input[type="checkbox"] { min-width: var(--control-height); min-height: var(--control-height); }
+.operations-reference { display: grid; gap: var(--space-xs); }
+.operations-pagination { display: flex; gap: var(--space-xs); flex-wrap: wrap; align-items: center; padding-block: var(--space-md); }
+.operations-pagination span { flex-basis: 100%; }
+.operations-record { display: grid; gap: var(--space-xs); padding-block: var(--space-md); border-bottom: var(--border-width) solid var(--border-default); overflow-wrap: anywhere; min-width: 0; }
+.operations-record .button { justify-self: start; }
+.operations-secondary { color: var(--text-secondary); }
+.operations-desktop-table { display: none; }
+.operations-history { display: grid; gap: var(--space-sm); }
+@media (min-width: 48rem) {
+  .operations-filters { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .operations-pagination span { flex-basis: auto; margin-right: auto; }
+}
+@media (min-width: 64rem) {
+  .operations-mobile-records { display: none; }
+  .operations-desktop-table { display: block; }
+  .operations-desktop-table table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .operations-desktop-table th, .operations-desktop-table td { padding: var(--space-sm); text-align: left; overflow-wrap: anywhere; border-bottom: var(--border-width) solid var(--border-default); }
+}

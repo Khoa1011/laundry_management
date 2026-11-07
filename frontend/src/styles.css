@@ -17,6 +17,7 @@
 @import "./styles/orders.css";
 @import "./styles/wash-batches.css";
 @import "./styles/sorting.css";
+@import "./styles/operations.css";
 
 @theme inline {
   --color-app-background: var(--app-background);

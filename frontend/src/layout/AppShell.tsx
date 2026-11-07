@@ -1,3 +1,4 @@
+import { modulePermissions } from '../features/operations/catalog'
 import {
   Building2,
   ChevronDown,
@@ -44,6 +45,8 @@ const navItems = [
   { to: '/wash-batches', key: 'washBatches', icon: Layers3, permission: PERMISSION_CODES.BATCH_READ },
   { to: '/customers', key: 'customers', icon: Users, permission: PERMISSION_CODES.CUSTOMER_READ },
   { to: '/employees', key: 'employees', icon: UsersRound, permission: PERMISSION_CODES.EMPLOYEE_READ },
+  { to: '/inventory', key: 'inventory', icon: PackageSearch, anyPermissions: modulePermissions('inventory') },
+  { to: '/finance', key: 'finance', icon: Building2, anyPermissions: modulePermissions('finance') },
   { to: '/more', key: 'more', icon: MoreHorizontal },
 ] as const
 
@@ -70,7 +73,7 @@ export function AppShell() {
   const canCreateCustomer = hasPermission(PERMISSION_CODES.CUSTOMER_CREATE)
   const canCreateOrder = hasPermission(PERMISSION_CODES.ORDER_CREATE)
   const visibleNavItems = navItems.filter((item) =>
-    !('permission' in item) || hasPermission(item.permission as PermissionCode))
+    'anyPermissions' in item ? item.anyPermissions.some(hasPermission) : !('permission' in item) || hasPermission(item.permission as PermissionCode))
   const canOpenAccess = [
     PERMISSION_CODES.ACCESS_ROLE_READ,
     PERMISSION_CODES.ACCESS_USER_READ,
@@ -84,7 +87,7 @@ export function AppShell() {
   ].some(hasPermission)
   const desktopPrimaryNavItems = visibleNavItems.filter((item) => item.key !== 'more')
   const itemLabel = (key: typeof navItems[number]['key']) =>
-    key === 'employees' ? t('employee:title') : t(`navigation:${key}`)
+    key === 'employees' ? t('employee:title') : key === 'inventory' || key === 'finance' ? t(`operations:${key}`) : t(`navigation:${key}`)
 
   const toggleSidebar = () => setSidebarCollapsed((current) => {
     const next = !current
