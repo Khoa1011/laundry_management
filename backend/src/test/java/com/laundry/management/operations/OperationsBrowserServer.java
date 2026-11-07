@@ -24,10 +24,11 @@ public final class OperationsBrowserServer {
             var roles=context.getBean(RoleRepository.class);
             var passwords=context.getBean(PasswordEncoder.class);
             var branch=branches.saveAndFlush(new Branch("TEST","Chi nhánh kiểm thử cô lập"));
+            var secondBranch=branches.saveAndFlush(new Branch("TEST2","Chi nhánh kiểm thử thứ hai"));
             for(String role:new String[]{"ADMIN","MANAGER","RECEPTIONIST"}) {
                 var account=new UserAccount("browser."+role.toLowerCase(),passwords.encode("foundation-test-only"),"Kiểm thử "+role,branch);
                 account.addRole(roles.findByCode(role).orElseThrow());
-                account=users.saveAndFlush(account);account.assignBranch(branch,true);users.saveAndFlush(account);
+                account=users.saveAndFlush(account);account.assignBranch(branch,true);account.assignBranch(secondBranch,false);users.saveAndFlush(account);
             }
         });
         System.out.println("OPERATIONS_BROWSER_FIXTURE_READY");

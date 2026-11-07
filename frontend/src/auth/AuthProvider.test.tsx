@@ -1,7 +1,9 @@
 import { act, render, screen } from '@testing-library/react'
+import { useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CurrentUser } from '../api/types'
 import { AuthProvider, useAuth } from './AuthProvider'
+import type { BranchChangeRequest } from './branchChangeGuards'
 
 const stableUser: CurrentUser = {
   id: 1,
@@ -42,6 +44,16 @@ vi.mock('../api/client', () => ({
 function Probe() {
   const { user } = useAuth()
   return <span>{user?.displayName}</span>
+}
+
+function GuardedBranchProbe() {
+  const { branchId, setBranchId, registerBranchChangeGuard } = useAuth()
+  const [request, setRequest] = useState<BranchChangeRequest | null>(null)
+  useEffect(() => registerBranchChangeGuard(setRequest), [registerBranchChangeGuard])
+  return <><span data-testid="selected-branch">{branchId}</span>
+    <button onClick={() => setBranchId(2)}>switch</button><button onClick={() => setBranchId(99)}>forbidden</button>
+    {request && <><button onClick={() => setRequest(null)}>cancel</button><button onClick={() => { request.proceed(); setRequest(null) }}>continue</button></>}
+  </>
 }
 
 describe('AuthProvider', () => {
@@ -88,5 +100,22 @@ describe('AuthProvider', () => {
       await Promise.resolve()
     })
     expect(mocks.apiRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('guards a permitted branch change without weakening branch membership checks', async () => {
+    const user = { ...stableUser, branches: [...stableUser.branches, { id: 2, code: 'SECOND', name: 'Chi nhánh hai' }] }
+    mocks.readSession.mockReturnValue({ accessToken: 'test-token', expiresAt: Date.now() + 60_000, user })
+    mocks.apiRequest.mockResolvedValue({ ...user, effectivePermissions: [] })
+    render(<AuthProvider><GuardedBranchProbe /></AuthProvider>)
+    await act(async () => { await Promise.resolve() })
+    act(() => screen.getByText('forbidden').click())
+    expect(screen.queryByText('continue')).not.toBeInTheDocument()
+    act(() => screen.getByText('switch').click())
+    expect(screen.getByTestId('selected-branch')).toHaveTextContent('1')
+    act(() => screen.getByText('cancel').click())
+    expect(screen.getByTestId('selected-branch')).toHaveTextContent('1')
+    act(() => screen.getByText('switch').click())
+    act(() => screen.getByText('continue').click())
+    expect(screen.getByTestId('selected-branch')).toHaveTextContent('2')
   })
 })

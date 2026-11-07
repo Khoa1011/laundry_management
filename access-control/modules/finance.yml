@@ -7,7 +7,7 @@
     "descriptionEn": "Branch-scoped master data and operations.",
     "displayOrder": 31,
     "dataScopeNotes": "Effective permission and branch membership are checked independently; no role bypass.",
-    "businessPolicyNotes": "Posted balances are immutable; draft, approval, posting and reversal are separate capabilities."
+    "businessPolicyNotes": "Single-operator workflow: save valid documents with immediate effect, revise saved documents safely, cancel through linked adjustments; immutable ledger and audit, no approval or separate posting step."
   },
   "permissions": [
     {
@@ -135,56 +135,12 @@
       "code": "finance.document.update",
       "resource": "document",
       "action": "update",
-      "nameVi": "Sửa chứng từ nháp",
-      "nameEn": "Edit cash drafts",
-      "descriptionVi": "Sửa chứng từ nháp trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Edit cash drafts within authorized branches.",
-      "riskLevel": "HIGH",
+      "nameVi": "Chỉnh sửa chứng từ đã lưu",
+      "nameEn": "Edit saved documents",
+      "descriptionVi": "Chỉnh sửa chứng từ đã lưu trong chi nhánh được phép; tính chênh lệch an toàn, giữ ledger cũ và audit.",
+      "descriptionEn": "Edit saved branch-scoped documents using safe revision deltas, immutable ledger entries and audit.",
+      "riskLevel": "CRITICAL",
       "displayOrder": 120
-    },
-    {
-      "code": "finance.document.submit",
-      "resource": "document",
-      "action": "submit",
-      "nameVi": "Gửi duyệt chứng từ",
-      "nameEn": "Submit cash documents",
-      "descriptionVi": "Gửi duyệt chứng từ trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Submit cash documents within authorized branches.",
-      "riskLevel": "HIGH",
-      "displayOrder": 130
-    },
-    {
-      "code": "finance.document.approve",
-      "resource": "document",
-      "action": "approve",
-      "nameVi": "Duyệt hoặc từ chối",
-      "nameEn": "Approve or reject cash documents",
-      "descriptionVi": "Duyệt hoặc từ chối trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Approve or reject cash documents within authorized branches.",
-      "riskLevel": "CRITICAL",
-      "displayOrder": 140
-    },
-    {
-      "code": "finance.document.post",
-      "resource": "document",
-      "action": "post",
-      "nameVi": "Ghi sổ chứng từ",
-      "nameEn": "Post cash documents",
-      "descriptionVi": "Ghi sổ chứng từ trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Post cash documents within authorized branches.",
-      "riskLevel": "CRITICAL",
-      "displayOrder": 150
-    },
-    {
-      "code": "finance.document.reverse",
-      "resource": "document",
-      "action": "reverse",
-      "nameVi": "Đảo chứng từ",
-      "nameEn": "Reverse cash documents",
-      "descriptionVi": "Đảo chứng từ trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Reverse cash documents within authorized branches.",
-      "riskLevel": "CRITICAL",
-      "displayOrder": 160
     },
     {
       "code": "finance.transfer.create",
@@ -251,6 +207,17 @@
       "descriptionEn": "Export finance reports within authorized branches.",
       "riskLevel": "HIGH",
       "displayOrder": 220
+    },
+    {
+      "code": "finance.document.cancel",
+      "resource": "document",
+      "action": "cancel",
+      "nameVi": "Hủy chứng từ đã lưu",
+      "nameEn": "Cancel saved documents",
+      "descriptionVi": "Hủy chứng từ trong chi nhánh được phép bằng điều chỉnh hoặc đảo nghiệp vụ có liên kết; không xóa ledger.",
+      "descriptionEn": "Cancel branch-scoped documents through linked adjustment or reversal entries without deleting ledger history.",
+      "riskLevel": "CRITICAL",
+      "displayOrder": 160
     }
   ],
   "defaultRoleGrants": {
@@ -267,16 +234,13 @@
       "finance.receipt.create",
       "finance.expense.create",
       "finance.document.update",
-      "finance.document.submit",
-      "finance.document.approve",
-      "finance.document.post",
-      "finance.document.reverse",
       "finance.transfer.create",
       "finance.reconciliation.create",
       "finance.payable.read",
       "finance.payable.pay",
       "finance.report.read",
-      "finance.report.export"
+      "finance.report.export",
+      "finance.document.cancel"
     ],
     "MANAGER": [
       "finance.account.read",
@@ -291,16 +255,13 @@
       "finance.receipt.create",
       "finance.expense.create",
       "finance.document.update",
-      "finance.document.submit",
-      "finance.document.approve",
-      "finance.document.post",
-      "finance.document.reverse",
       "finance.transfer.create",
       "finance.reconciliation.create",
       "finance.payable.read",
       "finance.payable.pay",
       "finance.report.read",
-      "finance.report.export"
+      "finance.report.export",
+      "finance.document.cancel"
     ]
   }
 }

@@ -27,14 +27,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     Optional<UserAccount> findByIdForUpdate(@Param("id") Long id);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("""
-        update UserAccount u
-        set u.authorizationVersion = u.authorizationVersion + 1
-        where exists (
-            select 1 from UserAccount candidate join candidate.roles r
-            where candidate = u and r.id = :roleId
-        )
-        """)
+    @Query(value = """
+        update users set authorization_version = authorization_version + 1
+        where id in (select user_id from user_roles where role_id = :roleId)
+        """, nativeQuery = true)
     int incrementAuthorizationVersionByRoleId(@Param("roleId") Long roleId);
 
     long countByRolesId(Long roleId);

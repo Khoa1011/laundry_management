@@ -23,6 +23,8 @@ Use `impeccable` for UI work.
 
 ## Behavior Protection
 
+Finance and Inventory follow `FINANCE & INVENTORY — SINGLE-OPERATOR WORKFLOW` in root `AGENTS.md`. Do not add approval controls or a separate posting action after Save. Authorized saved-document edits/cancellation use backend revision/correction commands, not direct ledger changes. Reuse `src/components/UnsavedBranchDialog.tsx` for dirty or pending Finance/Inventory forms so an explicit branch change cannot discard work silently.
+
 Preserve routes, APIs, payloads, i18n, auth, branch scope, permissions, SSE behavior, unread state, notification and sound preferences, and business rules. Frontend visibility never replaces backend authorization. Never infer access from a role name or introduce an ADMIN bypass.
 
 ## Validation

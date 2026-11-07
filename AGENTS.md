@@ -1139,6 +1139,24 @@ Report the results of:
 
 Do not claim that a screen is complete when it has only been visually implemented without real interaction, API integration, state handling, and responsive testing.
 
+## FINANCE & INVENTORY — SINGLE-OPERATOR WORKFLOW
+
+These mandatory business rules apply to Finance and Inventory, including receipts, issues, transfers, stocktakes, adjustments, cash receipts/expenses, reconciliation, supplier payables and settlements:
+
+1. Finance and Inventory currently operate with one person performing the work directly.
+2. Do not implement submission, approval or rejection workflows, approval permissions/thresholds, approver fields or second-person confirmation under another name.
+3. Saving a valid official document records its effects immediately in the same transaction. Never require a separate approval or posting action. Optional drafts may exist but are not a mandatory first step.
+4. Authorized users may edit saved documents, including documents already affecting balances; editing is not limited to drafts.
+5. Revisions must safely and accurately adjust related stock, cash, cost and payable figures. Preserve the document code and version its business data; evaluate dependencies before accepting a change. Block only changes that cannot be handled safely, with a specific reason and an alternative correction path.
+6. Every creation, revision and cancellation must have an audit log with actor, time, version and relevant before/after information.
+7. Never edit or delete recorded ledger entries. Use linked adjustment/reversal entries that preserve the prior figures and provenance.
+8. Retries, repeated saves and concurrent requests must not duplicate movements or corrections.
+9. Keep effective permission checks, branch/record scope, optimistic/transaction locking and data-integrity guarantees. The model does not grant access from role names or weaken `DENY > ALLOW > ROLE`.
+10. All subsequent phases default to this workflow. Ordinary document states are optional `DRAFT`, `RECORDED` and `CANCELLED`; physical transfer states may describe transit/receipt without introducing approval.
+11. Introduce an approval workflow again only if the project owner explicitly requests it in the future.
+
+See `docs/BUSINESS_RULES.md` and `docs/FINANCE_INVENTORY_ARCHITECTURE.md`. Retained legacy approval columns/permissions are compatibility data only and must not authorize or control the current workflow. Do not implement Phase 2–4 while completing a scoped workflow-simplification request.
+
 ## Handoff
 
 Report files changed, tests run, build results, API changes, database changes, and remaining risks. State explicitly when a category has no changes or when a command could not be run.

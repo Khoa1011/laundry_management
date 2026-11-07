@@ -6,8 +6,8 @@ import { ApiError } from '../../api/client'
 import { PERMISSION_CODES as P } from '../../auth/permissionCodes.generated'
 import { OperationsPage } from './OperationsPages'
 
-const mocks = vi.hoisted(() => ({ hasPermission: vi.fn(), list: vi.fn(), save: vi.fn(), policy: vi.fn(), savePolicy: vi.fn(), notify: vi.fn(), get: vi.fn() }))
-vi.mock('../../auth/AuthProvider', () => ({ useAuth: () => ({ branchId: 7, hasPermission: mocks.hasPermission }) }))
+const mocks = vi.hoisted(() => ({ hasPermission: vi.fn(), list: vi.fn(), save: vi.fn(), policy: vi.fn(), savePolicy: vi.fn(), notify: vi.fn(), get: vi.fn(), registerBranchChangeGuard: vi.fn(() => () => {}) }))
+vi.mock('../../auth/AuthProvider', () => ({ useAuth: () => ({ branchId: 7, hasPermission: mocks.hasPermission, registerBranchChangeGuard: mocks.registerBranchChangeGuard }) }))
 vi.mock('../../providers/ToastProvider', () => ({ useToast: () => ({ notify: mocks.notify }) }))
 vi.mock('./api', () => ({ operationsApi: mocks }))
 
@@ -83,9 +83,11 @@ describe('Operations foundation', () => {
 
   it('renders backend settings with safe defaults and readonly permission', async () => {
     mocks.hasPermission.mockImplementation((p) => p === P.INVENTORY_SETTINGS_READ)
-    mocks.policy.mockResolvedValue({ branchId: 7, version: -1, approvalRequired: true, approvalThreshold: '0', allowNegative: false, defaultResourceId: null, valuationMethod: 'MOVING_WEIGHTED_AVERAGE', currency: 'VND' })
+    mocks.policy.mockResolvedValue({ branchId: 7, version: -1, allowNegative: false, defaultResourceId: null, valuationMethod: 'MOVING_WEIGHTED_AVERAGE', currency: 'VND' })
     page('settings')
-    expect(await screen.findByLabelText('Luôn yêu cầu duyệt')).toBeChecked()
+    expect(await screen.findByLabelText('Cho phép tồn kho âm')).not.toBeChecked()
+    expect(screen.queryByText('Luôn yêu cầu duyệt')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ngưỡng tiền cần duyệt')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Cho phép tồn kho âm')).not.toBeChecked()
     expect(screen.queryByRole('button', { name: 'Lưu' })).not.toBeInTheDocument()
   })

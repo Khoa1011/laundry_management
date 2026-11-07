@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { apiRequest, logoutSession, readSession, refreshSession, writeSession } from '../api/client'
 import type { CurrentUser, LoginResponse } from '../api/types'
 import type { PermissionCode } from './permissionCodes.generated'
+import { BranchChangeGuards, type BranchChangeGuard } from './branchChangeGuards'
 
 interface AuthContextValue {
   user: CurrentUser | null
@@ -11,6 +12,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   setBranchId: (branchId: number) => void
+  registerBranchChangeGuard: (guard: BranchChangeGuard) => () => void
   hasPermission: (permission: PermissionCode) => boolean
   clearExpiredNotice: () => void
   refreshCurrentUser: () => Promise<void>
@@ -31,12 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isRestoring, setIsRestoring] = useState(!initialSession)
   const refreshCurrentUserInFlight = useRef<Promise<void> | null>(null)
   const lastFocusRefreshAt = useRef(0)
+  const [branchChangeGuards] = useState(() => new BranchChangeGuards())
+
+  useEffect(() => { branchChangeGuards.cancelPending() }, [branchChangeGuards, user])
 
   const logout = useCallback(async () => {
+    branchChangeGuards.cancelPending()
     await logoutSession()
     setUser(null)
     setBranchIdState(null)
-  }, [])
+  }, [branchChangeGuards])
 
   const applySession = useCallback((session: NonNullable<ReturnType<typeof readSession>>) => {
     setUser(session.user)
@@ -144,16 +150,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setBranchId = useCallback((nextBranchId: number) => {
-    if (!user?.branches.some((branch) => branch.id === nextBranchId)) return
-    setBranchIdState(nextBranchId)
-  }, [user])
+    if (nextBranchId === branchId || !user?.branches.some((branch) => branch.id === nextBranchId)) return
+    branchChangeGuards.request(nextBranchId, () => setBranchIdState(nextBranchId))
+  }, [user, branchId, branchChangeGuards])
+
+  const registerBranchChangeGuard = useCallback((guard: BranchChangeGuard) => branchChangeGuards.register(guard), [branchChangeGuards])
 
   const hasPermission = useCallback((permission: PermissionCode) => user?.permissions.includes(permission) ?? false, [user])
   const clearExpiredNotice = useCallback(() => setSessionExpired(false), [])
   const value = useMemo(() => ({
     user, branchId, sessionExpired, isRestoring, login, logout, setBranchId, hasPermission, clearExpiredNotice,
-    refreshCurrentUser,
-  }), [user, branchId, sessionExpired, isRestoring, login, logout, setBranchId, hasPermission, clearExpiredNotice, refreshCurrentUser])
+    refreshCurrentUser, registerBranchChangeGuard,
+  }), [user, branchId, sessionExpired, isRestoring, login, logout, setBranchId, hasPermission, clearExpiredNotice, refreshCurrentUser, registerBranchChangeGuard])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -8,7 +8,6 @@ import com.laundry.management.inventory.infrastructure.*;
 import com.laundry.management.operations.api.*;
 import com.laundry.management.operations.domain.PolicySettings;
 import com.laundry.management.operations.infrastructure.OperationsAuditRepository;
-import java.math.BigDecimal;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import java.time.*;
@@ -94,8 +93,8 @@ public class OperationsPolicyService {
     private Long lock(Long branchId) {
         Long branch=access.branch(branchId); branches.findByIdForUpdate(branch).orElseThrow(OperationsAccess::missing); return branch;
     }
-    private void update(PolicySettings settings, PolicyDtos.Request r) { settings.update(r.approvalRequired(), r.approvalThreshold(), r.allowNegative(), access.actor(), Instant.now(clock)); }
-    private void record(Long branch, String module) { data.audit(branch,module,"settings",branch,"UPDATED","approvalRequired,approvalThreshold,allowNegative,defaultResourceId"); }
-    private PolicyDtos.Response defaults(Long branch, boolean stock) { return new PolicyDtos.Response(branch,-1,true,BigDecimal.ZERO,false,null,stock?"MOVING_WEIGHTED_AVERAGE":null,"VND",null); }
-    private PolicyDtos.Response response(PolicySettings s, Long defaultId, boolean stock) { return new PolicyDtos.Response(s.getBranchId(),s.getVersion(),s.isApprovalRequired(),s.getApprovalThreshold(),s.isAllowNegative(),defaultId,stock?"MOVING_WEIGHTED_AVERAGE":null,"VND",s.getUpdatedAt()); }
+    private void update(PolicySettings settings, PolicyDtos.Request r) { settings.update(r.allowNegative(), access.actor(), Instant.now(clock)); }
+    private void record(Long branch, String module) { data.audit(branch,module,"settings",branch,"UPDATED","allowNegative,defaultResourceId"); }
+    private PolicyDtos.Response defaults(Long branch, boolean stock) { return new PolicyDtos.Response(branch,-1,false,null,stock?"MOVING_WEIGHTED_AVERAGE":null,"VND",null); }
+    private PolicyDtos.Response response(PolicySettings s, Long defaultId, boolean stock) { return new PolicyDtos.Response(s.getBranchId(),s.getVersion(),s.isAllowNegative(),defaultId,stock?"MOVING_WEIGHTED_AVERAGE":null,"VND",s.getUpdatedAt()); }
 }

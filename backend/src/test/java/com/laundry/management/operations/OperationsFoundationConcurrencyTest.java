@@ -13,7 +13,6 @@ import com.laundry.management.operations.api.*;
 import com.laundry.management.operations.application.OperationsPolicyService;
 import com.laundry.management.operations.domain.OperationsAudit;
 import com.laundry.management.operations.infrastructure.OperationsAuditRepository;
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -76,7 +75,7 @@ class OperationsFoundationConcurrencyTest {
     @Test void concurrentInitialSettingsCannotOverwriteEachOther() throws Exception {
         AtomicInteger successes=new AtomicInteger(), conflicts=new AtomicInteger();
         parallel(2,i -> {
-            try { policies.saveInventory(new PolicyDtos.Request(branchId,-1L,true,BigDecimal.ZERO,false,null));successes.incrementAndGet(); }
+            try { policies.saveInventory(new PolicyDtos.Request(branchId,-1L,false,null));successes.incrementAndGet(); }
             catch(com.laundry.management.common.exception.ApiException e) { assertEquals(409,e.getStatus().value());conflicts.incrementAndGet(); }
         });
         assertEquals(1,successes.get());assertEquals(1,conflicts.get());

@@ -7,7 +7,7 @@
     "descriptionEn": "Branch-scoped master data and operations.",
     "displayOrder": 30,
     "dataScopeNotes": "Effective permission and branch membership are checked independently; no role bypass.",
-    "businessPolicyNotes": "Posted balances are immutable; draft, approval, posting and reversal are separate capabilities."
+    "businessPolicyNotes": "Single-operator workflow: save valid documents with immediate effect, revise saved documents safely, cancel through linked adjustments; immutable ledger and audit, no approval or separate posting step."
   },
   "permissions": [
     {
@@ -223,56 +223,12 @@
       "code": "inventory.document.update",
       "resource": "document",
       "action": "update",
-      "nameVi": "Sửa phiếu nháp",
-      "nameEn": "Edit drafts",
-      "descriptionVi": "Sửa phiếu nháp trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Edit drafts within authorized branches.",
-      "riskLevel": "MEDIUM",
-      "displayOrder": 200
-    },
-    {
-      "code": "inventory.document.submit",
-      "resource": "document",
-      "action": "submit",
-      "nameVi": "Gửi duyệt phiếu kho",
-      "nameEn": "Submit stock documents",
-      "descriptionVi": "Gửi duyệt phiếu kho trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Submit stock documents within authorized branches.",
-      "riskLevel": "MEDIUM",
-      "displayOrder": 210
-    },
-    {
-      "code": "inventory.document.approve",
-      "resource": "document",
-      "action": "approve",
-      "nameVi": "Duyệt phiếu kho",
-      "nameEn": "Approve stock documents",
-      "descriptionVi": "Duyệt phiếu kho trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Approve stock documents within authorized branches.",
+      "nameVi": "Chỉnh sửa chứng từ đã lưu",
+      "nameEn": "Edit saved documents",
+      "descriptionVi": "Chỉnh sửa chứng từ đã lưu trong chi nhánh được phép; tính chênh lệch an toàn, giữ ledger cũ và audit.",
+      "descriptionEn": "Edit saved branch-scoped documents using safe revision deltas, immutable ledger entries and audit.",
       "riskLevel": "HIGH",
-      "displayOrder": 220
-    },
-    {
-      "code": "inventory.document.post",
-      "resource": "document",
-      "action": "post",
-      "nameVi": "Ghi sổ kho",
-      "nameEn": "Post stock documents",
-      "descriptionVi": "Ghi sổ kho trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Post stock documents within authorized branches.",
-      "riskLevel": "CRITICAL",
-      "displayOrder": 230
-    },
-    {
-      "code": "inventory.document.reverse",
-      "resource": "document",
-      "action": "reverse",
-      "nameVi": "Đảo phiếu kho",
-      "nameEn": "Reverse stock documents",
-      "descriptionVi": "Đảo phiếu kho trong phạm vi chi nhánh được phép.",
-      "descriptionEn": "Reverse stock documents within authorized branches.",
-      "riskLevel": "CRITICAL",
-      "displayOrder": 240
+      "displayOrder": 200
     },
     {
       "code": "inventory.stocktake.create",
@@ -328,6 +284,17 @@
       "descriptionEn": "Export stock reports within authorized branches.",
       "riskLevel": "HIGH",
       "displayOrder": 290
+    },
+    {
+      "code": "inventory.document.cancel",
+      "resource": "document",
+      "action": "cancel",
+      "nameVi": "Hủy chứng từ đã lưu",
+      "nameEn": "Cancel saved documents",
+      "descriptionVi": "Hủy chứng từ trong chi nhánh được phép bằng điều chỉnh hoặc đảo nghiệp vụ có liên kết; không xóa ledger.",
+      "descriptionEn": "Cancel branch-scoped documents through linked adjustment or reversal entries without deleting ledger history.",
+      "riskLevel": "CRITICAL",
+      "displayOrder": 240
     }
   ],
   "defaultRoleGrants": {
@@ -352,15 +319,12 @@
       "inventory.receipt.create",
       "inventory.issue.create",
       "inventory.document.update",
-      "inventory.document.submit",
-      "inventory.document.approve",
-      "inventory.document.post",
-      "inventory.document.reverse",
       "inventory.stocktake.create",
       "inventory.adjustment.create",
       "inventory.transfer.create",
       "inventory.report.read",
-      "inventory.report.export"
+      "inventory.report.export",
+      "inventory.document.cancel"
     ],
     "MANAGER": [
       "inventory.warehouse.read",
@@ -383,15 +347,12 @@
       "inventory.receipt.create",
       "inventory.issue.create",
       "inventory.document.update",
-      "inventory.document.submit",
-      "inventory.document.approve",
-      "inventory.document.post",
-      "inventory.document.reverse",
       "inventory.stocktake.create",
       "inventory.adjustment.create",
       "inventory.transfer.create",
       "inventory.report.read",
-      "inventory.report.export"
+      "inventory.report.export",
+      "inventory.document.cancel"
     ],
     "RECEPTIONIST": [
       "inventory.warehouse.read",

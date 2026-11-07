@@ -177,7 +177,7 @@ public class AccessControlService {
         }
         UserAccount actor = requiredActor(current);
         Role role = new Role(nextRoleCode(), request.displayName().trim(), trim(request.description()), actor);
-        if (source != null) role.replacePermissions(source.getPermissions());
+        if (source != null) role.replacePermissions(activePermissions(source));
         role = roleRepository.saveAndFlush(role);
         audit("ROLE", role.getId(), "ROLE_CREATED", null,
             source == null ? null : source.getCode(), json(roleMetadata(role)), "Role created");
@@ -228,7 +228,7 @@ public class AccessControlService {
         Role source = requiredRole(roleId);
         UserAccount actor = requiredActor(currentUserProvider.getRequired());
         Role clone = new Role(nextRoleCode(), request.displayName().trim(), trim(request.description()), actor);
-        if (request.copyPermissions()) clone.replacePermissions(source.getPermissions());
+        if (request.copyPermissions()) clone.replacePermissions(activePermissions(source));
         clone = roleRepository.saveAndFlush(clone);
         audit("ROLE", clone.getId(), "ROLE_CLONED", null, source.getCode(), json(roleMetadata(clone)), request.reason());
         return role(clone, 0);
@@ -238,9 +238,9 @@ public class AccessControlService {
     public AccessDtos.RoleMatrixResponse roleMatrix(Long roleId) {
         Role role = requiredRole(roleId);
         long assigned = userRepository.countByRolesId(roleId);
-        Set<String> codes = role.getPermissions().stream().map(Permission::getCode)
+        Set<String> codes = role.getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.ACTIVE).map(Permission::getCode)
             .collect(Collectors.toCollection(LinkedHashSet::new));
-        int highRisk = (int) role.getPermissions().stream()
+        int highRisk = (int) role.getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.ACTIVE)
             .filter(permission -> permission.getRiskLevel() == PermissionRiskLevel.HIGH
                 || permission.getRiskLevel() == PermissionRiskLevel.CRITICAL)
             .count();
@@ -254,12 +254,14 @@ public class AccessControlService {
         Role role = requiredRole(roleId);
         requireVersion(role.getVersion(), request.version(), ErrorCode.ROLE_PERMISSION_VERSION_CONFLICT);
         Set<Permission> permissions = validatePermissions(request.permissionCodes());
+        // Retired grants are historical compatibility data, not editable matrix selections.
+        role.getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.INACTIVE).forEach(permissions::add);
         CurrentUser actor = currentUserProvider.getRequired();
         boolean actorUsesRole = actor.roles().contains(role.getCode());
         if (actorUsesRole && !request.permissionCodes().contains(PermissionCodes.ACCESS_ROLE_PERMISSION_ASSIGN)) {
             throw forbidden(ErrorCode.SELF_LOCKOUT_PREVENTED, "You cannot remove your own permission-matrix access.");
         }
-        Set<String> oldCodes = role.getPermissions().stream().map(Permission::getCode).collect(Collectors.toSet());
+        Set<String> oldCodes = role.getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.ACTIVE).map(Permission::getCode).collect(Collectors.toSet());
         role.replacePermissions(permissions);
         role.markUpdatedBy(requiredActor(actor));
         roleRepository.flush();
@@ -297,11 +299,12 @@ public class AccessControlService {
         UserAccount user = scopedUser(userId);
         EffectivePermissionService.EffectiveAccess access = effectivePermissionService.resolve(user);
         Set<String> rolePermissions = access.primaryRole() == null ? Set.of()
-            : access.primaryRole().getPermissions().stream().map(Permission::getCode).collect(Collectors.toSet());
+            : access.primaryRole().getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.ACTIVE).map(Permission::getCode).collect(Collectors.toSet());
         return new AccessDtos.UserAccessResponse(
             userSummary(user),
             rolePermissions,
             user.getPermissionOverrides().stream()
+                .filter(item -> item.getPermission().getStatus() == PermissionStatus.ACTIVE)
                 .sorted(Comparator.comparing(item -> item.getPermission().getCode()))
                 .map(this::override)
                 .toList(),
@@ -356,7 +359,8 @@ public class AccessControlService {
             .collect(Collectors.toMap(Permission::getCode, Function.identity()));
         Map<String, UserPermissionOverride> existing = target.getPermissionOverrides().stream()
             .collect(Collectors.toMap(item -> item.getPermission().getCode(), Function.identity()));
-        List<UserPermissionOverride> overrides = new ArrayList<>();
+        List<UserPermissionOverride> overrides = new ArrayList<>(existing.values().stream()
+            .filter(item -> item.getPermission().getStatus() == PermissionStatus.INACTIVE).toList());
         for (AccessDtos.OverrideItemRequest item : request.overrides()) {
             if (item.effectiveFrom() != null && item.effectiveTo() != null
                 && !item.effectiveTo().isAfter(item.effectiveFrom())) {
@@ -439,11 +443,17 @@ public class AccessControlService {
     private Set<Permission> validatePermissions(Collection<String> codes) {
         List<Permission> found = permissionRepository.findAllByCodeIn(codes);
         Set<String> foundCodes = found.stream().map(Permission::getCode).collect(Collectors.toSet());
-        if (foundCodes.size() != codes.size() || !foundCodes.containsAll(codes)) {
+        if (foundCodes.size() != codes.size() || !foundCodes.containsAll(codes)
+            || found.stream().anyMatch(p -> p.getStatus() != PermissionStatus.ACTIVE)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_PERMISSION_CODE,
-                "Invalid permission code", "One or more permission codes are unknown.");
+                "Invalid permission code", "One or more permission codes are unknown or inactive.");
         }
         return new LinkedHashSet<>(found);
+    }
+
+    private Set<Permission> activePermissions(Role role) {
+        return role.getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.ACTIVE)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private List<AccessDtos.PermissionDecisionResponse> decisions(EffectivePermissionService.EffectiveAccess access) {
@@ -499,7 +509,7 @@ public class AccessControlService {
             role.getId(), role.getCode(), role.getDisplayName(), role.getBusinessDescription(),
             role.getNameVi(), role.getNameEn(), role.getDescriptionVi(), role.getDescriptionEn(),
             role.getStatus(), role.isSystem(), role.getVersion(), assignedUsers,
-            role.getPermissions().size(), role.getCreatedAt(), role.getUpdatedAt(),
+            (int) role.getPermissions().stream().filter(p -> p.getStatus() == PermissionStatus.ACTIVE).count(), role.getCreatedAt(), role.getUpdatedAt(),
             userReference(role.getCreatedBy()), userReference(role.getUpdatedBy())
         );
     }
@@ -511,7 +521,7 @@ public class AccessControlService {
             .sorted(Comparator.comparing(BranchAccess::code)).toList();
         return new AccessDtos.UserSummaryResponse(
             user.getId(), user.getUsername(), user.getDisplayName(), user.getStatus(),
-            primary == null ? null : roleSummary(primary), branches, user.getPermissionOverrides().size(),
+            primary == null ? null : roleSummary(primary), branches, (int) user.getPermissionOverrides().stream().filter(o -> o.getPermission().getStatus() == PermissionStatus.ACTIVE).count(),
             user.getAuthorizationVersion(), user.getAccessVersion(), user.getUpdatedAt()
         );
     }

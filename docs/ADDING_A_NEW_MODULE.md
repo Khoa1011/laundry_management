@@ -63,12 +63,12 @@ The order's branch and ownership are data scope. Valid state transitions and whe
 
 Possible codes:
 
-- `cash.voucher.read`
-- `cash.voucher.create`
-- `cash.voucher.update`
-- `cash.voucher.approve`
-- `cash.voucher.cancel`
+- `finance.ledger.read`
+- `finance.receipt.create`
+- `finance.expense.create`
+- `finance.document.update`
+- `finance.document.cancel`
 
-Branch or cash-drawer ownership is data scope. Approval amount limits, two-person approval, and creator-cannot-approve are business policies.
+For Finance/Inventory, follow the mandatory Single-Operator Workflow in AGENTS.md. Saving has immediate effect; editing saved documents and cancellation use linked corrections with immutable ledger history. Do not add approval, thresholds or a separate posting command. Branch or cash-drawer ownership remains a separate data-scope check.
 
 HIGH and CRITICAL permissions are never granted implicitly. Wildcards are not persisted as effective permissions. Role names never authorize operations, and no ADMIN bypass is permitted.

@@ -2,7 +2,7 @@
 
 ## Scope and decisions (2026-11-07)
 
-The user request is the source for the new supplier-payable, inventory and cash-management rules. Existing Order, Payment, customer-debt and wash-batch rules are unchanged. The UI remains Solid Admin, explicitly confirmed by the user; Liquid Glass and ripple are excluded.
+The latest official requirement is Single-Operator Workflow: create -> save -> immediate effect, with safe editing and cancellation of saved documents. This supersedes the original approval/posted-immutability design. The user request is the source for the new supplier-payable, inventory and cash-management rules. Existing Order, Payment, customer-debt and wash-batch rules are unchanged. The UI remains Solid Admin, explicitly confirmed by the user; Liquid Glass and ripple are excluded.
 
 Phase 0 documents the complete target. Phase 1 implements branch-scoped master data, configuration, permission registration, audited changes, and real API-backed management screens. Phases 2–4 must not be represented as implemented until their transaction and concurrency tests pass. No phase-1 endpoint changes stock, cash balances or payables.
 
@@ -35,9 +35,9 @@ erDiagram
   branches ||--o{ operations_audit : scopes
 ```
 
-Base units have an immutable dimension (COUNT, MASS, VOLUME). A package conversion references an input unit in the same dimension and stores a positive exact decimal factor into the item's base unit. Separate packages (can, carton, box) may use different factors. Editing a conversion later must never change posted transaction snapshots. Base unit cannot change after item creation. Money is DECIMAL/BigDecimal, never float/double. Reference purchase prices are separate from actual inventory cost. Phase 1 has no cost/balance editing field.
+Base units have an immutable dimension (COUNT, MASS, VOLUME). A package conversion references an input unit in the same dimension and stores a positive exact decimal factor into the item's base unit. Separate packages (can, carton, box) may use different factors. Editing a conversion later must never change recorded transaction snapshots. Base unit cannot change after item creation. Money is DECIMAL/BigDecimal, never float/double. Reference purchase prices are separate from actual inventory cost. Phase 1 has no cost/balance editing field.
 
-Cash accounts begin at zero VND; opening balances require a separately authorized posted operation in phase 3. Phase-1 account responses do not imply an operational cash ledger. Settings default to required approval, zero approval threshold, no negative stock or cash, moving weighted average, and no closed date. Default warehouse/account references must be active and belong to the same branch. No default is silently created on GET.
+Cash accounts begin at zero VND; opening balances require a separately authorized save-and-record operation in phase 3. Phase-1 account responses do not imply an operational cash ledger. Settings contain no approval switch or amount threshold. Defaults disallow negative stock/cash and use moving weighted average. Legacy approval columns remain unmapped compatibility data; V28 changes their insert defaults without rewriting old rows. Default warehouse/account references must be active and belong to the same branch. No default is silently created on GET.
 
 ## API contracts, permissions and UI
 
@@ -49,13 +49,24 @@ The UI provides separate resource URLs, one query/filter/page state per page, mo
 
 ## Target transaction architecture (phases 2–4; not implemented by foundation)
 
-Documents follow DRAFT -> PENDING_APPROVAL -> APPROVED -> POSTED; rejection returns through a versioned edit/resubmit path. Direct posting is permitted only by configured policy and explicit posting permission. Posted documents are immutable; reversal creates linked counter-entries, once only. Cancel applies before posting. Two-person approval and threshold enforcement occur on the server. Period close rejects backdated posting; corrections post in the next open period.
+## FINANCE & INVENTORY — SINGLE-OPERATOR WORKFLOW
+
+The mandatory eleven rules are in root `AGENTS.md` under this exact title and apply to every subsequent phase. The current model has one operator. Do not introduce submission, approval, rejection, approver fields, amount thresholds or a second-person confirmation under another name. Add such a workflow again only if the project owner explicitly requests it.
+
+Saving a valid official document records stock/cash/payable effects in the same transaction, with no second command or separate posting permission. Ordinary states are optional DRAFT, RECORDED and CANCELLED. Drafts have no effect and are never a mandatory first step. Physical transfer states may describe transit and receipt; they are not authorization gates.
+
+Authorized users can edit a RECORDED document under its original code. Use immutable document revisions and optimistic versions, calculate exact deltas, and append linked correction/reversal ledger entries. The document is editable; historical ledger entries are immutable. A 5-to-7-litre receipt revision adds only 2 litres, and a cash expense revised from 500,000 to 450,000 restores only 50,000 to the fund. Cancellation applies the outstanding linked counter-effect once and sets CANCELLED, without deleting the document, allocations or history.
+
+Before accepting a revision/cancellation, lock affected balances and dependencies, assess consumed stock, valuation, prior payments, returns and settlement allocations. Block only changes that cannot be handled safely, with a specific explanation and an alternative correction route. Do not silently produce negative balances, incorrect costs or overpaid liabilities. The operator performs corrections directly with the relevant effective edit/cancel permission; there is no approval step. If a closed period prevents modifying its economic figures, an authorized correction is recorded in an open period while retaining the source link and original period history.
+
+Creation, revision and cancellation each retain actor/time/version and relevant before/after figures in audit. Idempotency protects each revision/cancellation as well as initial saves. A repeated identical command returns its original result; a stale or changed-payload retry conflicts. Branch/record scope and concurrency/integrity guarantees remain mandatory.
+
 
 Inventory posting locks balance rows in sorted warehouse/item order. Ledger entries are authoritative; balance projections update in the same transaction. Receipts snapshot input unit, factor, base quantity, unit price, discounts, allocated acquisition charges and cost. Moving weighted average is per warehouse, using explicit decimal scales and residual allocation on the final line. Issues snapshot cost and never generate cash expenditure. Transfers link both movements atomically (a later transit workflow must use a distinct transit location). Stocktakes snapshot quantity and balance version; concurrent movement requires rebase/recount instead of overwriting current stock.
 
 Inventory calls a Finance payable contract inside the same local transaction when posting a purchase or return. Receipt value creates liability independently of cash settlement. Supplier payment locks selected payables and cash account, validates outstanding amounts, allocates exactly once and posts one cash movement. A return reduces stock and liability; refunds are separate cash events. Advances require their own settlement balance rather than negative unidentified payables.
 
-Cash posting locks account rows in sorted ID order. Transfer is one document and two ledger entries with zero net system movement, excluded from business income/expense. Reconciliation snapshots account balance/version and records discrepancy; any adjustment is a separately approved document. No direct balance mutation API is permitted.
+Cash posting locks account rows in sorted ID order. Transfer is one document and two ledger entries with zero net system movement, excluded from business income/expense. Reconciliation snapshots account balance/version and records discrepancy; any adjustment is a separately authorized document whose save records its effect immediately. No direct balance mutation API is permitted.
 
 An idempotency key is unique by branch, command kind and source reference. Persist payload digest/result in the same transaction; replay returns the original result, changed-payload reuse conflicts. Database unique source links protect ledger posting even across request keys. Future order/payment/batch adapters carry source type/source ID, never create fake orders, and cannot duplicate an existing payment. Batch consumption links to the wash batch, not a fixed quantity per order.
 
@@ -65,4 +76,27 @@ Attachments reuse private validated storage through module-specific authorizatio
 
 Foundation: test actual migration + schema validation, CRUD persistence, unit dimensions, reference scope, stale updates, code allocation, audit rollback, permissions/overrides and branch denial. Run all backend tests and Maven verify, permission generation/validation/drift tests, frontend typecheck/lint/unit tests/build. Verify UI on mobile first, including 390x600, then tablet and desktop, keyboard/touch/theme/language and loading/error/empty/long data. Report unavailable MySQL/browser checks explicitly.
 
-Phase 2: inventory documents, stock ledger/balances, cost, transfers, stocktake, purchase payable contract; implement the supplied 10→15→12 and concurrent 8-of-10 scenarios. Phase 3: cash documents/ledger, transfer, reconciliation, supplier allocations and partial payments. Phase 4: returns/reversals/period close, attachments, notifications, export/reports, transaction fault injection, MySQL concurrency and end-to-end hardening. Each phase must pass its gates before proceeding.
+Phase 2: inventory documents, stock ledger/balances, cost, transfers, stocktake, purchase payable contract, safe editing/cancellation of recorded documents; implement the supplied 10→15→12 and concurrent 8-of-10 scenarios. Phase 3: cash documents/ledger, direct-effect saves, safe revisions/cancellation, transfer, reconciliation, supplier allocations and partial payments. Phase 4: returns/reversals/period close, attachments, notifications, export/reports, transaction fault injection, MySQL concurrency and end-to-end hardening. Each phase must pass its gates before proceeding.
+
+## Permission and API transition (V28)
+
+Retire `document.submit`, `document.approve`, `document.post` and `document.reverse` under both Finance and Inventory from active manifests/generated constants. The eight existing database permissions and their assignments remain INACTIVE history. Register `finance.document.cancel` and `inventory.document.cancel`; default manifests grant them explicitly to ADMIN/MANAGER. On an existing database, copy actual reversal role grants and user overrides (including DENY, time windows and inactive status) to cancellation. Do not infer a cancellation grant from a role name or an old approval/posting grant. Existing revoked reversal grants stay revoked. Increment affected authorization/access/role versions. The dynamic matrix and effective-permission computation exclude inactive entries, and matrix/override edits preserve retired historical assignments while rejecting new assignment of inactive codes.
+
+`document.update` covers safe editing of saved records, with HIGH Inventory and CRITICAL Finance risk. No runtime document endpoint is created by this transition. The foundation settings DTO now contains branchId/version/allowNegative/defaultResourceId plus response-only valuation/currency/time. It does not expose or require approval fields. Legacy incoming approval fields are explicitly ignored for rolling-client compatibility; they cannot change the workflow or retained columns. New settings audit events list only active configuration fields. Historical audit rows are retained and the UI labels retired configuration fields as legacy configuration.
+
+Dirty catalog/configuration forms intercept explicit branch changes through a shared guard and show a cancellable unsaved-data dialog. Cancellation preserves both values and branch; confirmation discards the form and changes branch once. Pending saves block switching; stale/unmounted confirmations cannot change branch later. Authorization-driven removal of branch access remains immediate and is not delayed by a dirty-form prompt.
+
+## Acceptance criteria deferred to phases 2–4 — NOT RUN
+
+1. Save a valid stock/cash document without any approval or additional posting request; effects and audit commit immediately.
+2. Optional draft save has no effect; an official save does not require an earlier draft.
+3. Revise a saved receipt from 5 to 7 litres: append a net +2 correction, preserve its code, prior ledger and both revisions.
+4. Revise a saved expense from 500,000 to 450,000: append a +50,000 cash correction once.
+5. Retry initial save, revision or cancellation: return one effective movement/correction only.
+6. Cancel a recorded document: append the correct counter-effect once, preserve provenance and audit; repeated cancellation cannot double-reverse.
+7. Edit a purchase with partial/multiple settlements: preserve allocations and recalculate payable/cash effects without double payment; safely reject an impossible reduction with a specific alternative.
+8. Edit/cancel after stock consumption, returns or later receipts: preserve valuation, prevent forbidden negative stock/cash and explain any unsafe correction.
+9. Race two saves/revisions/cancellations: no lost update, duplicate movement or incorrect stock/cash/liability; injected failure rolls back all effects.
+10. Effective DENY, missing permission, cross-branch IDs and period constraints remain enforced for all direct saves, edits and cancellations.
+
+These scenarios specify future behavior; the foundation still has no document/ledger/payable implementation. Do not report them as passing until real integration/concurrency tests run.

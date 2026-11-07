@@ -53,6 +53,6 @@ export type CatalogRecord = {
 }
 export type Values = Record<string, string | boolean>
 export type Policy = {
-  branchId: number; version: number; approvalRequired: boolean; approvalThreshold: string
+  branchId: number; version: number
   allowNegative: boolean; defaultResourceId: number | null; valuationMethod: string | null; currency: string
 }

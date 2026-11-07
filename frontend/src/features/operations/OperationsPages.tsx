@@ -6,6 +6,7 @@ import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { PERMISSION_CODES as P } from '../../auth/permissionCodes.generated'
 import { Field } from '../../components/Field'
+import { UnsavedBranchDialog } from '../../components/UnsavedBranchDialog'
 import { MoneyInput } from '../../components/MoneyInput'
 import { AppNavLink } from '../../components/navigation/AppNavLink'
 import { ConfirmDialog, OverlayDialog } from '../../components/OverlayDialog'
@@ -186,6 +187,7 @@ function CatalogEditor({ branchId, path, definition, record, editable, onClose }
       </form>
     </OverlayDialog>
     <ConfirmDialog open={discard || blocker.state === 'blocked'} onClose={() => { setDiscard(false); if (blocker.state === 'blocked') blocker.reset() }} onConfirm={() => { if (blocker.state === 'blocked') blocker.proceed(); else onClose() }} title={t('common:unsavedTitle')} body={t('common:unsavedBody')} confirmLabel={t('common:leave')} />
+    <UnsavedBranchDialog dirty={dirty} busy={mutation.isPending} />
   </>
 }
 
@@ -211,13 +213,12 @@ function PolicyForm({ module, branchId, initial }: { module: Module; branchId: n
   return <Surface className="operations-catalog"><h2>{t('resources.settings')}</h2><p>{t('policyHelp')}</p>{module === 'inventory' && <p>{t('valuationHelp')}</p>}
     <form className="operations-form" onSubmit={(e) => { e.preventDefault(); if (manage && !mutation.isPending) mutation.mutate() }}>
       {mutation.isError && <QueryError error={mutation.error} retry={() => void client.invalidateQueries({ queryKey: ['operations', module, 'settings'] })} />}
-      <Field label={t('fields.approvalRequired')}><input type="checkbox" checked={values.approvalRequired} disabled={disabled} onChange={(e) => setValues({ ...values, approvalRequired: e.target.checked })} /></Field>
-      <MoneyInput label={t('fields.approvalThreshold')} value={values.approvalThreshold} onValueChange={(v) => setValues({ ...values, approvalThreshold: v || '0' })} disabled={disabled} maxIntegerDigits={17} fractionDigits={2} />
       <Field label={t(module === 'inventory' ? 'allowNegativeStock' : 'fields.allowNegative')}><input type="checkbox" checked={values.allowNegative} disabled={disabled} onChange={(e) => setValues({ ...values, allowNegative: e.target.checked })} /></Field>
       <div className="form-field"><span className="form-field__label">{t('fields.defaultResourceId')}</span><ReferenceField field={reference} value={String(values.defaultResourceId ?? '')} onChange={(v) => setValues({ ...values, defaultResourceId: v ? Number(v) : null })} branchId={branchId} disabled={disabled} /></div>
       {manage && <Button type="submit" loading={mutation.isPending} disabled={!dirty}>{t('save')}</Button>}
     </form>
     <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.state === 'blocked' && blocker.reset()} onConfirm={() => blocker.state === 'blocked' && blocker.proceed()} title={t('common:unsavedTitle')} body={t('common:unsavedBody')} confirmLabel={t('common:leave')} />
+    <UnsavedBranchDialog dirty={dirty} busy={mutation.isPending} />
   </Surface>
 }
 
@@ -227,7 +228,7 @@ function HistoryPage({ module, branchId }: { module: Module; branchId: number })
   const query = useQuery({ queryKey: ['operations', module, 'history', branchId, page], queryFn: () => operationsApi.history(module, branchId, page) })
   return <Surface className="operations-catalog"><h2>{t('history')}</h2>{query.isPending ? <LoadingState /> : query.isError ? <QueryError error={query.error} retry={() => void query.refetch()} /> : <>
     {!query.data.items.length && <StatePanel title={t('empty')} body={t('emptyBody')} />}
-    <div className="operations-history">{query.data.items.map((a) => <article className="operations-record" key={a.id}><strong>{t(a.action)} · {t(`resources.${a.resource}`)}</strong><DateTimeText value={a.occurredAt} /><span>{t('record')}: {a.recordId} · {t('actor')}: {a.actorId}</span><span className="operations-secondary">{t('changes')}: {a.changedFields.split(',').map((f) => t(`fields.${f}`)).join(', ')}</span></article>)}</div>
+    <div className="operations-history">{query.data.items.map((a) => <article className="operations-record" key={a.id}><strong>{t(a.action)} · {t(`resources.${a.resource}`)}</strong><DateTimeText value={a.occurredAt} /><span>{t('record')}: {a.recordId} · {t('actor')}: {a.actorId}</span><span className="operations-secondary">{t('changes')}: {[...new Set(a.changedFields.split(',').map((f) => t(f === 'approvalRequired' || f === 'approvalThreshold' ? 'legacyConfiguration' : `fields.${f}`)))].join(', ')}</span></article>)}</div>
     <Pager page={page} pages={query.data.totalPages} count={query.data.totalElements} onPage={setPage} />
   </>}</Surface>
 }

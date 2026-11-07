@@ -68,11 +68,20 @@ This is the initial business-rule template for the laundry shop management syste
 - Reference purchase price is separately protected from ordinary item details and editing. It is not current inventory cost. Minimum stock cannot be negative; an optional maximum must be at least the minimum. Expiry tracking requires lot tracking.
 - Confirmed posting rules for subsequent phases: receipts increase stock independently of payment, consumption creates no second cash expense, transfers conserve total stock, stocktakes detect intervening movements, and valuation uses moving weighted average per warehouse. Negative stock is disabled by default. These posting workflows are not provided by the master-data foundation.
 
+## FINANCE & INVENTORY — SINGLE-OPERATOR WORKFLOW
+
+- One operator creates and saves official documents with immediate effect. Do not implement submission, approval, rejection, approver fields, approval permissions/thresholds, a second-person confirmation, or a separate posting action.
+- An authorized operator may edit saved documents, not only drafts. Preserve the code; version the business data, compute exact stock/cash/cost/payable deltas, append linked correction/reversal entries and audit before/after figures. Never rewrite or delete recorded ledger entries.
+- Cancellation is an authorized revision with a linked counter-effect, once only. Ordinary states are optional DRAFT, RECORDED and CANCELLED; transit/receipt states may represent physical transfer steps only.
+- Check consumed stock, settled payables, returns and valuation dependencies before edits/cancellation. Reject only unsafe changes with a specific reason and a correction alternative; never silently create invalid negative balances, wrong costs or duplicated payments.
+- Keep idempotency, concurrency control, effective permissions, branch/record scope, transactions and audit. The single-operator model is not a security bypass. Future phases must follow these rules; approval may return only on an explicit future project-owner request.
+- Root AGENTS.md contains the full mandatory eleven-rule contract. Finance/Inventory acceptance scenarios for direct-effect saves, revisions and cancellation are in FINANCE_INVENTORY_ARCHITECTURE.md; they are not implemented by the current catalog foundation.
+
 ## Cash and supplier-payable management
 
-- The master-data foundation owns branch-scoped cash accounts and income/expense categories. Account setup never accepts or edits a current balance or an opening balance. Currency is VND; opening balance requires its own authorized posted operation in the finance phase.
-- Settings default to required approval, a zero approval threshold, and no negative stock/cash. Defaults are returned without writing to the database. Default warehouses/accounts must be active in the same branch; selecting a different default is required before deactivation.
-- Confirmed target rules: only posted cash documents affect balances; transfers conserve total cash and are excluded from business income/expense; reconciliations record discrepancies without overwriting balances. Posted documents are immutable and corrections use linked, single-use reversal entries.
+- The master-data foundation owns branch-scoped cash accounts and income/expense categories. Account setup never accepts or edits a current balance or an opening balance. Currency is VND; opening balance requires its own authorized save-and-record operation in the finance phase.
+- Settings have no approval switch or threshold; negative stock/cash is disabled by default. Defaults are returned without writing to the database. Default warehouses/accounts must be active in the same branch; selecting a different default is required before deactivation.
+- Confirmed target rules: saving an official cash document immediately affects balances; transfers conserve total cash and are excluded from business income/expense; reconciliations record discrepancies without overwriting balances. Saved documents may be revised/cancelled by authorized users through immutable revisions and linked correction/reversal entries; ledger history remains immutable.
 - Purchase receipts create supplier obligations independently of cash settlement. Each partial payment reduces cash and the allocated payable once; returns and actual refunds are distinct operations. Supplier payables do not redefine customer debt or Order Payment behavior.
 - Stock, cash, liability and audit changes must commit together; retries and concurrent posting must not duplicate movements. Ledger posting, reconciliation, payables, reporting, notifications and export remain subsequent implementation phases.
 
@@ -140,7 +149,7 @@ This is the initial business-rule template for the laundry shop management syste
 ## Revenue and expenses
 
 - **NEEDS CONFIRMATION** - Define when revenue is recognized and how it relates to orders, payments, refunds, debt, discounts, and taxes.
-- **NEEDS CONFIRMATION** - Define expense categories, required evidence, approval, editing, and cancellation rules.
+- Finance expense saving/editing/cancellation follows the single-operator rules below. Evidence/storage implementation remains a later phase; there is no approval workflow.
 - **NEEDS CONFIRMATION** - Define reporting periods, time zone, cash-shift boundaries, and reconciliation rules.
 
 ## Receipts and POS printing

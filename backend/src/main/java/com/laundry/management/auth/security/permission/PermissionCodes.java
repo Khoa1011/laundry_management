@@ -68,10 +68,7 @@ public final class PermissionCodes {
     public static final String FINANCE_RECEIPT_CREATE = "finance.receipt.create";
     public static final String FINANCE_EXPENSE_CREATE = "finance.expense.create";
     public static final String FINANCE_DOCUMENT_UPDATE = "finance.document.update";
-    public static final String FINANCE_DOCUMENT_SUBMIT = "finance.document.submit";
-    public static final String FINANCE_DOCUMENT_APPROVE = "finance.document.approve";
-    public static final String FINANCE_DOCUMENT_POST = "finance.document.post";
-    public static final String FINANCE_DOCUMENT_REVERSE = "finance.document.reverse";
+    public static final String FINANCE_DOCUMENT_CANCEL = "finance.document.cancel";
     public static final String FINANCE_TRANSFER_CREATE = "finance.transfer.create";
     public static final String FINANCE_RECONCILIATION_CREATE = "finance.reconciliation.create";
     public static final String FINANCE_PAYABLE_READ = "finance.payable.read";
@@ -98,10 +95,7 @@ public final class PermissionCodes {
     public static final String INVENTORY_RECEIPT_CREATE = "inventory.receipt.create";
     public static final String INVENTORY_ISSUE_CREATE = "inventory.issue.create";
     public static final String INVENTORY_DOCUMENT_UPDATE = "inventory.document.update";
-    public static final String INVENTORY_DOCUMENT_SUBMIT = "inventory.document.submit";
-    public static final String INVENTORY_DOCUMENT_APPROVE = "inventory.document.approve";
-    public static final String INVENTORY_DOCUMENT_POST = "inventory.document.post";
-    public static final String INVENTORY_DOCUMENT_REVERSE = "inventory.document.reverse";
+    public static final String INVENTORY_DOCUMENT_CANCEL = "inventory.document.cancel";
     public static final String INVENTORY_STOCKTAKE_CREATE = "inventory.stocktake.create";
     public static final String INVENTORY_ADJUSTMENT_CREATE = "inventory.adjustment.create";
     public static final String INVENTORY_TRANSFER_CREATE = "inventory.transfer.create";
