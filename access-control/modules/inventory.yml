@@ -317,6 +317,39 @@
       "descriptionEn": "Receive or return stock in transit within every involved authorized branch.",
       "riskLevel": "HIGH",
       "displayOrder": 337
+    },
+    {
+      "code": "inventory.invoice.read",
+      "resource": "invoice",
+      "action": "read",
+      "nameVi": "Xem ảnh hóa đơn nhập hàng",
+      "nameEn": "View receipt invoice images",
+      "descriptionVi": "Xem ảnh hóa đơn nhập hàng trong chi nhánh được phép.",
+      "descriptionEn": "View receipt invoice images within authorized branches.",
+      "riskLevel": "HIGH",
+      "displayOrder": 338
+    },
+    {
+      "code": "inventory.invoice.upload",
+      "resource": "invoice",
+      "action": "upload",
+      "nameVi": "Tải lên hoặc thay ảnh hóa đơn",
+      "nameEn": "Upload or replace receipt invoice images",
+      "descriptionVi": "Tải lên hoặc thay ảnh hóa đơn trong chi nhánh được phép.",
+      "descriptionEn": "Upload or replace receipt invoice images within authorized branches.",
+      "riskLevel": "HIGH",
+      "displayOrder": 339
+    },
+    {
+      "code": "inventory.invoice.delete",
+      "resource": "invoice",
+      "action": "delete",
+      "nameVi": "Gỡ ảnh hóa đơn",
+      "nameEn": "Remove receipt invoice images",
+      "descriptionVi": "Gỡ ảnh hóa đơn trong chi nhánh được phép.",
+      "descriptionEn": "Remove receipt invoice images within authorized branches.",
+      "riskLevel": "HIGH",
+      "displayOrder": 340
     }
   ],
   "defaultRoleGrants": {
@@ -348,7 +381,10 @@
       "inventory.report.export",
       "inventory.document.cancel",
       "inventory.document.read",
-      "inventory.transfer.receive"
+      "inventory.transfer.receive",
+      "inventory.invoice.read",
+      "inventory.invoice.upload",
+      "inventory.invoice.delete"
     ],
     "MANAGER": [
       "inventory.warehouse.read",
@@ -378,7 +414,10 @@
       "inventory.report.export",
       "inventory.document.cancel",
       "inventory.document.read",
-      "inventory.transfer.receive"
+      "inventory.transfer.receive",
+      "inventory.invoice.read",
+      "inventory.invoice.upload",
+      "inventory.invoice.delete"
     ],
     "RECEPTIONIST": [
       "inventory.warehouse.read",

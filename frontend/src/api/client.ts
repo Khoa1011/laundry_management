@@ -161,7 +161,7 @@ async function apiRequestBlobInternal(
 ): Promise<Blob> {
   const session = readSession()
   const headers = new Headers(options.headers)
-  headers.set('Accept', 'image/jpeg,image/png,application/pdf')
+  headers.set('Accept', 'image/jpeg,image/png,image/webp,application/pdf')
   if (!options.skipAuthentication && session?.accessToken) {
     headers.set('Authorization', `Bearer ${session.accessToken}`)
   }

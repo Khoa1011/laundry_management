@@ -1,0 +1,90 @@
+{
+  "detail": [
+    {
+      "client": 375,
+      "height": 844,
+      "scroll": 375,
+      "width": 390
+    },
+    {
+      "client": 345,
+      "height": 800,
+      "scroll": 345,
+      "width": 360
+    },
+    {
+      "client": 375,
+      "height": 600,
+      "scroll": 375,
+      "width": 390
+    },
+    {
+      "client": 397,
+      "height": 915,
+      "scroll": 397,
+      "width": 412
+    },
+    {
+      "client": 753,
+      "height": 1024,
+      "scroll": 753,
+      "width": 768
+    },
+    {
+      "client": 1009,
+      "height": 768,
+      "scroll": 1009,
+      "width": 1024
+    },
+    {
+      "client": 1265,
+      "height": 720,
+      "scroll": 1265,
+      "width": 1280
+    },
+    {
+      "client": 1351,
+      "height": 600,
+      "scroll": 1351,
+      "width": 1366
+    },
+    {
+      "client": 1351,
+      "height": 768,
+      "scroll": 1351,
+      "width": 1366
+    },
+    {
+      "client": 1425,
+      "height": 900,
+      "scroll": 1425,
+      "width": 1440
+    },
+    {
+      "client": 1920,
+      "height": 1080,
+      "scroll": 1920,
+      "width": 1920
+    },
+    {
+      "client": 885,
+      "height": 750,
+      "scroll": 885,
+      "width": 900
+    },
+    {
+      "client": 1135,
+      "height": 710,
+      "scroll": 1135,
+      "width": 1150
+    }
+  ],
+  "form": {
+    "active": "Chọn ảnh",
+    "client": 375,
+    "footer": 600.0000152587891,
+    "h": 600,
+    "scroll": 375,
+    "w": 390
+  }
+}

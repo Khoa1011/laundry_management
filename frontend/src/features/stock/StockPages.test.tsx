@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError } from '../../api/client'
+import { ApiError, apiRequest } from '../../api/client'
 import { PERMISSION_CODES as P } from '../../auth/permissionCodes.generated'
 import { StockDetailPage, StockEditorPage, StockPage } from './StockPages'
 import { decimal, emptyFilters, emptyLine } from './types'
@@ -13,6 +13,10 @@ vi.mock('../../auth/AuthProvider', () => ({ useAuth: () => ({ branchId: 7, user:
 vi.mock('../../providers/ToastProvider', () => ({ useToast: () => ({ notify: mocks.notify }) }))
 vi.mock('../operations/api', () => ({ operationsApi: { list: mocks.list, get: mocks.get } }))
 vi.mock('./api', async (original) => ({ ...await original<typeof import('./api')>(), stockApi: mocks }))
+vi.mock('../../api/client', async (original) => ({
+  ...await original<typeof import('../../api/client')>(),
+  apiRequest: vi.fn(),
+}))
 
 const empty = { items: [], totalElements: 0, totalPages: 0, page: 0, size: 20, summary: { totalValue: '0' } }
 const input = { branchId: 7, kind: 'RECEIPT', warehouseId: 3, destinationBranchId: null, destinationWarehouseId: null, supplierId: null, businessAt: '2026-11-07T02:00:00Z', issueType: 'CONSUMPTION', reason: '', note: '', charges: '0', draft: false, lines: [{ ...emptyLine(), itemId: 5, quantity: '5', unitPrice: '40000' }] }
@@ -27,6 +31,9 @@ function page(path: string, client = new QueryClient({ defaultOptions: { queries
   return render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
 }
 describe('Inventory operations', () => {
+  beforeEach(() => {
+    vi.mocked(apiRequest).mockResolvedValue({ storageReady: true, files: [] })
+  })
   beforeEach(() => { vi.clearAllMocks(); mocks.hasPermission.mockReturnValue(true); mocks.documents.mockResolvedValue(empty); mocks.detail.mockResolvedValue(saved); mocks.preview.mockResolvedValue(saved); mocks.save.mockResolvedValue(saved); mocks.history.mockResolvedValue(empty); mocks.packages.mockResolvedValue([]); mocks.balances.mockResolvedValue(empty); mocks.ledger.mockResolvedValue(empty); mocks.list.mockResolvedValue({ ...empty, items: [{ id: 3, name: 'Kho chính' }, { id: 5, name: 'Nước giặt' }] }); mocks.get.mockResolvedValue({ id: 5, name: 'Nước giặt', trackLots: false, trackExpiry: false }) })
   it('formats large decimals exactly without floating point rounding', () => { expect(decimal('9999999999999.123456')).toBe('9.999.999.999.999,123456'); expect(decimal('46666.66666667', true)).toBe('46,666.66666667'); expect(decimal(null)).toBe('—') })
   it('uses inclusive Vietnamese calendar end dates as an exclusive API boundary', () => { const params = new URLSearchParams(query(7, { ...emptyFilters, from: '2026-11-07', to: '2026-11-07' }, 2)); expect(params.get('from')).toBe('2026-11-06T17:00:00.000Z'); expect(params.get('to')).toBe('2026-11-07T17:00:00.000Z'); expect(params.get('page')).toBe('2') })
@@ -83,4 +90,40 @@ describe('Inventory operations', () => {
     expect(mocks.preview).toHaveBeenCalledTimes(1)
   })
   it('requires a cancellation reason and warns before discarding it', async () => { page('/inventory/documents/9'); fireEvent.click(await screen.findByRole('button', { name: 'Hủy chứng từ' })); fireEvent.change(screen.getByLabelText(/^Lý do/), { target: { value: 'Nhập sai' } }); fireEvent.click(screen.getAllByRole('button', { name: 'Đóng' }).at(-1)!); expect(await screen.findByText('Bạn có thay đổi chưa lưu')).toBeInTheDocument(); expect(mocks.cancel).not.toHaveBeenCalled() })
+  it('retries an invoice image separately after the receipt has already been saved', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:invoice')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    try {
+      const uploads: string[] = []
+      vi.mocked(apiRequest).mockImplementation(async (_path, options) => {
+        if (options?.method === 'POST') {
+          uploads.push(new Headers(options.headers).get('Idempotency-Key')!)
+          if (uploads.length === 1) throw new ApiError(503, { status: 503 })
+        }
+        return { storageReady: true, files: [] } as never
+      })
+      const { container } = page('/inventory/documents/9/edit')
+      await screen.findByRole('button', { name: 'Chọn ảnh' })
+      const imageInput = container.querySelector('input[type="file"]:not([capture])')!
+      fireEvent.change(imageInput, { target: { files: [new File(['synthetic'], 'invoice.webp', { type: 'image/webp' })] } })
+      expect(await screen.findByText('invoice.webp')).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu và ghi nhận' })).toBeEnabled())
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu và ghi nhận' }))
+      expect(await screen.findByText('Không thể xử lý ảnh hóa đơn. Vui lòng thử lại.')).toBeInTheDocument()
+      expect(screen.getByText('Đã lưu và cập nhật tồn')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+      await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('Đã lưu ảnh hóa đơn'))
+      expect(mocks.save).toHaveBeenCalledTimes(1)
+      expect(uploads).toEqual([uploads[0], uploads[0]])
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+  it('hides invoice images when cost access is denied', async () => {
+    mocks.hasPermission.mockImplementation((permission) => permission !== P.INVENTORY_COST_READ)
+    page('/inventory/documents/9')
+    await screen.findByRole('heading', { name: saved.code })
+    expect(screen.queryByRole('heading', { name: 'Ảnh hóa đơn' })).not.toBeInTheDocument()
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
 })

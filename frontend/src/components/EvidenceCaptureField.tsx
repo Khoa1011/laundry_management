@@ -21,6 +21,7 @@ export interface EvidenceCaptureFieldProps {
   onChange: (file: File | null) => void
   labels: EvidenceCaptureLabels
   allowPdf?: boolean
+  allowWebp?: boolean
   disabled?: boolean
   required?: boolean
   maxImageBytes?: number
@@ -33,6 +34,7 @@ export function EvidenceCaptureField({
   onChange,
   labels,
   allowPdf = false,
+  allowWebp = false,
   disabled = false,
   required = false,
   maxImageBytes = 10 * 1024 * 1024,
@@ -45,7 +47,7 @@ export function EvidenceCaptureField({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const contentType = mediaContentType(value)
+  const contentType = mediaContentType(value, allowWebp)
 
   useEffect(() => {
     if (!value || !contentType) { setPreviewUrl(null); return }
@@ -56,7 +58,7 @@ export function EvidenceCaptureField({
 
   const select = (file?: File) => {
     if (!file) return
-    const type = mediaContentType(file)
+    const type = mediaContentType(file, allowWebp)
     if (!type || (type === 'application/pdf' && !allowPdf)) { setError(labels.invalidType); return }
     if (type === 'application/pdf' && file.size > maxPdfBytes) { setError(labels.pdfTooLarge); return }
     if (type !== 'application/pdf' && file.size > maxImageBytes) { setError(labels.imageTooLarge); return }
@@ -68,7 +70,8 @@ export function EvidenceCaptureField({
     event.target.value = ''
   }
   const remove = () => { setError(null); setPreviewOpen(false); onChange(null) }
-  const acceptedFiles = allowPdf ? 'image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf' : 'image/jpeg,image/png,.jpg,.jpeg,.png'
+  const acceptedFiles = ['image/jpeg,image/png,.jpg,.jpeg,.png', allowWebp && 'image/webp,.webp',
+    allowPdf && 'application/pdf,.pdf'].filter(Boolean).join(',')
 
   return <div className={`evidence-capture${error ? ' evidence-capture--error' : ''}`}>
     <div className="evidence-capture__label" id={`${id}-label`}>{labels.label}{required && <span aria-hidden="true"> *</span>}</div>
@@ -81,8 +84,8 @@ export function EvidenceCaptureField({
       <div className="evidence-capture__file"><strong>{value.name}</strong><small>{formatFileSize(value.size)}</small></div>
       <div className="evidence-capture__actions">
         <button type="button" className="icon-button" onClick={() => setPreviewOpen(true)} aria-label={labels.preview} title={labels.preview}><Eye size={18} /></button>
-        <button type="button" className="icon-button" onClick={() => fileInput.current?.click()} aria-label={labels.replaceFile} title={labels.replaceFile}><RotateCcw size={18} /></button>
-        <button type="button" className="icon-button icon-button--danger" onClick={remove} aria-label={labels.removeFile} title={labels.removeFile}><Trash2 size={18} /></button>
+        <button type="button" className="icon-button" onClick={() => fileInput.current?.click()} disabled={disabled} aria-label={labels.replaceFile} title={labels.replaceFile}><RotateCcw size={18} /></button>
+        <button type="button" className="icon-button icon-button--danger" onClick={remove} disabled={disabled} aria-label={labels.removeFile} title={labels.removeFile}><Trash2 size={18} /></button>
       </div>
     </div> : <div className="evidence-capture__empty">
       <FileImage size={28} aria-hidden="true" />
@@ -99,11 +102,12 @@ export function EvidenceCaptureField({
   </div>
 }
 
-function mediaContentType(file: File | null) {
+function mediaContentType(file: File | null, allowWebp: boolean) {
   if (!file) return null
   const name = file.name.toLowerCase()
   if (file.type === 'image/jpeg' || /\.jpe?g$/.test(name)) return 'image/jpeg'
   if (file.type === 'image/png' || name.endsWith('.png')) return 'image/png'
+  if (allowWebp && (file.type === 'image/webp' || name.endsWith('.webp'))) return 'image/webp'
   if (file.type === 'application/pdf' || name.endsWith('.pdf')) return 'application/pdf'
   return null
 }

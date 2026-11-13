@@ -13,6 +13,11 @@ public final class OperationsBrowserServer {
     public static void main(String[] args) {
         var app=new SpringApplication(LaundryManagementApplication.class);
         app.setAdditionalProfiles("test");
+        if (java.util.Arrays.asList(args).contains("--mock-invoice-storage")) {
+            app.addInitializers(context -> ((org.springframework.context.support.GenericApplicationContext) context)
+                .registerBean("browserInvoiceStorage", com.laundry.management.storage.PrivateObjectStorage.class,
+                    BrowserInvoiceStorage::new, definition -> definition.setPrimary(true)));
+        }
         boolean mysql = java.util.Arrays.asList(args).contains("--isolated-mysql");
         var context=app.run("--server.port=18080", "--server.address=127.0.0.1",
             "--spring.datasource.url=" + (mysql
@@ -55,5 +60,17 @@ public final class OperationsBrowserServer {
             }
         });
         System.out.println("OPERATIONS_BROWSER_FIXTURE_READY");
+    }
+
+    private static final class BrowserInvoiceStorage implements com.laundry.management.storage.PrivateObjectStorage {
+        private final java.util.Map<String, byte[]> objects = new java.util.concurrent.ConcurrentHashMap<>();
+        public boolean ready() { return true; }
+        public void put(String key, byte[] bytes, String type) { objects.put(key, bytes.clone()); }
+        public java.io.InputStream open(String key) {
+            byte[] bytes = objects.get(key);
+            if (bytes == null) throw new IllegalStateException("Test object missing");
+            return new java.io.ByteArrayInputStream(bytes);
+        }
+        public void delete(String key) { objects.remove(key); }
     }
 }

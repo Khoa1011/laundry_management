@@ -26,6 +26,8 @@ import { stockApi, query } from './api'
 import { createPermissions, decimal, emptyFilters, emptyLine, kinds, type Balance, type Dashboard, type Document, type Filters, type Input, type Ledger, type Line, type Report } from './types'
 
 import { StockNavigation } from './StockNavigation'
+import { InvoiceCapture, ReceiptInvoiceImages } from './ReceiptInvoiceImages'
+import { uploadInvoiceImage, useInvoiceError, useReceiptInvoicePermissions, type PendingInvoiceImage } from './receiptInvoiceApi'
 import { stockPages as pages } from './types'
 function stockError(error: unknown, t: (key: string, options?: Record<string, unknown>) => string) {
   if (!(error instanceof ApiError)) return t('error')
@@ -141,7 +143,13 @@ export function StockEditorPage() {
 function Editor({ initial, saved, branchId }: { initial: Input; saved?: Document; branchId: number }) {
   const { t, i18n } = useTranslation('stock'); const { user } = useAuth(); const navigate = useNavigate(); const client = useQueryClient(); const { notify } = useToast()
   const [values, setValues] = useState<Input>(() => editorInput(initial, saved?.version)); const [error, setError] = useState<unknown>(); const [key, setKey] = useState(crypto.randomUUID()); const savedOk = useRef(false); const mutationPending = useRef(false)
-  const dirty = !savedOk.current && JSON.stringify(values) !== JSON.stringify(editorInput(initial, saved?.version)); const blocker = useBlocker(() => !savedOk.current && (dirty || mutationPending.current))
+  const invoicePermission = useReceiptInvoicePermissions()
+  const invoiceError = useInvoiceError()
+  const [invoice, setInvoice] = useState<PendingInvoiceImage | null>(null)
+  const [recorded, setRecorded] = useState<Document | null>(null)
+  const dirty = Boolean(invoice) || (!savedOk.current && JSON.stringify(values) !== JSON.stringify(editorInput(initial, saved?.version)))
+  const leavingAfterSave = useRef(false)
+  const blocker = useBlocker(() => !leavingAfterSave.current && (dirty || mutationPending.current))
   useBeforeUnload((e) => { if (dirty || mutationPending.current) { e.preventDefault(); e.returnValue = '' } })
   const debounced = useDebouncedValue(values, 400)
   const valid = !!debounced.warehouseId && validMoney(debounced.charges) && debounced.lines.every((line) =>
@@ -161,11 +169,66 @@ function Editor({ initial, saved, branchId }: { initial: Input; saved?: Document
   }, [])
   const preview = useQuery({ queryKey: ['stock', 'preview', saved?.id, debounced], queryFn: () => stockApi.preview(normalized(debounced), saved?.id), enabled: valid, retry: false })
   const change = (next: Input) => { setValues(next); setError(undefined); setKey(crypto.randomUUID()) }
-  const mutation = useMutation({ mutationFn: async (draft: boolean) => { mutationPending.current = true; try { return await stockApi.save(normalized({ ...values, branchId, draft }), key, saved?.id) } finally { mutationPending.current = false } }, onSuccess: (d) => { savedOk.current = true; void client.invalidateQueries({ queryKey: ['stock'] }); notify(t(d.status === 'DRAFT' ? 'draftSaved' : 'saved')); navigate(`/inventory/documents/${d.id}`) }, onError: (e) => { setError(e); document.querySelector<HTMLElement>('[role="alert"]')?.focus() } })
+  function openSaved(documentId: number) {
+    leavingAfterSave.current = true
+    void client.invalidateQueries({ queryKey: ['stock'] })
+    navigate(`/inventory/documents/${documentId}`)
+  }
+  const attachment = useMutation({
+    mutationFn: async ({ documentId, image }: { documentId: number; image: PendingInvoiceImage }) => {
+      mutationPending.current = true
+      try { return await uploadInvoiceImage(documentId, branchId, image) }
+      finally { mutationPending.current = false }
+    },
+    onSuccess: (_data, { documentId }) => {
+      setInvoice(null)
+      void client.invalidateQueries({ queryKey: ['receipt-invoices', branchId, documentId] })
+      notify(t('invoice.uploaded'))
+      openSaved(documentId)
+    },
+  })
+  const mutation = useMutation({
+    mutationFn: async (draft: boolean) => {
+      mutationPending.current = true
+      try { return await stockApi.save(normalized({ ...values, branchId, draft }), key, saved?.id) }
+      finally { mutationPending.current = false }
+    },
+    onSuccess: (d) => {
+      savedOk.current = true
+      notify(t(d.status === 'DRAFT' ? 'draftSaved' : 'saved'))
+      if (invoice && invoicePermission.upload) {
+        setRecorded(d)
+        attachment.mutate({ documentId: d.id, image: invoice })
+      } else {
+        openSaved(d.id)
+      }
+    },
+    onError: (e) => { setError(e); document.querySelector<HTMLElement>('[role="alert"]')?.focus() },
+  })
   const canSave = valid && isCurrentPreview && !!preview.data && !preview.isFetching && !preview.isError
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!mutation.isPending && canSave) mutation.mutate(false) }
   useEffect(() => { if (error) { const line = error instanceof ApiError ? error.problem.detail?.split(':')[1] : undefined; const target = document.querySelector<HTMLElement>(line ? `#stock-line-${Number(line)} input` : '[role="alert"]'); target?.focus(); target?.scrollIntoView?.({ block: 'center' }) } }, [error])
   const fmt = (v: string | null | undefined) => decimal(v, i18n.language.startsWith('en'))
+  if (recorded) return <div className="catalog-page stock-editor">
+    <header className="catalog-page-header"><h1>{recorded.code}</h1></header>
+    <Surface className="operations-catalog operations-form">
+      <h2>{t('invoice.title')}</h2>
+      <p role="status">{t(recorded.status === 'DRAFT' ? 'draftSaved' : 'saved')}</p>
+      {attachment.isPending && <p role="status">{t('invoice.uploading')}</p>}
+      {attachment.isError && <p role="alert">{invoiceError(attachment.error)}</p>}
+      <div className="stock-header-actions">
+        {invoice && attachment.isError && invoicePermission.upload && <Button type="button"
+          onClick={() => attachment.mutate({ documentId: recorded.id, image: invoice })}>{t('retry')}</Button>}
+        <Button type="button" variant="secondary" disabled={attachment.isPending}
+          onClick={() => openSaved(recorded.id)}>{t('invoice.continue')}</Button>
+      </div>
+    </Surface>
+    <UnsavedBranchDialog dirty={dirty} busy={attachment.isPending} />
+    <ConfirmDialog open={blocker.state === 'blocked'} pending={attachment.isPending}
+      onClose={() => blocker.state === 'blocked' && blocker.reset()}
+      onConfirm={() => blocker.state === 'blocked' && blocker.proceed()}
+      title={t('common:unsavedTitle')} body={t('common:unsavedBody')} confirmLabel={t('common:leave')} />
+  </div>
   return <div className="catalog-page stock-editor"><header className="catalog-page-header"><ButtonLink variant="ghost" to={saved ? `/inventory/documents/${saved.id}` : `/inventory/${Object.keys(kinds).find((k) => kinds[k] === values.kind)}`}>{t('back')}</ButtonLink><h1>{saved ? `${t('edit')} · ${saved.code}` : `${t('create')} · ${t(`kind.${values.kind}`)}`}</h1><p>{t('saveHint')}</p></header>
     <form id="stock-editor" className="stock-editor-layout" onSubmit={submit}>
       <div className="stock-editor-sections"><Surface className="operations-catalog"><h2>{t('warehouse')}</h2><div className="operations-form">
@@ -180,6 +243,13 @@ function Editor({ initial, saved, branchId }: { initial: Input; saved?: Document
           <Button type="button" variant="secondary" disabled={mutation.isPending || values.lines.length >= 100} onClick={() => change({ ...values, lines: [...values.lines, emptyLine()] })}>{t('addLine')}</Button>
         </Surface>
         <Surface className="operations-catalog"><div className="operations-form">{values.kind === 'RECEIPT' && <StockMoneyInput label={t('charges')} value={values.charges} onValueChange={(v) => change({ ...values, charges: v })} disabled={mutation.isPending} />}<Field label={t('reason')} required={values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE'}><textarea required={values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE'} value={values.reason ?? ''} maxLength={1000} disabled={mutation.isPending} onChange={(e) => change({ ...values, reason: e.target.value })} /></Field><Field label={t('note')}><textarea value={values.note ?? ''} maxLength={1000} disabled={mutation.isPending} onChange={(e) => change({ ...values, note: e.target.value })} /></Field></div></Surface>
+      {values.kind === 'RECEIPT' && saved && <ReceiptInvoiceImages documentId={saved.id} branchId={branchId}
+        cancelled={saved.status === 'CANCELLED'} manage={false} />}
+      {values.kind === 'RECEIPT' && invoicePermission.upload && saved?.status !== 'CANCELLED' &&
+        <Surface className="operations-catalog">
+          <InvoiceCapture value={invoice?.file ?? null} disabled={mutation.isPending}
+            onChange={(file) => setInvoice(file ? { file, command: crypto.randomUUID() } : null)} />
+        </Surface>}
       </div>
       <Surface className="operations-catalog stock-summary"><h2>{t('preview')}</h2><p>{t('previewHelp')}</p>{preview.isFetching && <p role="status">{t('previewUpdating')}</p>}{preview.isError && <Failure error={preview.error} retry={() => void preview.refetch()} />}
         {valid && preview.data && <><strong>{t('total')}: {fmt(preview.data.totalValue)}</strong>{values.kind === 'RECEIPT' && <dl className="stock-values">{(['subtotal', 'discountTotal', 'taxTotal'] as const).map((key) => <div key={key}><dt>{t(key)}</dt><dd>{fmt(preview.data?.[key])}</dd></div>)}</dl>}{Object.entries(preview.data.quantities).map(([unit, n]) => <p key={unit}>{fmt(n)} {unit}</p>)}{preview.data.lines.map((l, i) => <p key={i}>{l.itemName}: {fmt(l.baseQuantity)} {l.baseUnit}{l.difference !== undefined ? ` · ${t('difference')}: ${fmt(l.difference)}` : ''} · {t('value')}: {fmt(l.lineValue)}</p>)}</>}
@@ -242,6 +312,8 @@ function Detail({ data, branchId }: { data: Document; branchId: number }) {
   const close = () => { if (!mutation.isPending) { if (actionDirty) setDiscard(true); else setAction(null) } }
   return <><header className="catalog-page-header"><h1>{data.code}</h1><p>{t(`kind.${data.kind}`)} · {t(`status.${data.status}`)} · {t('revision')} {data.version}</p><DateTimeText value={data.businessAt} /><div className="stock-header-actions">{data.status !== 'CANCELLED' && hasPermission(P.INVENTORY_DOCUMENT_UPDATE) && <ButtonLink to={`/inventory/documents/${data.id}/edit`}>{t('edit')}</ButtonLink>}{data.status !== 'CANCELLED' && hasPermission(P.INVENTORY_DOCUMENT_CANCEL) && <Button variant="danger" onClick={() => start('cancel')}>{t('cancel')}</Button>}{['IN_TRANSIT', 'PARTIALLY_RECEIVED'].includes(data.status) && hasPermission(P.INVENTORY_TRANSFER_RECEIVE) && <><Button onClick={() => start('receive')}>{t('receive')}</Button><Button variant="secondary" onClick={() => start('return')}>{t('returnTransit')}</Button></>}{hasPermission(P.INVENTORY_AUDIT_READ) && <Button variant="secondary" onClick={() => setShowHistory(!showHistory)}>{t('history')}</Button>}</div></header>
     <Surface className="operations-catalog"><h2>{data.warehouseName}</h2><p>{data.supplierName}</p><strong>{t('total')}: {fmt(data.totalValue)}</strong><p>{t('actor')}: {data.createdBy} · {t('recordedAt')}: <DateTimeText value={data.updatedAt} /></p><p>{data.input.note}</p>{data.lines.map((l, i) => <article className="operations-record" key={i}><strong>{l.itemName}</strong><p>{fmt(l.quantity)} {l.inputUnit} → {fmt(l.baseQuantity)} {l.baseUnit} · {t('value')}: {fmt(l.lineValue)}</p>{l.lotCode && <p>{l.lotCode} · {l.expiryDate?.split('-').reverse().join('/')}</p>}</article>)}<p>{t('noFinance')}</p></Surface>
+    {data.kind === 'RECEIPT' && <ReceiptInvoiceImages key={`${branchId}/${data.id}`} documentId={data.id}
+      branchId={branchId} cancelled={data.status === 'CANCELLED'} />}
     {!!data.transit?.length && <Surface className="operations-catalog"><h2>{t('transit')}</h2>{data.transit.map((l) => <p key={l.lineNumber}>{data.lines[l.lineNumber - 1]?.itemName}: {t('quantity')} {fmt(l.dispatched)} · {t('received')} {fmt(l.received)} · {t('returned')} {fmt(l.returned)}</p>)}</Surface>}
     {showHistory && (history.isPending ? <LoadingState /> : history.isError ? <Failure error={history.error} retry={() => void history.refetch()} /> : history.data && <Surface className="operations-catalog"><h2>{t('history')}</h2>{history.data.items.map((r) => <article className="operations-record" key={r.id}><strong>{t('revision')} {r.revision} · {t('actor')} {r.actorId}</strong><DateTimeText value={r.recordedAt} /><p>{r.reason}</p><p>{t('historyBefore')}: {fmt(r.beforeSnapshot?.totalValue ?? null)} · {t('historyAfter')}: {fmt(r.snapshot.totalValue)}</p>{r.effects.map((e, i) => <p key={i}>{t(`phase.${e.phase}`)} · {t('item')} {e.itemId ?? ''}: {fmt(e.quantityDelta)} · {fmt(e.valueDelta)}</p>)}</article>)}<Pagination page={page} pages={history.data.totalPages} count={history.data.totalElements} onPage={setPage} /></Surface>)}
     <OverlayDialog open={action !== null && !discard && routeBlocker.state !== 'blocked'} onClose={close} title={t(action === 'cancel' ? 'cancel' : action === 'return' ? 'returnTransit' : 'receive')} footer={<><Button variant="secondary" disabled={mutation.isPending} onClick={close}>{t('close')}</Button><Button type="submit" form="stock-action" loading={mutation.isPending} variant={action === 'cancel' ? 'danger' : 'primary'}>{t(action === 'cancel' ? 'confirmCancel' : 'settle')}</Button></>}>

@@ -132,11 +132,13 @@ public class GlobalExceptionHandler {
         MaxUploadSizeExceededException exception,
         HttpServletRequest request
     ) {
+        boolean invoice = request.getRequestURI().startsWith("/api/inventory/documents/")
+            && request.getRequestURI().contains("/invoice-images");
         ApiProblem problem = problemFactory.create(
             HttpStatus.PAYLOAD_TOO_LARGE,
-            ErrorCode.EMPLOYEE_DOCUMENT_TOO_LARGE,
+            invoice ? ErrorCode.INVENTORY_INVOICE_TOO_LARGE : ErrorCode.EMPLOYEE_DOCUMENT_TOO_LARGE,
             "Uploaded file is too large",
-            "Images may be up to 10 MB and PDF files up to 20 MB.",
+            invoice ? "Invoice images may be up to 10 MB." : "Images may be up to 10 MB and PDF files up to 20 MB.",
             request
         );
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(problem);

@@ -2,6 +2,7 @@ package com.laundry.management.employee.application;
 
 import com.laundry.management.common.exception.ApiException;
 import com.laundry.management.common.exception.ErrorCode;
+import com.laundry.management.common.file.PrivateFilename;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -42,7 +43,7 @@ public class EmployeeDocumentFileValidator {
             throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, ErrorCode.EMPLOYEE_DOCUMENT_TOO_LARGE,
                 "Employee document is too large", "Images may be up to 10 MB and PDF files up to 20 MB.");
         }
-        String filename = sanitizeFilename(file.getOriginalFilename(), EXTENSIONS.get(contentType));
+        String filename = PrivateFilename.sanitize(file.getOriginalFilename(), "document" + EXTENSIONS.get(contentType));
         if (!filename.toLowerCase(Locale.ROOT).endsWith(EXTENSIONS.get(contentType))
             && !(contentType.equals("image/jpeg") && filename.toLowerCase(Locale.ROOT).endsWith(".jpeg"))) {
             throw invalid("The filename extension does not match the file content.");
@@ -65,15 +66,6 @@ public class EmployeeDocumentFileValidator {
             throw invalid("The file could not be inspected.");
         }
         throw invalid("Only JPEG, PNG, and PDF files are accepted.");
-    }
-
-    private String sanitizeFilename(String raw, String fallbackExtension) {
-        String name = raw == null ? "document" + fallbackExtension : raw.replace('\\', '/');
-        name = name.substring(name.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "").trim();
-        name = name.replaceAll("[^A-Za-z0-9._ -]", "_");
-        if (name.isBlank() || name.equals(".") || name.equals("..")) name = "document" + fallbackExtension;
-        if (name.length() > 180) name = name.substring(name.length() - 180);
-        return name;
     }
 
     private ApiException invalid(String detail) {

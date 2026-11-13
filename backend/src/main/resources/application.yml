@@ -13,6 +13,13 @@ spring:
       max-request-size: ${APP_EMPLOYEE_DOCUMENT_MAX_REQUEST_SIZE:21MB}
 
 app:
+  r2:
+    enabled: ${APP_R2_ENABLED:false}
+    account-id: ${APP_R2_ACCOUNT_ID:}
+    bucket: ${APP_R2_BUCKET:laundry-invoices}
+    access-key-id: ${APP_R2_ACCESS_KEY_ID:}
+    secret-access-key: ${APP_R2_SECRET_ACCESS_KEY:}
+    endpoint: ${APP_R2_ENDPOINT:}
   security:
     jwt:
       secret: ${APP_JWT_SECRET:}
