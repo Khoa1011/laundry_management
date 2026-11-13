@@ -4,7 +4,13 @@
 
 The latest official requirement is Single-Operator Workflow: create -> save -> immediate effect, with safe editing and cancellation of saved documents. This supersedes the original approval/posted-immutability design. The user request is the source for the new supplier-payable, inventory and cash-management rules. Existing Order, Payment, customer-debt and wash-batch rules are unchanged. The UI remains Solid Admin, explicitly confirmed by the user; Liquid Glass and ripple are excluded.
 
-Phase 0 documents the complete target. Phase 1 implements branch-scoped master data, configuration, permission registration, audited changes, and real API-backed management screens. Phases 2–4 must not be represented as implemented until their transaction and concurrency tests pass. No phase-1 endpoint changes stock, cash balances or payables.
+Phase 0 documents the complete target. Phase 1 implements branch-scoped master data, configuration, permission registration, audited changes, and real API-backed management screens. Phase 2 backend transaction/concurrency evidence is tracked in the linked verification report. Phases 3–4 remain unimplemented. No phase-1 endpoint changes stock, cash balances or payables.
+
+## Phase 2 implementation (2026-11-08)
+
+Inventory operations are now implemented in `inventory/operations` and `features/stock`, with additive V29–V31 migrations. The precise transactional, valuation, transit, permission, notification and Phase-3 contracts are in [INVENTORY_OPERATIONS.md](INVENTORY_OPERATIONS.md). Current execution evidence, remaining browser verification and manual acceptance steps are in [INVENTORY_PHASE2_VERIFICATION.md](INVENTORY_PHASE2_VERIFICATION.md).
+
+The original foundation/target sections below retain design context. Inventory acceptance scenarios now have real integration/concurrency tests; cash/payable/settlement scenarios remain Phase 3 and NOT RUN. Overall responsive acceptance remains PARTIALLY VERIFIED until actual browser testing succeeds. No finance ledger/payable side effect is introduced by stock commands.
 
 ## Existing boundaries
 
@@ -86,7 +92,7 @@ Retire `document.submit`, `document.approve`, `document.post` and `document.reve
 
 Dirty catalog/configuration forms intercept explicit branch changes through a shared guard and show a cancellable unsaved-data dialog. Cancellation preserves both values and branch; confirmation discards the form and changes branch once. Pending saves block switching; stale/unmounted confirmations cannot change branch later. Authorization-driven removal of branch access remains immediate and is not delayed by a dirty-form prompt.
 
-## Acceptance criteria deferred to phases 2–4 — NOT RUN
+## Acceptance criteria and current verification (2026-11-08)
 
 1. Save a valid stock/cash document without any approval or additional posting request; effects and audit commit immediately.
 2. Optional draft save has no effect; an official save does not require an earlier draft.
@@ -99,4 +105,6 @@ Dirty catalog/configuration forms intercept explicit branch changes through a sh
 9. Race two saves/revisions/cancellations: no lost update, duplicate movement or incorrect stock/cash/liability; injected failure rolls back all effects.
 10. Effective DENY, missing permission, cross-branch IDs and period constraints remain enforced for all direct saves, edits and cancellations.
 
-These scenarios specify future behavior; the foundation still has no document/ledger/payable implementation. Do not report them as passing until real integration/concurrency tests run.
+Inventory portions of 1–3, 5–6 and 8–10 now have executable integration tests: immediate saves/drafts, 5→7 revisions, replay/cancellation/dependency guards, two simultaneous receipts, two distinct operators issuing stock, receive/count races, rollback, DENY and branch isolation. See INVENTORY_PHASE2_VERIFICATION.md for exact scope/results; this does not claim a separate simultaneous-revision/cancellation stress test or production load capacity.
+
+Cash/expense/payable portions, scenario 4 and scenario 7 remain Phase 3 and NOT RUN. A mocked Finance dependency guard test only verifies the integration boundary, not a payable implementation. Period closing remains deferred. Actual responsive/browser acceptance is still blocked while browser use is disabled; backend tests do not mark that gate VERIFIED.

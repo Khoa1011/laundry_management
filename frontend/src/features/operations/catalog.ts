@@ -1,3 +1,4 @@
+import { stockPermissions } from '../stock/types'
 import { PERMISSION_CODES as P, type PermissionCode } from '../../auth/permissionCodes.generated'
 
 export type Module = 'inventory' | 'finance'
@@ -43,6 +44,7 @@ export const catalogs: Record<Module, CatalogDefinition[]> = {
 }
 export const modulePermissions = (module: Module) => [
   ...catalogs[module].map((c) => c.read),
+  ...(module === 'inventory' ? stockPermissions : []),
   module === 'inventory' ? P.INVENTORY_SETTINGS_READ : P.FINANCE_SETTINGS_READ,
   module === 'inventory' ? P.INVENTORY_AUDIT_READ : P.FINANCE_AUDIT_READ,
 ]

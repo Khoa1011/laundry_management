@@ -26,8 +26,10 @@ public class InventoryCatalogService {
     private final InventoryItemRepository inventoryItem;
     private final InventoryConversionRepository inventoryConversion;
     private final InventorySettingsRepository settings;
-    public InventoryCatalogService(CatalogPersistence data, OperationsAccess access, WarehouseRepository warehouse, InventoryCategoryRepository inventoryCategory, InventoryUnitRepository inventoryUnit, SupplierRepository supplier, InventoryItemRepository inventoryItem, InventoryConversionRepository inventoryConversion, InventorySettingsRepository settings) {
+    private final com.laundry.management.inventory.operations.StockStore stock;
+    public InventoryCatalogService(CatalogPersistence data, OperationsAccess access, WarehouseRepository warehouse, InventoryCategoryRepository inventoryCategory, InventoryUnitRepository inventoryUnit, SupplierRepository supplier, InventoryItemRepository inventoryItem, InventoryConversionRepository inventoryConversion, InventorySettingsRepository settings, com.laundry.management.inventory.operations.StockStore stock) {
         this.data=data; this.access=access;
+        this.stock=stock;
         this.warehouse=warehouse;
         this.inventoryCategory=inventoryCategory;
         this.inventoryUnit=inventoryUnit;
@@ -148,6 +150,7 @@ public class InventoryCatalogService {
     @Transactional
     public InventoryItemResponse saveInventoryItem(Long id, @Valid InventoryItemRequest request) {
         Long branch=access.branch(request.branchId());
+        data.lockBranch(branch);
         InventoryItem record;
         if(id==null) { record=new InventoryItem(); data.initialize(record, branch, "InventoryItem", "VT"); }
         else { record=data.get(inventoryItem, id, branch); OperationsAccess.version(record.getVersion(), request.version()); }
@@ -155,6 +158,10 @@ public class InventoryCatalogService {
         data.active(inventoryUnit, request.baseUnitId(), branch);
         if(request.supplierId()!=null) data.active(supplier, request.supplierId(), branch);
         if(id!=null && !record.getBaseUnitId().equals(request.baseUnitId())) throw new OperationsValidationException("baseUnitId","immutable");
+        if(id!=null && (record.getTrackLots()!=request.trackLots() || record.getTrackExpiry()!=request.trackExpiry()) &&
+            (!stock.rows("SELECT id FROM stock_ledger WHERE item_id=? LIMIT 1 FOR UPDATE",id).isEmpty() ||
+             !stock.rows("SELECT document_id FROM stock_transit WHERE destination_item_id=? AND dispatched>received+returned LIMIT 1 FOR UPDATE",id).isEmpty()))
+            throw new OperationsValidationException("trackLots","stockHistoryTrackingImmutable");
         if(request.maximumStock()!=null && request.maximumStock().compareTo(request.minimumStock())<0) throw new OperationsValidationException("maximumStock","maxStock");
         if(request.trackExpiry() && !request.trackLots()) throw new OperationsValidationException("trackExpiry","expiry");
         if(request.referencePrice()!=null && !access.has(PermissionCodes.INVENTORY_COST_UPDATE)) throw new ApiException(HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, "Permission denied", "Reference price update permission is required.");

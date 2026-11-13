@@ -63,7 +63,7 @@ export function AppShell() {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
   const mobileDrawerRef = useRef<HTMLElement>(null)
 
-  const focused = location.pathname === '/customers/new'
+  const focused = /\/inventory\/[^/]+\/new$/.test(location.pathname) || /\/inventory\/documents\/\d+\/edit$/.test(location.pathname) || location.pathname === '/customers/new'
     || location.pathname === '/orders/new'
     || location.pathname === '/operations/sorting'
     || /\/customers\/\d+\/edit$/.test(location.pathname)

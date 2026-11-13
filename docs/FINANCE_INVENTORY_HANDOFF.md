@@ -1,3 +1,17 @@
+# Bàn giao hiện tại — Inventory Operations Phase 2 (08/11/2026)
+
+Đã bổ sung vận hành kho có hiệu lực khi Lưu, sửa/hủy bù trừ, chuyển/nhận/hoàn, kiểm kê, điều chỉnh, ledger/balance/lô, bình quân giá vốn, dashboard, nhập xuất tồn, CSV và notification. Không có bước duyệt hoặc ghi sổ riêng. Giữ Solid Admin đã xác nhận.
+
+- [Báo cáo A–J, kết quả kiểm thử và hướng dẫn thủ công](INVENTORY_PHASE2_VERIFICATION.md).
+- [Contract kiến trúc/API/giá vốn/Phase 3](INVENTORY_OPERATIONS.md).
+- [Danh sách tệp thay đổi](INVENTORY_PHASE2_FILES.md).
+
+Migration mới V29–V31; không sửa migration V28 trở về trước. 47 quyền Finance/Inventory hiện hành, 142 toàn hệ thống. Không có biến động tiền hoặc công nợ mới. Backend H2: 254 PASS; MySQL: 60 ca kho mới nhất + 20 Foundation + 1 nâng cấp PASS; frontend: 223 PASS; typecheck/lint/build và 10 permission tests PASS. Nghiệm thu responsive vẫn **PARTIALLY VERIFIED** khi công cụ trình duyệt còn báo bị tắt trong Work settings. Số liệu test cuối và mọi giới hạn nằm trong báo cáo A–J, không suy từ bản bàn giao cũ.
+
+Phần bên dưới lưu nguyên bàn giao lịch sử V28 ngày 07/11/2026 để truy vết; các câu “Phase 2 chưa triển khai” chỉ mô tả thời điểm V28, không phải trạng thái hiện tại.
+
+---
+
 # Bàn giao Thu chi & Kho — Single-Operator Workflow — 07/11/2026
 
 ## Phạm vi lượt thay đổi

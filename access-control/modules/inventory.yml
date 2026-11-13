@@ -295,6 +295,28 @@
       "descriptionEn": "Cancel branch-scoped documents through linked adjustment or reversal entries without deleting ledger history.",
       "riskLevel": "CRITICAL",
       "displayOrder": 240
+    },
+    {
+      "code": "inventory.document.read",
+      "resource": "document",
+      "action": "read",
+      "nameVi": "Xem chứng từ kho",
+      "nameEn": "View stock documents",
+      "descriptionVi": "Xem chứng từ kho trong phạm vi các chi nhánh liên quan được phép.",
+      "descriptionEn": "View stock documents within every involved authorized branch.",
+      "riskLevel": "LOW",
+      "displayOrder": 336
+    },
+    {
+      "code": "inventory.transfer.receive",
+      "resource": "transfer",
+      "action": "receive",
+      "nameVi": "Nhận hoặc hoàn hàng đang chuyển",
+      "nameEn": "Receive or return stock in transit",
+      "descriptionVi": "Nhận hoặc hoàn hàng đang chuyển trong phạm vi các chi nhánh liên quan được phép.",
+      "descriptionEn": "Receive or return stock in transit within every involved authorized branch.",
+      "riskLevel": "HIGH",
+      "displayOrder": 337
     }
   ],
   "defaultRoleGrants": {
@@ -324,7 +346,9 @@
       "inventory.transfer.create",
       "inventory.report.read",
       "inventory.report.export",
-      "inventory.document.cancel"
+      "inventory.document.cancel",
+      "inventory.document.read",
+      "inventory.transfer.receive"
     ],
     "MANAGER": [
       "inventory.warehouse.read",
@@ -352,7 +376,9 @@
       "inventory.transfer.create",
       "inventory.report.read",
       "inventory.report.export",
-      "inventory.document.cancel"
+      "inventory.document.cancel",
+      "inventory.document.read",
+      "inventory.transfer.receive"
     ],
     "RECEPTIONIST": [
       "inventory.warehouse.read",

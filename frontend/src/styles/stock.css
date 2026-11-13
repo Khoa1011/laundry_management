@@ -1,0 +1,33 @@
+.stock-header-actions { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; }
+.stock-filters { display: grid; gap: var(--space-sm); }
+.stock-values { display: grid; gap: var(--space-sm); margin: 0; }
+.stock-values > div { display: flex; justify-content: space-between; gap: var(--space-md); min-width: 0; flex-wrap: wrap; }
+.stock-values dt { color: var(--text-secondary); }
+.stock-values dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.stock-values small, .stock-flow span, .operations-desktop-table small { display: block; color: var(--text-secondary); }
+.stock-dashboard-grid, .stock-editor-layout, .stock-editor-sections { display: grid; gap: var(--space-md); min-width: 0; }
+.stock-flow { display: grid; gap: var(--space-xs); padding-block: var(--space-sm); border-bottom: var(--border-width) solid var(--border-default); }
+.stock-editor input:not([type="checkbox"]), .stock-editor textarea, .stock-editor select { font-size: var(--field-font-size); max-width: 100%; width: 100%; }
+.stock-line { padding: 0; padding-block: var(--space-md); margin-block: var(--space-md); border: none; border-bottom: var(--border-width) solid var(--border-default); min-width: 0; }
+.stock-line legend { font-weight: 700; }
+.stock-line-fields { display: grid; gap: var(--space-md); margin-bottom: var(--space-sm); }
+.stock-editor p, .stock-editor strong, .stock-report-list p { overflow-wrap: anywhere; }
+.stock-save-actions { display: grid; gap: var(--space-sm); margin-top: var(--space-lg); }
+.stock-summary { align-self: start; }
+.stock-editor { padding-bottom: calc(var(--mobile-navigation-height) + var(--space-xl) + env(safe-area-inset-bottom)); }
+.stock-dashboard-grid > *, .stock-filters > *, .stock-editor-sections > * { min-width: 0; overflow-wrap: anywhere; }
+.quantity-flow-chart, .quantity-flow-chart__row { display: grid; gap: var(--space-sm); }
+.quantity-flow-chart__row { margin-block: var(--space-md); }
+.quantity-flow-chart label, .quantity-flow-chart meter { display: block; width: 100%; }
+.quantity-flow-chart meter { accent-color: var(--chart-1); }
+.quantity-flow-chart__out { accent-color: var(--chart-5); }
+@media (min-width: 48rem) {
+  .stock-filters { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .stock-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-line-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 80rem) {
+  .stock-editor-layout { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .stock-summary { position: sticky; top: var(--desktop-header-height); }
+  .stock-report-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-lg); }
+}

@@ -1,3 +1,5 @@
+import { stockPages } from '../stock/types'
+import { StockNavigation } from '../stock/StockNavigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -41,6 +43,8 @@ export function OperationsPage({ module }: { module: Module }) {
   const settingsRead = module === 'inventory' ? P.INVENTORY_SETTINGS_READ : P.FINANCE_SETTINGS_READ
   const auditRead = module === 'inventory' ? P.INVENTORY_AUDIT_READ : P.FINANCE_AUDIT_READ
   const first = visible[0]?.key ?? (hasPermission(settingsRead) ? 'settings' : hasPermission(auditRead) ? 'history' : null)
+  const stockDestination = module === 'inventory' ? stockPages.find((p) => hasPermission(p.permission)) : undefined
+  if (!resource && stockDestination) return <Navigate to={`/inventory/${stockDestination.path}`} replace />
   if (!resource) return first ? <Navigate to={`/${module}/${first}`} replace /> : <PermissionDeniedState />
   const definition = visible.find((c) => c.key === resource)
   const allowed = definition || (resource === 'settings' && hasPermission(settingsRead)) || (resource === 'history' && hasPermission(auditRead))
@@ -51,7 +55,7 @@ export function OperationsPage({ module }: { module: Module }) {
       {hasPermission(settingsRead) && <AppNavLink to={`/${module}/settings`} className="catalog-module-tab" activeClassName="catalog-module-tab--active" indicatorId={`operations-${module}`}>{t('resources.settings')}</AppNavLink>}
       {hasPermission(auditRead) && <AppNavLink to={`/${module}/history`} className="catalog-module-tab" activeClassName="catalog-module-tab--active" indicatorId={`operations-${module}`}>{t('resources.history')}</AppNavLink>}
     </Surface>
-    <p className="operations-notice">{t('foundationBody')}</p>
+    {module === 'inventory' ? <StockNavigation /> : <p className="operations-notice">{t('foundationBody')}</p>}
     {!allowed ? <PermissionDeniedState /> : !branchId ? <StatePanel title={t('noBranch')} body={t('subtitle')} /> :
       resource === 'settings' ? <PolicyPage key={`${module}/${branchId}`} module={module} branchId={branchId} /> :
         resource === 'history' ? <HistoryPage key={`${module}/${branchId}`} module={module} branchId={branchId} /> :
@@ -87,7 +91,7 @@ function CatalogPage({ module, definition, branchId }: { module: Module; definit
   </>
 }
 
-function ReferenceField({ field, value, onChange, branchId, disabled }: { field: FieldDefinition; value: string; onChange: (value: string) => void; branchId: number; disabled: boolean }) {
+export function ReferenceField({ field, value, onChange, branchId, disabled, label }: { field: FieldDefinition; value: string; onChange: (value: string) => void; branchId: number; disabled: boolean; label?: string }) {
   const { hasPermission } = useAuth()
   const { t } = useTranslation('operations')
   const [search, setSearch] = useState('')
@@ -99,8 +103,8 @@ function ReferenceField({ field, value, onChange, branchId, disabled }: { field:
   const options = query.data?.items ?? []
   return <div className="operations-reference">
     {!allowed ? <p>{t('referenceDenied')}</p> : <>
-      {!disabled && <input type="search" aria-label={`${t('lookup')}: ${t(`fields.${field.key}`)}`} placeholder={t('lookup')} value={search} maxLength={150} onChange={(e) => { setSearch(e.target.value); setPage(0) }} />}
-      <select aria-label={t(`fields.${field.key}`)} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+      {!disabled && <input type="search" aria-label={`${t('lookup')}: ${label ?? t(`fields.${field.key}`)}`} placeholder={t('lookup')} value={search} maxLength={150} onChange={(e) => { setSearch(e.target.value); setPage(0) }} />}
+      <select aria-label={label ?? t(`fields.${field.key}`)} required={field.required} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
         <option value="">{t(field.required ? 'select' : 'none')}</option>
         {value && !options.some((o) => String(o.id) === value) && <option value={value}>{selected.data?.name ?? t('common:loading')}</option>}
         {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}

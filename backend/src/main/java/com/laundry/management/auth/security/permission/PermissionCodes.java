@@ -101,6 +101,8 @@ public final class PermissionCodes {
     public static final String INVENTORY_TRANSFER_CREATE = "inventory.transfer.create";
     public static final String INVENTORY_REPORT_READ = "inventory.report.read";
     public static final String INVENTORY_REPORT_EXPORT = "inventory.report.export";
+    public static final String INVENTORY_DOCUMENT_READ = "inventory.document.read";
+    public static final String INVENTORY_TRANSFER_RECEIVE = "inventory.transfer.receive";
     public static final String ITEM_TYPE_READ = "item-type.read";
     public static final String ITEM_TYPE_CREATE = "item-type.create";
     public static final String ITEM_TYPE_UPDATE = "item-type.update";

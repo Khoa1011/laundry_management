@@ -30,6 +30,14 @@ public final class OperationsBrowserServer {
                 account.addRole(roles.findByCode(role).orElseThrow());
                 account=users.saveAndFlush(account);account.assignBranch(branch,true);account.assignBranch(secondBranch,false);users.saveAndFlush(account);
             }
+            var db=context.getBean(com.laundry.management.inventory.operations.StockStore.class);
+            long actor=com.laundry.management.inventory.operations.StockStore.id(db.one("SELECT id FROM users WHERE username=?","browser.manager"),"id");long b=branch.getId();
+            for(String name:new String[]{"Kho chính kiểm thử","Kho nhận kiểm thử"})db.insert("INSERT INTO warehouses(branch_id,code,name,active,created_at,updated_at,created_by,updated_by) VALUES (?,?,?,TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)",b,name,name,actor,actor);
+            long category=db.insert("INSERT INTO inventory_categories(branch_id,code,name,active,created_at,updated_at,created_by,updated_by) VALUES (?,?,?,TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)",b,"CAT","Hóa chất",actor,actor);
+            long unit=db.insert("INSERT INTO inventory_units(branch_id,code,name,dimension,active,created_at,updated_at,created_by,updated_by) VALUES (?,?,?,'VOLUME',TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?)",b,"LIT","Lít",actor,actor);
+            for(String name:new String[]{"Nước giặt kiểm thử","Nước xả kiểm thử"})db.insert("INSERT INTO inventory_items(branch_id,code,name,active,created_at,updated_at,created_by,updated_by,category_id,base_unit_id,minimum_stock,track_lots,track_expiry) VALUES (?,?,?,TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?,?,5,FALSE,FALSE)",b,name,name,actor,actor,category,unit);
+            var reader=new UserAccount("browser.readonly",passwords.encode("foundation-test-only"),"Nhân viên chỉ đọc kho",branch);reader=users.saveAndFlush(reader);reader.assignBranch(branch,true);users.saveAndFlush(reader);
+            db.jdbc().update("INSERT INTO user_permission_overrides(user_id,permission_id,effect,reason) SELECT ?,id,'ALLOW','Isolated browser fixture' FROM permissions WHERE code IN ('inventory.overview.read','inventory.document.read','inventory.stock.read','inventory.report.read','inventory.item.read','inventory.warehouse.read','inventory.category.read','inventory.unit.read','inventory.supplier.read','notification.read-own')",reader.getId());
         });
         System.out.println("OPERATIONS_BROWSER_FIXTURE_READY");
     }

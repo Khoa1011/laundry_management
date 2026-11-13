@@ -8,6 +8,9 @@ import { StatePanel } from './components/States'
 import { AppShell } from './layout/AppShell'
 import { LoginPage } from './pages/LoginPage'
 
+const StockPage = lazy(() => import('./features/stock/StockPages').then((module) => ({ default: module.StockPage })))
+const StockEditorPage = lazy(() => import('./features/stock/StockPages').then((module) => ({ default: module.StockEditorPage })))
+const StockDetailPage = lazy(() => import('./features/stock/StockPages').then((module) => ({ default: module.StockDetailPage })))
 const OperationsPage = lazy(() => import('./features/operations/OperationsPages').then((module) => ({ default: module.OperationsPage })))
 const CustomerListPage = lazy(() => import('./features/customers/CustomerListPage').then((module) => ({ default: module.CustomerListPage })))
 const CustomerFormPage = lazy(() => import('./features/customers/CustomerFormPage').then((module) => ({ default: module.CustomerFormPage })))
@@ -101,6 +104,18 @@ const router = createBrowserRouter([
       { path: '/catalog/item-types', element: <PermissionRoute permission={PERMISSION_CODES.ITEM_TYPE_READ}><LazyPage><ItemTypeCatalogPage /></LazyPage></PermissionRoute> },
       { path: '/catalog/price-lists', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><LazyPage><PriceListPage /></LazyPage></PermissionRoute> },
       { path: '/catalog/price-lists/:priceListId', element: <PermissionRoute permission={PERMISSION_CODES.PRICE_LIST_READ}><PermissionRoute permission={PERMISSION_CODES.PRICE_RULE_READ}><LazyPage><PriceListDetailPage /></LazyPage></PermissionRoute></PermissionRoute> },
+      { path: '/inventory/documents/:documentId', element: <PermissionRoute permission={PERMISSION_CODES.INVENTORY_DOCUMENT_READ}><LazyPage><StockDetailPage /></LazyPage></PermissionRoute> },
+      { path: '/inventory/documents/:documentId/edit', element: <PermissionRoute permission={PERMISSION_CODES.INVENTORY_DOCUMENT_UPDATE}><LazyPage><StockEditorPage /></LazyPage></PermissionRoute> },
+      { path: '/inventory/:resource/new', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockEditorPage /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/dashboard', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="dashboard" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/receipts', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="receipts" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/issues', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="issues" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/transfers', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="transfers" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/stocktakes', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="stocktakes" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/adjustments', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="adjustments" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/balances', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="balances" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/ledger', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="ledger" /></LazyPage></AnyPermissionRoute> },
+      { path: '/inventory/reports', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><StockPage resource="reports" /></LazyPage></AnyPermissionRoute> },
       { path: '/inventory', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><OperationsPage module="inventory" /></LazyPage></AnyPermissionRoute> },
       { path: '/inventory/:resource', element: <AnyPermissionRoute permissions={modulePermissions('inventory')}><LazyPage><OperationsPage module="inventory" /></LazyPage></AnyPermissionRoute> },
       { path: '/finance', element: <AnyPermissionRoute permissions={modulePermissions('finance')}><LazyPage><OperationsPage module="finance" /></LazyPage></AnyPermissionRoute> },

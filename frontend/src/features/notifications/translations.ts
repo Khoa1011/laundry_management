@@ -1,4 +1,5 @@
 export const viNotifications = {
+  inventoryAlerts: { LOW_STOCK: { title: 'Vật tư cần bổ sung', message: 'Có vật tư dưới ngưỡng tối thiểu hoặc đã hết. Kiểm tra tồn kho.' }, EXPIRING: { title: 'Vật tư gần hết hạn', message: 'Kiểm tra lô vật tư gần hết hạn trong kho.' }, STOCKTAKE_DIFFERENCE: { title: 'Kiểm kê có chênh lệch', message: 'Kết quả kiểm kê đã được lưu và điều chỉnh tồn.' }, TRANSFER_RETURNED: { title: 'Chuyển kho có hàng hoàn trả', message: 'Có hàng đang chuyển được hoàn trả về kho nguồn.' } },
   title: 'Thông báo',
   bellLabel: '{{count}} thông báo chưa đọc',
   unreadSummary: '{{count}} chưa đọc',
@@ -129,6 +130,7 @@ export const viNotifications = {
 }
 
 export const enNotifications: typeof viNotifications = {
+  inventoryAlerts: { LOW_STOCK: { title: 'Replenishment needed', message: 'An item is below its minimum or out of stock. Review stock on hand.' }, EXPIRING: { title: 'Lots near expiry', message: 'Review expiring lots in stock.' }, STOCKTAKE_DIFFERENCE: { title: 'Stocktake difference', message: 'The count was recorded and stock adjusted.' }, TRANSFER_RETURNED: { title: 'Transfer goods returned', message: 'Goods in transit were returned to the source warehouse.' } },
   title: 'Notifications',
   bellLabel: '{{count}} unread notifications',
   unreadSummary: '{{count}} unread',

@@ -1,0 +1,54 @@
+# Tệp thay đổi — Inventory Phase 2
+
+Mốc so sánh: `ddde35aa964f78a3f65c47369e0b73c1ead87d7f`. Danh sách gồm tệp sửa và mới trong working tree; không bao gồm log/build/fixture tạm. Không commit hoặc push.
+
+- `access-control/modules/inventory.yml`
+- `backend/src/main/java/com/laundry/management/auth/security/permission/PermissionCodes.java`
+- `backend/src/main/java/com/laundry/management/common/exception/ErrorCode.java`
+- `backend/src/main/java/com/laundry/management/inventory/application/InventoryCatalogService.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/InventoryFinanceContract.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockAlertEvent.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockBook.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockChangedEvent.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockController.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockDtos.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockFailure.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockMath.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockNotificationListener.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockQueries.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockService.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockStore.java`
+- `backend/src/main/java/com/laundry/management/inventory/operations/StockVisibility.java`
+- `backend/src/main/resources/db/migration/common/V29__create_inventory_operations.sql`
+- `backend/src/main/resources/db/migration/common/V30__snapshot_stock_issue_type.sql`
+- `backend/src/main/resources/db/migration/common/V31__widen_stock_history_snapshots.sql`
+- `backend/src/test/java/com/laundry/management/operations/OperationsBrowserServer.java`
+- `backend/src/test/java/com/laundry/management/operations/SingleOperatorMigrationTest.java`
+- `backend/src/test/java/com/laundry/management/operations/StockConcurrencyIntegrationTest.java`
+- `backend/src/test/java/com/laundry/management/operations/StockMigrationTest.java`
+- `backend/src/test/java/com/laundry/management/operations/StockOperationsIntegrationTest.java`
+- `docs/FINANCE_INVENTORY_ARCHITECTURE.md`
+- `docs/FINANCE_INVENTORY_HANDOFF.md`
+- `docs/INVENTORY_OPERATIONS.md`
+- `docs/INVENTORY_PHASE2_FILES.md`
+- `docs/INVENTORY_PHASE2_VERIFICATION.md`
+- `frontend/src/App.tsx`
+- `frontend/src/auth/permissionCodes.generated.ts`
+- `frontend/src/components/ui/DatePickerField.test.tsx`
+- `frontend/src/components/ui/DatePickerField.tsx`
+- `frontend/src/components/ui/QuantityFlowChart.tsx`
+- `frontend/src/features/notifications/translations.ts`
+- `frontend/src/features/operations/OperationsPages.tsx`
+- `frontend/src/features/operations/catalog.ts`
+- `frontend/src/features/operations/translations.ts`
+- `frontend/src/features/stock/StockDatePicker.tsx`
+- `frontend/src/features/stock/StockNavigation.tsx`
+- `frontend/src/features/stock/StockPages.test.tsx`
+- `frontend/src/features/stock/StockPages.tsx`
+- `frontend/src/features/stock/api.ts`
+- `frontend/src/features/stock/translations.ts`
+- `frontend/src/features/stock/types.ts`
+- `frontend/src/i18n.ts`
+- `frontend/src/layout/AppShell.tsx`
+- `frontend/src/styles.css`
+- `frontend/src/styles/stock.css`

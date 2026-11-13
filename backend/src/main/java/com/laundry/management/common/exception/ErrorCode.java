@@ -2,6 +2,8 @@ package com.laundry.management.common.exception;
 
 public enum ErrorCode {
     VALIDATION_ERROR,
+    STOCK_INVALID,
+    STOCK_CONFLICT,
     OPERATIONS_NOT_FOUND,
     OPERATIONS_VALIDATION_ERROR,
     OPERATIONS_VERSION_CONFLICT,

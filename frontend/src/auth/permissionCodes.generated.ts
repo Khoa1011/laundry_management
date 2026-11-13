@@ -95,6 +95,8 @@ export const PERMISSION_CODES = {
   INVENTORY_TRANSFER_CREATE: 'inventory.transfer.create',
   INVENTORY_REPORT_READ: 'inventory.report.read',
   INVENTORY_REPORT_EXPORT: 'inventory.report.export',
+  INVENTORY_DOCUMENT_READ: 'inventory.document.read',
+  INVENTORY_TRANSFER_RECEIVE: 'inventory.transfer.receive',
   ITEM_TYPE_READ: 'item-type.read',
   ITEM_TYPE_CREATE: 'item-type.create',
   ITEM_TYPE_UPDATE: 'item-type.update',

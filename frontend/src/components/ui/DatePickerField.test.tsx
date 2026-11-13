@@ -4,6 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { DatePickerField } from './DatePickerField'
 
 describe('DatePickerField', () => {
+  it('supports generic labels and disables all entry points while submitting', () => {
+    const onChange = vi.fn()
+    render(<DatePickerField label="Expiry" value="2026-09-18" onChange={onChange} disabled locale="en-GB" labels={{ today: 'Today', tomorrow: 'Tomorrow', inTwoDays: '+2 days', title: 'Select date' }} />)
+    expect(screen.getByRole('button', { name: 'Expiry' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Tomorrow' })).toBeDisabled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
   it('offers date-only quick choices without a browser date-time input', async () => {
     const onChange = vi.fn()
     const { container } = render(<DatePickerField label="Ngày hẹn trả" value="" onChange={onChange} />)

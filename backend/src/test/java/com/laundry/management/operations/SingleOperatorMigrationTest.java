@@ -30,7 +30,7 @@ class SingleOperatorMigrationTest {
             jdbc.update("insert into role_permissions(role_id,permission_id) select r.id,p.id from roles r cross join permissions p where r.code='APPROVAL_ONLY' and p.code='finance.document.approve'");
             jdbc.update("delete from role_permissions where role_id=(select id from roles where code='ADMIN') and permission_id=(select id from permissions where code='finance.document.reverse')");
             int oldAssignments=jdbc.queryForObject("select count(*) from role_permissions rp join permissions p on p.id=rp.permission_id where p.code like '%.document.reverse'",Integer.class);
-            Flyway.configure().dataSource(source).locations(locations).load().migrate();
+            Flyway.configure().dataSource(source).locations(locations).target("28").load().migrate();
 
             assertEquals(8,jdbc.queryForObject("select count(*) from permissions where module in ('finance','inventory') and status='INACTIVE'",Integer.class));
             assertEquals(45,jdbc.queryForObject("select count(*) from permissions where module in ('finance','inventory') and status='ACTIVE'",Integer.class));
@@ -50,7 +50,7 @@ class SingleOperatorMigrationTest {
             jdbc.update("insert into inventory_settings(branch_id,allow_negative,updated_at,updated_by) values (?,FALSE,CURRENT_TIMESTAMP,?)",branch,user);
             assertFalse(jdbc.queryForObject("select approval_required from inventory_settings where branch_id=?",Boolean.class,branch));
             // A second migrate validates checksums and does not copy grants/overrides twice.
-            assertEquals(0,Flyway.configure().dataSource(source).locations(locations).load().migrate().migrationsExecuted);
+            assertEquals(0,Flyway.configure().dataSource(source).locations(locations).target("28").load().migrate().migrationsExecuted);
         } finally { if(h2) jdbc.execute("SHUTDOWN"); }
     }
     private int grant(JdbcTemplate jdbc,String role,String permission) {

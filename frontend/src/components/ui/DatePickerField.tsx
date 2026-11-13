@@ -22,16 +22,19 @@ const shiftedDateKey = (days: number) => {
   return dateKey(date)
 }
 
-const formatDate = (value: string) => {
+export type DatePickerLabels = { placeholder: string; title: string; description: string; quick: string; today: string; tomorrow: string; inTwoDays: string; clear: string; cancel: string; choose: string; previousMonth: string; nextMonth: string; selected: string; weekdays: string[] }
+const defaultLabels: DatePickerLabels = { placeholder: 'Chọn ngày hẹn trả', title: 'Chọn ngày hẹn trả', description: 'Chỉ chọn ngày, không cần chọn giờ.', quick: 'Chọn nhanh ngày hẹn trả', today: 'Hôm nay', tomorrow: 'Ngày mai', inTwoDays: '+2 ngày', clear: 'Xóa ngày', cancel: 'Hủy', choose: 'Chọn ngày', previousMonth: 'Tháng trước', nextMonth: 'Tháng sau', selected: 'Ngày đã chọn:', weekdays: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] }
+
+const formatDate = (value: string, locale: string, placeholder: string) => {
   const date = dateFromKey(value)
-  if (!date) return 'Chọn ngày hẹn trả'
-  const formatted = new Intl.DateTimeFormat('vi-VN', {
+  if (!date) return placeholder
+  const formatted = new Intl.DateTimeFormat(locale, {
     weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(date)
   return formatted.charAt(0).toLocaleUpperCase('vi-VN') + formatted.slice(1)
 }
 
-const monthLabel = (date: Date) => new Intl.DateTimeFormat('vi-VN', {
+const monthLabel = (date: Date, locale: string) => new Intl.DateTimeFormat(locale, {
   month: 'long', year: 'numeric',
 }).format(date)
 
@@ -53,13 +56,20 @@ export function DatePickerField({
   onChange,
   hint,
   required = false,
+  disabled = false,
+  locale = 'vi-VN',
+  labels: suppliedLabels,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   hint?: string
   required?: boolean
+  disabled?: boolean
+  locale?: string
+  labels?: Partial<DatePickerLabels>
 }) {
+  const labels = { ...defaultLabels, ...suppliedLabels }
   const labelId = useId()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -97,42 +107,42 @@ export function DatePickerField({
 
   return <div className="form-field date-picker-field">
     <span id={labelId} className="form-field__label">{label}{required && <span aria-hidden="true"> *</span>}</span>
-    <button type="button" className={`date-picker-trigger${value ? ' date-picker-trigger--selected' : ''}`} aria-labelledby={labelId} aria-haspopup="dialog" aria-expanded={open} onClick={showPicker}>
+    <button type="button" className={`date-picker-trigger${value ? ' date-picker-trigger--selected' : ''}`} aria-labelledby={labelId} aria-haspopup="dialog" aria-expanded={open && !disabled} disabled={disabled} onClick={showPicker}>
       <CalendarDays size={19} aria-hidden="true" />
-      <span>{formatDate(value)}</span>
+      <span>{formatDate(value, locale, labels.placeholder)}</span>
       <ChevronDown size={18} aria-hidden="true" />
     </button>
-    <div className="date-picker-quick-actions" aria-label="Chọn nhanh ngày hẹn trả">
-      <button type="button" aria-pressed={value === shiftedDateKey(0)} onClick={() => chooseQuickDate(0)}>Hôm nay</button>
-      <button type="button" aria-pressed={value === shiftedDateKey(1)} onClick={() => chooseQuickDate(1)}>Ngày mai</button>
-      <button type="button" aria-pressed={value === shiftedDateKey(2)} onClick={() => chooseQuickDate(2)}>+2 ngày</button>
+    <div className="date-picker-quick-actions" aria-label={labels.quick}>
+      <button type="button" disabled={disabled} aria-pressed={value === shiftedDateKey(0)} onClick={() => chooseQuickDate(0)}>{labels.today}</button>
+      <button type="button" disabled={disabled} aria-pressed={value === shiftedDateKey(1)} onClick={() => chooseQuickDate(1)}>{labels.tomorrow}</button>
+      <button type="button" disabled={disabled} aria-pressed={value === shiftedDateKey(2)} onClick={() => chooseQuickDate(2)}>{labels.inTwoDays}</button>
     </div>
     {hint && <span className="form-field__hint">{hint}</span>}
 
     <OverlayDialog
-      open={open}
+      open={open && !disabled}
       onClose={() => setOpen(false)}
-      title="Chọn ngày hẹn trả"
-      description="Chỉ chọn ngày, không cần chọn giờ."
+      title={labels.title}
+      description={labels.description}
       footer={<>
-        {value && <Button className="date-picker-clear" type="button" variant="ghost" onClick={() => { onChange(''); setOpen(false) }}>Xóa ngày</Button>}
-        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Hủy</Button>
-        <Button type="button" disabled={!draft} onClick={() => { onChange(draft); setOpen(false) }}>Chọn ngày</Button>
+        {value && <Button className="date-picker-clear" type="button" variant="ghost" onClick={() => { onChange(''); setOpen(false) }}>{labels.clear}</Button>}
+        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>{labels.cancel}</Button>
+        <Button type="button" disabled={!draft} onClick={() => { onChange(draft); setOpen(false) }}>{labels.choose}</Button>
       </>}
     >
       <div className="date-picker-dialog">
-        <div className="date-picker-dialog__quick" aria-label="Chọn nhanh">
-          <button type="button" onClick={() => { setDraft(shiftedDateKey(0)); setVisibleMonth(new Date()) }}>Hôm nay</button>
-          <button type="button" onClick={() => { setDraft(shiftedDateKey(1)); const next = dateFromKey(shiftedDateKey(1))!; setVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1)) }}>Ngày mai</button>
-          <button type="button" onClick={() => { setDraft(shiftedDateKey(2)); const next = dateFromKey(shiftedDateKey(2))!; setVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1)) }}>+2 ngày</button>
+        <div className="date-picker-dialog__quick" aria-label={labels.quick}>
+          <button type="button" onClick={() => { setDraft(shiftedDateKey(0)); setVisibleMonth(new Date()) }}>{labels.today}</button>
+          <button type="button" onClick={() => { setDraft(shiftedDateKey(1)); const next = dateFromKey(shiftedDateKey(1))!; setVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1)) }}>{labels.tomorrow}</button>
+          <button type="button" onClick={() => { setDraft(shiftedDateKey(2)); const next = dateFromKey(shiftedDateKey(2))!; setVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1)) }}>{labels.inTwoDays}</button>
         </div>
         <div className="date-picker-dialog__month">
-          <IconButton type="button" variant="secondary" label="Tháng trước" onClick={() => setVisibleMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}><ChevronLeft size={19} /></IconButton>
-          <strong>{monthLabel(visibleMonth)}</strong>
-          <IconButton type="button" variant="secondary" label="Tháng sau" onClick={() => setVisibleMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}><ChevronRight size={19} /></IconButton>
+          <IconButton type="button" variant="secondary" label={labels.previousMonth} onClick={() => setVisibleMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}><ChevronLeft size={19} /></IconButton>
+          <strong>{monthLabel(visibleMonth, locale)}</strong>
+          <IconButton type="button" variant="secondary" label={labels.nextMonth} onClick={() => setVisibleMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}><ChevronRight size={19} /></IconButton>
         </div>
-        <div className="date-picker-calendar" role="grid" aria-label={monthLabel(visibleMonth)}>
-          {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(day => <span key={day} className="date-picker-calendar__weekday" role="columnheader">{day}</span>)}
+        <div className="date-picker-calendar" role="grid" aria-label={monthLabel(visibleMonth, locale)}>
+          {labels.weekdays.map(day => <span key={day} className="date-picker-calendar__weekday" role="columnheader">{day}</span>)}
           {days.map(date => {
             const key = dateKey(date)
             const selected = key === draft
@@ -142,7 +152,7 @@ export function DatePickerField({
                 type="button"
                 data-calendar-date={key}
                 className={`${selected ? 'selected ' : ''}${outside ? 'outside' : ''}`.trim()}
-                aria-label={formatDate(key)}
+                aria-label={formatDate(key, locale, labels.placeholder)}
                 aria-pressed={selected}
                 aria-current={key === today ? 'date' : undefined}
                 tabIndex={selected ? 0 : -1}
@@ -152,7 +162,7 @@ export function DatePickerField({
             </span>
           })}
         </div>
-        <p className="date-picker-dialog__selection">Ngày đã chọn: <strong>{formatDate(draft)}</strong></p>
+        <p className="date-picker-dialog__selection">{labels.selected} <strong>{formatDate(draft, locale, labels.placeholder)}</strong></p>
       </div>
     </OverlayDialog>
   </div>

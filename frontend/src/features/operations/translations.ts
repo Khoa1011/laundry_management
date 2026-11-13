@@ -1,7 +1,7 @@
 export const viOperations = {
   conflict: 'Bản ghi bị trùng hoặc xung đột. Kiểm tra tên và dữ liệu mới nhất trước khi lưu lại.',
   unitMismatch: 'Đơn vị nhập phải cùng nhóm với đơn vị cơ sở của vật tư.', defaultInUse: 'Hãy chọn mặc định khác trong cấu hình trước khi ngừng sử dụng.',
-  valuationHelp: 'Định giá theo bình quân gia quyền di động tại từng kho.', allowNegativeStock: 'Cho phép tồn kho âm', immutable: 'Không thể thay đổi sau khi tạo.',
+  valuationHelp: 'Định giá theo bình quân gia quyền di động tại từng kho.', allowNegativeStock: 'Cho phép tồn kho âm', stockHistoryTrackingImmutable: 'Vật tư đã có lịch sử kho hoặc hàng đang chuyển; không thể thay đổi theo dõi lô/hạn dùng.', immutable: 'Không thể thay đổi sau khi tạo.',
   changeBranch: 'Đổi chi nhánh', unsavedBranchBody: 'Đổi chi nhánh sẽ bỏ các thay đổi chưa lưu. Bạn có muốn tiếp tục?', legacyConfiguration: 'Cấu hình cũ (không còn áp dụng)',
   inventory: 'Quản lý kho', finance: 'Quản lý thu chi', navigation: 'Danh mục và cấu hình',
   foundation: 'Danh mục nền tảng', foundationBody: 'Chuẩn bị danh mục theo chi nhánh. Nhập xuất kho, ghi sổ quỹ và công nợ chưa được triển khai trong giai đoạn này.',
@@ -14,7 +14,7 @@ export const viOperations = {
 export const enOperations = {
   conflict: 'This record conflicts with existing data. Check the name and latest data before saving again.',
   unitMismatch: 'Input and base units must share the same dimension.', defaultInUse: 'Select a different branch default before deactivating this record.',
-  valuationHelp: 'Valuation uses moving weighted average per warehouse.', allowNegativeStock: 'Allow negative stock', immutable: 'Cannot be changed after creation.',
+  valuationHelp: 'Valuation uses moving weighted average per warehouse.', allowNegativeStock: 'Allow negative stock', stockHistoryTrackingImmutable: 'Lot/expiry tracking cannot change after stock history or outstanding transit.', immutable: 'Cannot be changed after creation.',
   changeBranch: 'Switch branch', unsavedBranchBody: 'Switching branches will discard your unsaved changes. Do you want to continue?', legacyConfiguration: 'Legacy configuration (no longer applied)',
   inventory: 'Inventory', finance: 'Finance', navigation: 'Catalogs and settings',
   foundation: 'Master data foundation', foundationBody: 'Prepare branch-scoped catalogs. Stock operations, cash posting and supplier payables are not implemented in this phase.',
