@@ -1,0 +1,16 @@
+{
+  "documentCode": "TEST-RE-000002",
+  "documentTotal": "420000.00",
+  "documentVersion": 1,
+  "maskedDetail": true,
+  "maskedHistory": true,
+  "maskedDashboard": true,
+  "exportStatus": 200,
+  "exportHasKnownCost": false,
+  "foreignBranch": 403,
+  "foreignWarehouse": 404,
+  "unknownDocument": 404,
+  "deniedPreview": 403,
+  "readonlyExport": 403,
+  "anonymous": 401
+}

@@ -1,4 +1,6 @@
 export const viStock = {
+  moneyHint: 'Dùng dấu phẩy hoặc dấu chấm cho phần lẻ.',
+  moneyInvalid: 'Nhập số tiền không âm, tối đa 13 chữ số nguyên và 2 chữ số lẻ.',
   fieldValidation: 'Kiểm tra trường: {{fields}}.',
   calendar: { placeholder: 'Chọn ngày', title: 'Chọn ngày', description: 'Chọn ngày cho bộ lọc hoặc hạn sử dụng.', quick: 'Chọn nhanh', today: 'Hôm nay', tomorrow: 'Ngày mai', inTwoDays: '+2 ngày', clear: 'Xóa ngày', cancel: 'Hủy', choose: 'Chọn ngày', previousMonth: 'Tháng trước', nextMonth: 'Tháng sau', selected: 'Ngày đã chọn:', weekdays: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] },
   subtotal: 'Giá trị trước giảm', discountTotal: 'Tổng giảm giá', taxTotal: 'Tổng thuế/chi phí dòng', dailyFlow: 'Biến động theo ngày', chartHelp: 'Theo ngày ghi nhận (UTC), tách riêng từng đơn vị. Bao gồm bù trừ và chuyển kho.', periodValues: 'Giá trị trong kỳ', consumption: 'Vật tư tiêu hao nhiều theo đơn vị', recentDocuments: 'Phiếu gần đây', periodTotal: 'Giá trị phiếu có hiệu lực trong kỳ',
@@ -12,6 +14,8 @@ export const viStock = {
 }
 export const enStock = {
   ...viStock,
+  moneyHint: 'Use a comma or period for decimals.',
+  moneyInvalid: 'Enter a non-negative amount with up to 13 whole digits and 2 decimals.',
   fieldValidation: 'Check these fields: {{fields}}.',
   calendar: { placeholder: 'Select date', title: 'Select date', description: 'Choose a filter or expiry date.', quick: 'Quick dates', today: 'Today', tomorrow: 'Tomorrow', inTwoDays: '+2 days', clear: 'Clear date', cancel: 'Cancel', choose: 'Select date', previousMonth: 'Previous month', nextMonth: 'Next month', selected: 'Selected date:', weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
   subtotal: 'Before discounts', discountTotal: 'Total discounts', taxTotal: 'Total line tax/cost', dailyFlow: 'Daily movements', chartHelp: 'Recording date (UTC), separately by unit. Includes compensation and transfers.', periodValues: 'Period value', consumption: 'Top consumption by unit', recentDocuments: 'Recent documents', periodTotal: 'Recorded document value in period',

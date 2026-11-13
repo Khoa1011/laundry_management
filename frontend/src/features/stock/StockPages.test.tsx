@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
@@ -17,8 +17,7 @@ vi.mock('./api', async (original) => ({ ...await original<typeof import('./api')
 const empty = { items: [], totalElements: 0, totalPages: 0, page: 0, size: 20, summary: { totalValue: '0' } }
 const input = { branchId: 7, kind: 'RECEIPT', warehouseId: 3, destinationBranchId: null, destinationWarehouseId: null, supplierId: null, businessAt: '2026-11-07T02:00:00Z', issueType: 'CONSUMPTION', reason: '', note: '', charges: '0', draft: false, lines: [{ ...emptyLine(), itemId: 5, quantity: '5', unitPrice: '40000' }] }
 const saved = { id: 9, code: 'CN-RE-000001', kind: 'RECEIPT', branchId: 7, warehouseName: 'Kho chính', warehouseId: 3, status: 'RECORDED', version: 0, businessAt: input.businessAt, input, totalValue: '200000', quantities: { 'Lít': '5' }, createdBy: 1, updatedBy: 1, createdAt: input.businessAt, updatedAt: input.businessAt, lines: [{ ...input.lines[0], itemName: 'Nước giặt', baseUnit: 'Lít', inputUnit: 'Lít', factor: '1', baseQuantity: '5', lineValue: '200000' }] }
-function page(path: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+function page(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   const router = createMemoryRouter([
     { path: '/inventory/:resource', element: <StockPage /> },
     { path: '/inventory/:resource/new', element: <StockEditorPage /> },
@@ -42,5 +41,46 @@ describe('Inventory operations', () => {
   it('keeps the same idempotency key when retrying a failed save with unchanged input', async () => { mocks.save.mockRejectedValue(new Error('network interrupted')); page('/inventory/documents/9/edit'); await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu và ghi nhận' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Lưu và ghi nhận' })); await screen.findByRole('alert'); fireEvent.click(screen.getByRole('button', { name: 'Lưu và ghi nhận' })); await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(2)); expect(mocks.save.mock.calls[0][1]).toBe(mocks.save.mock.calls[1][1]); expect(screen.getByLabelText(/^Số lượng/)).toHaveValue('5') })
   it('keeps stale document input and reports a dependency without resubmitting', async () => { mocks.preview.mockRejectedValue(new ApiError(409, { status: 409, detail: 'DOWNSTREAM_MOVEMENT_USE_ADJUSTMENT_OR_SUPPLIER_RETURN' })); page('/inventory/documents/9/edit'); expect(await screen.findByText(/bảo toàn giá vốn lịch sử/)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Lưu và ghi nhận' })).toBeDisabled(); expect(mocks.save).not.toHaveBeenCalled() })
   it('places server field validation beside the affected material line', async () => { mocks.preview.mockRejectedValue(new ApiError(400, { status: 400, fieldErrors: { 'lines[0].quantity': ['Invalid precision'] } })); page('/inventory/documents/9/edit'); const message = await screen.findByText('Kiểm tra trường: Số lượng.'); expect(message.closest('fieldset')).toHaveAttribute('id', 'stock-line-1'); expect(screen.getByRole('button', { name: 'Lưu và ghi nhận' })).toBeDisabled() })
+  it('preserves negative money for correction and sends valid local decimals exactly', async () => {
+    page('/inventory/documents/9/edit')
+    const price = await screen.findByRole('textbox', { name: /^Đơn giá/ })
+    fireEvent.change(price, { target: { value: '-100' } })
+    expect(price).toHaveValue('-100')
+    expect(price).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('button', { name: 'Lưu và ghi nhận' })).toBeDisabled()
+    expect(mocks.save).not.toHaveBeenCalled()
+    fireEvent.change(price, { target: { value: '100,25' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu và ghi nhận' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và ghi nhận' }))
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ unitPrice: '100.25' })],
+    }), expect.any(String), 9))
+  })
+  it('waits for the current stocktake snapshot when a stale balance is cached', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const balancePage = (version: number) => ({
+      ...empty,
+      items: [{ version, quantity: '14', baseUnit: 'Lít', averageCost: '40000' }],
+    })
+    client.setQueryData(['stock', 'line-balance', 7, 3, 5], balancePage(1))
+    let resolveBalance!: (balance: ReturnType<typeof balancePage>) => void
+    mocks.balances.mockReturnValue(new Promise<ReturnType<typeof balancePage>>((resolve) => {
+      resolveBalance = resolve
+    }))
+    page('/inventory/stocktakes/new', client)
+    const warehouse = await screen.findByRole('combobox', { name: /^Kho/ })
+    await waitFor(() => expect(warehouse).toHaveTextContent('Kho chính'))
+    fireEvent.change(warehouse, { target: { value: '3' } })
+    const material = screen.getByRole('combobox', { name: /^Vật tư 1/ })
+    await waitFor(() => expect(material).toHaveTextContent('Nước giặt'))
+    fireEvent.change(material, { target: { value: '5' } })
+    fireEvent.change(screen.getByLabelText(/^Tồn thực đếm/), { target: { value: '14' } })
+    fireEvent.change(screen.getByLabelText(/^Lý do/), { target: { value: 'Kiểm kê sau nhập' } })
+    await act(async () => resolveBalance(balancePage(2)))
+    await waitFor(() => expect(mocks.preview).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ balanceVersion: 2, quantity: '14' })],
+    }), undefined))
+    expect(mocks.preview).toHaveBeenCalledTimes(1)
+  })
   it('requires a cancellation reason and warns before discarding it', async () => { page('/inventory/documents/9'); fireEvent.click(await screen.findByRole('button', { name: 'Hủy chứng từ' })); fireEvent.change(screen.getByLabelText(/^Lý do/), { target: { value: 'Nhập sai' } }); fireEvent.click(screen.getAllByRole('button', { name: 'Đóng' }).at(-1)!); expect(await screen.findByText('Bạn có thay đổi chưa lưu')).toBeInTheDocument(); expect(mocks.cancel).not.toHaveBeenCalled() })
 })

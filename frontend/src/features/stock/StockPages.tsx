@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, ArrowDownToLine, ArrowUpFromLine, PackageSearch } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useBeforeUnload, useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
@@ -103,7 +103,30 @@ function DashboardView({ data, fmt }: { data: Dashboard; fmt: (v: string | numbe
 }
 
 function toLocal(iso: string) { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) }
-function normalized(input: Input) { return { ...input, charges: input.charges || '0', lines: input.lines.map((l) => ({ ...l, quantity: l.quantity.replace(',', '.'), unitPrice: l.unitPrice === '' ? null : l.unitPrice, discount: l.discount || '0', tax: l.tax || '0' })) } }
+const stockMoneyPattern = /^\d{1,13}(?:[.,]\d{1,2})?$/
+
+function validMoney(value: string | null) {
+  return !value || stockMoneyPattern.test(value)
+}
+
+function StockMoneyInput(props: Pick<ComponentProps<typeof MoneyInput>, 'label' | 'value' | 'onValueChange' | 'required' | 'disabled'>) {
+  const { t } = useTranslation('stock')
+  return <MoneyInput {...props} fractionDigits={2} preserveInput hint={t('moneyHint')} error={validMoney(props.value) ? undefined : t('moneyInvalid')} />
+}
+
+function normalized(input: Input) {
+  return {
+    ...input,
+    charges: (input.charges || '0').replace(',', '.'),
+    lines: input.lines.map((line) => ({
+      ...line,
+      quantity: line.quantity.replace(',', '.'),
+      unitPrice: line.unitPrice ? line.unitPrice.replace(',', '.') : null,
+      discount: (line.discount || '0').replace(',', '.'),
+      tax: (line.tax || '0').replace(',', '.'),
+    })),
+  }
+}
 function editorInput(input: Input, version?: number): Input {
   return { ...input, version, draft: false, charges: input.charges ?? '0', note: input.note ?? '', reason: input.reason ?? '', lines: input.lines.map((l) => ({ ...l, quantity: String(l.quantity ?? ''), discount: l.discount ?? '0', tax: l.tax ?? '0' })) }
 }
@@ -120,11 +143,26 @@ function Editor({ initial, saved, branchId }: { initial: Input; saved?: Document
   const [values, setValues] = useState<Input>(() => editorInput(initial, saved?.version)); const [error, setError] = useState<unknown>(); const [key, setKey] = useState(crypto.randomUUID()); const savedOk = useRef(false); const mutationPending = useRef(false)
   const dirty = !savedOk.current && JSON.stringify(values) !== JSON.stringify(editorInput(initial, saved?.version)); const blocker = useBlocker(() => !savedOk.current && (dirty || mutationPending.current))
   useBeforeUnload((e) => { if (dirty || mutationPending.current) { e.preventDefault(); e.returnValue = '' } })
-  const debounced = useDebouncedValue(values, 400); const valid = !!debounced.warehouseId && debounced.lines.every((l) => l.itemId && l.quantity && (debounced.kind !== 'RECEIPT' || l.unitPrice !== null)) && (!['STOCKTAKE', 'ADJUSTMENT'].includes(debounced.kind) || !!debounced.reason)
+  const debounced = useDebouncedValue(values, 400)
+  const valid = !!debounced.warehouseId && validMoney(debounced.charges) && debounced.lines.every((line) =>
+    line.itemId && line.quantity &&
+    (debounced.kind !== 'RECEIPT' || !!line.unitPrice) &&
+    (debounced.kind !== 'STOCKTAKE' || line.balanceVersion != null) &&
+    [line.unitPrice, line.discount, line.tax].every(validMoney)
+  ) && (!['STOCKTAKE', 'ADJUSTMENT'].includes(debounced.kind) || !!debounced.reason.trim())
+  const isCurrentPreview = JSON.stringify(values) === JSON.stringify(debounced)
+  const captureVersion = useCallback((index: number, warehouseId: number | null, itemId: number | null, version: number, replace: boolean) => {
+    if (replace) setKey(crypto.randomUUID())
+    setValues((previous) => {
+      const line = previous.lines[index]
+      if (previous.warehouseId !== warehouseId || !line || line.itemId !== itemId || (!replace && line.balanceVersion != null)) return previous
+      return { ...previous, lines: previous.lines.map((entry, position) => position === index ? { ...entry, balanceVersion: version } : entry) }
+    })
+  }, [])
   const preview = useQuery({ queryKey: ['stock', 'preview', saved?.id, debounced], queryFn: () => stockApi.preview(normalized(debounced), saved?.id), enabled: valid, retry: false })
   const change = (next: Input) => { setValues(next); setError(undefined); setKey(crypto.randomUUID()) }
   const mutation = useMutation({ mutationFn: async (draft: boolean) => { mutationPending.current = true; try { return await stockApi.save(normalized({ ...values, branchId, draft }), key, saved?.id) } finally { mutationPending.current = false } }, onSuccess: (d) => { savedOk.current = true; void client.invalidateQueries({ queryKey: ['stock'] }); notify(t(d.status === 'DRAFT' ? 'draftSaved' : 'saved')); navigate(`/inventory/documents/${d.id}`) }, onError: (e) => { setError(e); document.querySelector<HTMLElement>('[role="alert"]')?.focus() } })
-  const canSave = valid && JSON.stringify(values) === JSON.stringify(debounced) && !!preview.data && !preview.isFetching && !preview.isError
+  const canSave = valid && isCurrentPreview && !!preview.data && !preview.isFetching && !preview.isError
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!mutation.isPending && canSave) mutation.mutate(false) }
   useEffect(() => { if (error) { const line = error instanceof ApiError ? error.problem.detail?.split(':')[1] : undefined; const target = document.querySelector<HTMLElement>(line ? `#stock-line-${Number(line)} input` : '[role="alert"]'); target?.focus(); target?.scrollIntoView?.({ block: 'center' }) } }, [error])
   const fmt = (v: string | null | undefined) => decimal(v, i18n.language.startsWith('en'))
@@ -138,10 +176,10 @@ function Editor({ initial, saved, branchId }: { initial: Input; saved?: Document
         {values.kind === 'TRANSFER' && <><Field label={t('destinationBranch')}><select value={values.destinationBranchId ?? ''} disabled={mutation.isPending || !!saved} onChange={(e) => change({ ...values, destinationBranchId: Number(e.target.value), destinationWarehouseId: null, lines: values.lines.map((l) => ({ ...l, destinationItemId: null })) })}>{user?.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field><Lookup label={t('destinationWarehouse')} path="warehouses" permission={P.INVENTORY_WAREHOUSE_READ} branchId={values.destinationBranchId!} value={values.destinationWarehouseId} onChange={(n) => change({ ...values, destinationWarehouseId: n })} disabled={mutation.isPending} required /><p>{t('crossBranchHelp')}</p></>}
       </div></Surface>
         <Surface className="operations-catalog"><h2>{t('lines')}</h2>{values.kind === 'STOCKTAKE' && <p>{t('snapshotHelp')}</p>}
-          {values.lines.map((line, index) => <LineEditor key={index} line={line} index={index} values={values} serverError={error ?? preview.error} disabled={mutation.isPending} update={(l) => change({ ...values, lines: values.lines.map((old, i) => i === index ? l : old) })} remove={() => change({ ...values, lines: values.lines.filter((_, i) => i !== index) })} />)}
+          {values.lines.map((line, index) => <LineEditor key={index} line={line} index={index} values={values} captureVersion={captureVersion} serverError={error ?? preview.error} disabled={mutation.isPending} update={(l) => change({ ...values, lines: values.lines.map((old, i) => i === index ? l : old) })} remove={() => change({ ...values, lines: values.lines.filter((_, i) => i !== index) })} />)}
           <Button type="button" variant="secondary" disabled={mutation.isPending || values.lines.length >= 100} onClick={() => change({ ...values, lines: [...values.lines, emptyLine()] })}>{t('addLine')}</Button>
         </Surface>
-        <Surface className="operations-catalog"><div className="operations-form">{values.kind === 'RECEIPT' && <MoneyInput label={t('charges')} value={values.charges} onValueChange={(v) => change({ ...values, charges: v })} fractionDigits={2} disabled={mutation.isPending} />}<Field label={t('reason')} required={values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE'}><textarea required={values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE'} value={values.reason ?? ''} maxLength={1000} disabled={mutation.isPending} onChange={(e) => change({ ...values, reason: e.target.value })} /></Field><Field label={t('note')}><textarea value={values.note ?? ''} maxLength={1000} disabled={mutation.isPending} onChange={(e) => change({ ...values, note: e.target.value })} /></Field></div></Surface>
+        <Surface className="operations-catalog"><div className="operations-form">{values.kind === 'RECEIPT' && <StockMoneyInput label={t('charges')} value={values.charges} onValueChange={(v) => change({ ...values, charges: v })} disabled={mutation.isPending} />}<Field label={t('reason')} required={values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE'}><textarea required={values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE'} value={values.reason ?? ''} maxLength={1000} disabled={mutation.isPending} onChange={(e) => change({ ...values, reason: e.target.value })} /></Field><Field label={t('note')}><textarea value={values.note ?? ''} maxLength={1000} disabled={mutation.isPending} onChange={(e) => change({ ...values, note: e.target.value })} /></Field></div></Surface>
       </div>
       <Surface className="operations-catalog stock-summary"><h2>{t('preview')}</h2><p>{t('previewHelp')}</p>{preview.isFetching && <p role="status">{t('previewUpdating')}</p>}{preview.isError && <Failure error={preview.error} retry={() => void preview.refetch()} />}
         {valid && preview.data && <><strong>{t('total')}: {fmt(preview.data.totalValue)}</strong>{values.kind === 'RECEIPT' && <dl className="stock-values">{(['subtotal', 'discountTotal', 'taxTotal'] as const).map((key) => <div key={key}><dt>{t(key)}</dt><dd>{fmt(preview.data?.[key])}</dd></div>)}</dl>}{Object.entries(preview.data.quantities).map(([unit, n]) => <p key={unit}>{fmt(n)} {unit}</p>)}{preview.data.lines.map((l, i) => <p key={i}>{l.itemName}: {fmt(l.baseQuantity)} {l.baseUnit}{l.difference !== undefined ? ` · ${t('difference')}: ${fmt(l.difference)}` : ''} · {t('value')}: {fmt(l.lineValue)}</p>)}</>}
@@ -150,11 +188,11 @@ function Editor({ initial, saved, branchId }: { initial: Input; saved?: Document
 
       </Surface>
     </form>
-    <div className="sticky-action-bar"><Button type="submit" form="stock-editor" loading={mutation.isPending} disabled={!canSave}>{t('save')}</Button>{(!saved || saved.status === 'DRAFT') && <Button type="button" variant="secondary" disabled={mutation.isPending || !valid} onClick={() => { if ((document.getElementById('stock-editor') as HTMLFormElement).reportValidity()) mutation.mutate(true) }}>{t('draft')}</Button>}</div>
+    <div className="sticky-action-bar"><Button type="submit" form="stock-editor" loading={mutation.isPending} disabled={!canSave}>{t('save')}</Button>{(!saved || saved.status === 'DRAFT') && <Button type="button" variant="secondary" disabled={mutation.isPending || !valid || !isCurrentPreview} onClick={() => { if ((document.getElementById('stock-editor') as HTMLFormElement).reportValidity()) mutation.mutate(true) }}>{t('draft')}</Button>}</div>
     <UnsavedBranchDialog dirty={dirty} busy={mutation.isPending} /><ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.state === 'blocked' && blocker.reset()} onConfirm={() => blocker.state === 'blocked' && blocker.proceed()} title={t('common:unsavedTitle')} body={t('common:unsavedBody')} confirmLabel={t('common:leave')} />
   </div>
 }
-function LineEditor({ line, index, values, update, remove, disabled, serverError }: { line: Line; index: number; values: Input; update: (l: Line) => void; remove: () => void; disabled: boolean; serverError: unknown }) {
+function LineEditor({ line, index, values, update, remove, disabled, serverError, captureVersion }: { line: Line; index: number; values: Input; update: (l: Line) => void; remove: () => void; disabled: boolean; serverError: unknown; captureVersion: (index: number, warehouseId: number | null, itemId: number | null, version: number, replace: boolean) => void }) {
   const { t, i18n } = useTranslation('stock'); const { hasPermission } = useAuth(); const fmt = (v: string | null | undefined) => decimal(v, i18n.language.startsWith('en'))
   const item = useQuery({ queryKey: ['stock', 'item', values.branchId, line.itemId], queryFn: () => operationsApi.get('/inventory/items', values.branchId, line.itemId!), enabled: !!line.itemId && hasPermission(P.INVENTORY_ITEM_READ) })
   const conversions = useQuery({ queryKey: ['stock', 'conversions', values.branchId, line.itemId], queryFn: () => stockApi.packages(values.branchId, line.itemId!), enabled: !!line.itemId && hasPermission(P.INVENTORY_UNIT_READ) })
@@ -162,7 +200,12 @@ function LineEditor({ line, index, values, update, remove, disabled, serverError
   const lots = useQuery({ queryKey: ['stock', 'lots', values.branchId, values.warehouseId, line.itemId], queryFn: () => stockApi.lots(values.branchId, values.warehouseId!, line.itemId!), enabled: !!values.warehouseId && !!line.itemId && !!item.data?.trackLots && hasPermission(P.INVENTORY_STOCK_READ) })
   const current = balance.data?.items[0]
   const invalidFields = serverError instanceof ApiError ? Object.keys(serverError.problem.fieldErrors ?? {}).filter((key) => key.startsWith(`lines[${index}].`)).map((key) => t(({ itemId: 'item', conversionId: 'inputUnit', quantity: 'quantity', unitPrice: 'price', discount: 'discount', tax: 'tax', lotCode: 'lot', expiryDate: 'expiry', destinationItemId: 'destinationItem', increase: 'direction', balanceVersion: 'expected' } as Record<string, string>)[key.split('.').at(-1)!] ?? 'invalid')) : []
-  useEffect(() => { if (values.kind === 'STOCKTAKE' && line.balanceVersion === null && current) update({ ...line, balanceVersion: current.version }) }, [current, values.kind, line, update])
+  useEffect(() => {
+    if (values.kind === 'STOCKTAKE' && line.balanceVersion == null && current &&
+        balance.isFetchedAfterMount && balance.isSuccess && !balance.isFetching) {
+      captureVersion(index, values.warehouseId, line.itemId, current.version, false)
+    }
+  }, [current, balance.isFetchedAfterMount, balance.isSuccess, balance.isFetching, values.kind, values.warehouseId, line.balanceVersion, line.itemId, index, captureVersion])
   const numeric = (label: string, key: keyof Line, required = false) => <Field label={label} required={required}><input type="text" inputMode="decimal" pattern="[0-9]+([,.][0-9]{1,6})?" required={required} value={String(line[key] ?? '')} disabled={disabled} onChange={(e) => update({ ...line, [key]: e.target.value })} /></Field>
   return <fieldset className="stock-line" id={`stock-line-${index + 1}`}><legend>{t('item')} {index + 1}</legend><div className="stock-line-fields">
     <Lookup label={`${t('item')} ${index + 1}`} path="items" permission={P.INVENTORY_ITEM_READ} branchId={values.branchId} value={line.itemId} required disabled={disabled} onChange={(n) => update({ ...emptyLine(), itemId: n })} />
@@ -171,13 +214,13 @@ function LineEditor({ line, index, values, update, remove, disabled, serverError
     {conversions.isError && <Failure error={conversions.error} retry={() => void conversions.refetch()} />}
     <Field label={t('inputUnit')}><select value={line.conversionId ?? ''} disabled={disabled || values.kind === 'STOCKTAKE'} onChange={(e) => update({ ...line, conversionId: e.target.value ? Number(e.target.value) : null })}><option value="">{t('baseUnit')}</option>{conversions.data?.map((c) => <option key={c.id} value={c.id}>{c.name} · ×{String(c.factor)}</option>)}</select></Field>
     {numeric(t(values.kind === 'STOCKTAKE' ? 'counted' : 'quantity'), 'quantity', true)}
-    {(values.kind === 'RECEIPT' || values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE') && <MoneyInput label={t('price')} value={line.unitPrice ?? ''} onValueChange={(v) => update({ ...line, unitPrice: v })} fractionDigits={2} required={values.kind === 'RECEIPT'} disabled={disabled} />}
-    {values.kind === 'RECEIPT' && <><MoneyInput label={t('discount')} value={line.discount} onValueChange={(v) => update({ ...line, discount: v })} fractionDigits={2} disabled={disabled} /><MoneyInput label={t('tax')} value={line.tax} onValueChange={(v) => update({ ...line, tax: v })} fractionDigits={2} disabled={disabled} /></>}
+    {(values.kind === 'RECEIPT' || values.kind === 'ADJUSTMENT' || values.kind === 'STOCKTAKE') && <StockMoneyInput label={t('price')} value={line.unitPrice ?? ''} onValueChange={(v) => update({ ...line, unitPrice: v })} required={values.kind === 'RECEIPT'} disabled={disabled} />}
+    {values.kind === 'RECEIPT' && <><StockMoneyInput label={t('discount')} value={line.discount} onValueChange={(v) => update({ ...line, discount: v })} disabled={disabled} /><StockMoneyInput label={t('tax')} value={line.tax} onValueChange={(v) => update({ ...line, tax: v })} disabled={disabled} /></>}
     {item.data?.trackLots && <>{lots.data && values.kind !== 'RECEIPT' && <Field label={t('useLot')}><select value={line.lotCode ?? ''} disabled={disabled} onChange={(e) => { const lot = lots.data.find((l) => l.lotCode === e.target.value); if (lot) update({ ...line, lotCode: lot.lotCode, expiryDate: lot.expiryDate }) }}><option value="">{t('select')}</option>{lots.data.map((l) => <option key={l.lotCode} value={l.lotCode}>{l.lotCode} · {fmt(l.quantity)}</option>)}</select></Field>}<Field label={t('lot')} required><input value={line.lotCode ?? ''} disabled={disabled} maxLength={80} required onChange={(e) => update({ ...line, lotCode: e.target.value })} /></Field></>}
     {item.data?.trackExpiry && <DatePickerField label={t('expiry')} value={line.expiryDate ?? ''} disabled={disabled} onChange={(v) => update({ ...line, expiryDate: v })} required />}
     {values.kind === 'ADJUSTMENT' && <Field label={t('direction')}><select disabled={disabled} value={line.increase} onChange={(e) => update({ ...line, increase: Number(e.target.value) })}><option value={1}>{t('increase')}</option><option value={0}>{t('decrease')}</option></select></Field>}
     {values.kind === 'TRANSFER' && values.destinationBranchId !== values.branchId && <Lookup label={t('destinationItem')} path="items" permission={P.INVENTORY_ITEM_READ} branchId={values.destinationBranchId!} value={line.destinationItemId} onChange={(n) => update({ ...line, destinationItemId: n })} disabled={disabled} required />}
-    {values.kind === 'STOCKTAKE' && <Button type="button" variant="secondary" disabled={disabled} onClick={async () => { const result = await balance.refetch(); update({ ...line, balanceVersion: result.data?.items[0]?.version ?? -1 }) }}>{t('reload')}</Button>}
+    {values.kind === 'STOCKTAKE' && <Button type="button" variant="secondary" disabled={disabled || !values.warehouseId || !line.itemId || balance.isFetching} onClick={async () => { const result = await balance.refetch(); const latest = result.data?.items[0]; if (result.isSuccess && latest) captureVersion(index, values.warehouseId, line.itemId, latest.version, true) }}>{t('reload')}</Button>}
   </div>{(invalidFields.length > 0 || serverError instanceof ApiError && serverError.problem.detail?.split(':')[1] === String(index + 1)) && <p className="form-field__error" role="alert">{invalidFields.length ? t('fieldValidation', { fields: invalidFields.join(', ') }) : stockError(serverError, t)}</p>}<Button type="button" variant="danger" disabled={disabled || values.lines.length === 1} onClick={remove}>{t('removeLine')}</Button></fieldset>
 }
 

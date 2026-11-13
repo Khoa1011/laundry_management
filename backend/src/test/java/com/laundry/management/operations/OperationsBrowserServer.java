@@ -7,16 +7,21 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Explicitly launched test-only browser fixture. Always forces a disposable in-memory database. */
+/** Explicitly launched browser fixture. Database targets are fixed to the test environments below. */
 public final class OperationsBrowserServer {
     private OperationsBrowserServer() {}
     public static void main(String[] args) {
         var app=new SpringApplication(LaundryManagementApplication.class);
         app.setAdditionalProfiles("test");
+        boolean mysql = java.util.Arrays.asList(args).contains("--isolated-mysql");
         var context=app.run("--server.port=18080", "--server.address=127.0.0.1",
-            "--spring.datasource.url=jdbc:h2:mem:operations_browser;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "--spring.datasource.driver-class-name=org.h2.Driver", "--spring.datasource.username=sa",
-            "--spring.datasource.password=", "--spring.flyway.locations=classpath:db/migration/common",
+            "--spring.datasource.url=" + (mysql
+                ? "jdbc:mysql://127.0.0.1:13319/inventory_browser_test?serverTimezone=UTC"
+                : "jdbc:h2:mem:operations_browser;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"),
+            "--spring.datasource.driver-class-name=" + (mysql ? "com.mysql.cj.jdbc.Driver" : "org.h2.Driver"),
+            "--spring.datasource.username=" + (mysql ? "root" : "sa"),
+            "--spring.datasource.password=", "--spring.flyway.locations=classpath:db/migration/common"
+                + (mysql ? ",classpath:db/migration/mysql" : ""),
             "--app.bootstrap.enabled=false", "--app.demo-seed.enabled=false");
         context.getBean(TransactionTemplate.class).executeWithoutResult(s -> {
             var branches=context.getBean(BranchRepository.class);
@@ -38,6 +43,16 @@ public final class OperationsBrowserServer {
             for(String name:new String[]{"Nước giặt kiểm thử","Nước xả kiểm thử"})db.insert("INSERT INTO inventory_items(branch_id,code,name,active,created_at,updated_at,created_by,updated_by,category_id,base_unit_id,minimum_stock,track_lots,track_expiry) VALUES (?,?,?,TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?,?,5,FALSE,FALSE)",b,name,name,actor,actor,category,unit);
             var reader=new UserAccount("browser.readonly",passwords.encode("foundation-test-only"),"Nhân viên chỉ đọc kho",branch);reader=users.saveAndFlush(reader);reader.assignBranch(branch,true);users.saveAndFlush(reader);
             db.jdbc().update("INSERT INTO user_permission_overrides(user_id,permission_id,effect,reason) SELECT ?,id,'ALLOW','Isolated browser fixture' FROM permissions WHERE code IN ('inventory.overview.read','inventory.document.read','inventory.stock.read','inventory.report.read','inventory.item.read','inventory.warehouse.read','inventory.category.read','inventory.unit.read','inventory.supplier.read','notification.read-own')",reader.getId());
+            for (String identity : new String[]{"no-cost", "deny-receipt"}) {
+                var operator = new UserAccount("browser." + identity, passwords.encode("foundation-test-only"),
+                    "Kiểm thử " + identity, branch);
+                operator.addRole(roles.findByCode("MANAGER").orElseThrow());
+                operator = users.saveAndFlush(operator);
+                operator.assignBranch(branch, true);
+                users.saveAndFlush(operator);
+                String denied = identity.equals("no-cost") ? "inventory.cost.read" : "inventory.receipt.create";
+                db.jdbc().update("INSERT INTO user_permission_overrides(user_id,permission_id,effect,reason) SELECT ?,id,'DENY','Isolated browser fixture' FROM permissions WHERE code=?", operator.getId(), denied);
+            }
         });
         System.out.println("OPERATIONS_BROWSER_FIXTURE_READY");
     }

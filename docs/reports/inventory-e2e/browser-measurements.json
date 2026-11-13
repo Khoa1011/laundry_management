@@ -1,0 +1,802 @@
+{
+  "chromeInstalledVersion": "157.0.8103.51",
+  "csv": {
+    "action": "fulfilled",
+    "event": "rejected",
+    "localFile": false
+  },
+  "access": [
+    {
+      "user": "readonly",
+      "edit": 0,
+      "cancel": 0,
+      "costVisible": 0,
+      "branchOptions": 1
+    },
+    {
+      "user": "no-cost",
+      "edit": 1,
+      "cancel": 1,
+      "costVisible": 0,
+      "branchOptions": 1,
+      "historyCost": 0
+    },
+    {
+      "user": "deny-receipt",
+      "create": 0,
+      "directRouteDenied": true
+    }
+  ],
+  "routeSmoke": [
+    {
+      "n": "Vật tư",
+      "path": "/inventory/items",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Kho",
+      "path": "/inventory/warehouses",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Nhóm danh mục",
+      "path": "/inventory/categories",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Đơn vị",
+      "path": "/inventory/units",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Quy cách nhập",
+      "path": "/inventory/conversions",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Nhà cung cấp",
+      "path": "/inventory/suppliers",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Cấu hình",
+      "path": "/inventory/settings",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Lịch sử thay đổi",
+      "path": "/inventory/history",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Tổng quan kho",
+      "path": "/inventory/dashboard",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Nhập hàng",
+      "path": "/inventory/receipts",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Xuất vật tư",
+      "path": "/inventory/issues",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Chuyển kho",
+      "path": "/inventory/transfers",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Kiểm kê",
+      "path": "/inventory/stocktakes",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Điều chỉnh",
+      "path": "/inventory/adjustments",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Tồn kho",
+      "path": "/inventory/balances",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Biến động kho",
+      "path": "/inventory/ledger",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "n": "Nhập xuất tồn",
+      "path": "/inventory/reports",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    }
+  ],
+  "responsive": [
+    {
+      "route": "adjustments",
+      "alerts": [],
+      "client": 305,
+      "h": 568,
+      "mainClient": 320,
+      "mainScroll": 320,
+      "scroll": 320,
+      "w": 320
+    },
+    {
+      "route": "adjustments",
+      "alerts": [],
+      "client": 345,
+      "h": 800,
+      "mainClient": 345,
+      "mainScroll": 345,
+      "scroll": 345,
+      "w": 360
+    },
+    {
+      "route": "adjustments",
+      "alerts": [],
+      "client": 360,
+      "h": 667,
+      "mainClient": 360,
+      "mainScroll": 360,
+      "scroll": 360,
+      "w": 375
+    },
+    {
+      "route": "adjustments",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "adjustments",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "adjustments",
+      "alerts": [],
+      "client": 397,
+      "h": 915,
+      "mainClient": 397,
+      "mainScroll": 397,
+      "scroll": 397,
+      "w": 412
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 305,
+      "h": 568,
+      "mainClient": 320,
+      "mainScroll": 320,
+      "scroll": 320,
+      "w": 320
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 345,
+      "h": 800,
+      "mainClient": 345,
+      "mainScroll": 345,
+      "scroll": 345,
+      "w": 360
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 360,
+      "h": 667,
+      "mainClient": 360,
+      "mainScroll": 360,
+      "scroll": 360,
+      "w": 375
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 397,
+      "h": 915,
+      "mainClient": 397,
+      "mainScroll": 397,
+      "scroll": 397,
+      "w": 412
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 753,
+      "h": 1024,
+      "mainClient": 753,
+      "mainScroll": 753,
+      "scroll": 753,
+      "w": 768
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1009,
+      "h": 768,
+      "mainClient": 749,
+      "mainScroll": 749,
+      "scroll": 1009,
+      "w": 1024
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1265,
+      "h": 720,
+      "mainClient": 1005,
+      "mainScroll": 1005,
+      "scroll": 1265,
+      "w": 1280
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1351,
+      "h": 768,
+      "mainClient": 1091,
+      "mainScroll": 1091,
+      "scroll": 1351,
+      "w": 1366
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1351,
+      "h": 600,
+      "mainClient": 1091,
+      "mainScroll": 1091,
+      "scroll": 1351,
+      "w": 1366
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1425,
+      "h": 900,
+      "mainClient": 1165,
+      "mainScroll": 1165,
+      "scroll": 1425,
+      "w": 1440
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1905,
+      "h": 1080,
+      "mainClient": 1645,
+      "mainScroll": 1645,
+      "scroll": 1905,
+      "w": 1920
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 525,
+      "h": 810,
+      "mainClient": 525,
+      "mainScroll": 525,
+      "scroll": 525,
+      "w": 540
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 885,
+      "h": 750,
+      "mainClient": 885,
+      "mainScroll": 885,
+      "scroll": 885,
+      "w": 900
+    },
+    {
+      "route": "reports",
+      "alerts": [],
+      "client": 1135,
+      "h": 710,
+      "mainClient": 875,
+      "mainScroll": 875,
+      "scroll": 1135,
+      "w": 1150
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 305,
+      "h": 568,
+      "mainClient": 305,
+      "mainScroll": 305,
+      "scroll": 305,
+      "w": 320
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 345,
+      "h": 800,
+      "mainClient": 345,
+      "mainScroll": 345,
+      "scroll": 345,
+      "w": 360
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 360,
+      "h": 667,
+      "mainClient": 360,
+      "mainScroll": 360,
+      "scroll": 360,
+      "w": 375
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 397,
+      "h": 915,
+      "mainClient": 397,
+      "mainScroll": 397,
+      "scroll": 397,
+      "w": 412
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 753,
+      "h": 1024,
+      "mainClient": 753,
+      "mainScroll": 753,
+      "scroll": 753,
+      "w": 768
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1009,
+      "h": 768,
+      "mainClient": 749,
+      "mainScroll": 749,
+      "scroll": 1009,
+      "w": 1024
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1265,
+      "h": 720,
+      "mainClient": 1005,
+      "mainScroll": 1005,
+      "scroll": 1265,
+      "w": 1280
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1351,
+      "h": 768,
+      "mainClient": 1091,
+      "mainScroll": 1091,
+      "scroll": 1351,
+      "w": 1366
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1351,
+      "h": 600,
+      "mainClient": 1091,
+      "mainScroll": 1091,
+      "scroll": 1351,
+      "w": 1366
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1425,
+      "h": 900,
+      "mainClient": 1165,
+      "mainScroll": 1165,
+      "scroll": 1425,
+      "w": 1440
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1905,
+      "h": 1080,
+      "mainClient": 1645,
+      "mainScroll": 1645,
+      "scroll": 1905,
+      "w": 1920
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 525,
+      "h": 810,
+      "mainClient": 525,
+      "mainScroll": 525,
+      "scroll": 525,
+      "w": 540
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 885,
+      "h": 750,
+      "mainClient": 885,
+      "mainScroll": 885,
+      "scroll": 885,
+      "w": 900
+    },
+    {
+      "route": "dashboard",
+      "alerts": [],
+      "client": 1135,
+      "h": 710,
+      "mainClient": 875,
+      "mainScroll": 875,
+      "scroll": 1135,
+      "w": 1150
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 305,
+      "h": 568,
+      "mainClient": 305,
+      "mainScroll": 305,
+      "scroll": 305,
+      "w": 320
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 345,
+      "h": 800,
+      "mainClient": 345,
+      "mainScroll": 345,
+      "scroll": 345,
+      "w": 360
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 360,
+      "h": 667,
+      "mainClient": 360,
+      "mainScroll": 360,
+      "scroll": 360,
+      "w": 375
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 375,
+      "h": 844,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 375,
+      "h": 600,
+      "mainClient": 375,
+      "mainScroll": 375,
+      "scroll": 375,
+      "w": 390
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 397,
+      "h": 915,
+      "mainClient": 397,
+      "mainScroll": 397,
+      "scroll": 397,
+      "w": 412
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 753,
+      "h": 1024,
+      "mainClient": 753,
+      "mainScroll": 753,
+      "scroll": 753,
+      "w": 768
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1009,
+      "h": 768,
+      "mainClient": 749,
+      "mainScroll": 757,
+      "scroll": 1009,
+      "w": 1024
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1265,
+      "h": 720,
+      "mainClient": 1005,
+      "mainScroll": 1005,
+      "scroll": 1265,
+      "w": 1280
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1351,
+      "h": 768,
+      "mainClient": 1091,
+      "mainScroll": 1091,
+      "scroll": 1351,
+      "w": 1366
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1351,
+      "h": 600,
+      "mainClient": 1091,
+      "mainScroll": 1091,
+      "scroll": 1351,
+      "w": 1366
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1425,
+      "h": 900,
+      "mainClient": 1165,
+      "mainScroll": 1165,
+      "scroll": 1425,
+      "w": 1440
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1905,
+      "h": 1080,
+      "mainClient": 1645,
+      "mainScroll": 1645,
+      "scroll": 1905,
+      "w": 1920
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 525,
+      "h": 810,
+      "mainClient": 525,
+      "mainScroll": 525,
+      "scroll": 525,
+      "w": 540
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 885,
+      "h": 750,
+      "mainClient": 885,
+      "mainScroll": 885,
+      "scroll": 885,
+      "w": 900
+    },
+    {
+      "route": "receipt-editor",
+      "alerts": [],
+      "client": 1135,
+      "h": 710,
+      "mainClient": 875,
+      "mainScroll": 883,
+      "scroll": 1135,
+      "w": 1150
+    }
+  ],
+  "report320After": {
+    "alerts": [],
+    "client": 305,
+    "h": 568,
+    "mainClient": 305,
+    "mainScroll": 305,
+    "scroll": 305,
+    "w": 320
+  },
+  "reportDateFilter": [
+    "    - generic: Thứ Bảy, 14/11/2026",
+    "  - paragraph: Báo cáo theo thời gian ghi nhận, không hồi tố theo ngày nghiệp vụ. Tồn cuối = đầu + nhập − xuất + điều chỉnh tăng − điều chỉnh giảm. Tối đa 10.000 dòng mỗi lần xuất; hãy lọc hẹp hơn khi cần.",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - term: Tồn cuối",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - term: Tồn cuối",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\"",
+    "    - definition: \"0\""
+  ],
+  "consoleSample": {
+    "captured": 1,
+    "reactRuntime": 0
+  }
+}
